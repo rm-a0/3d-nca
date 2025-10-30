@@ -1,0 +1,45 @@
+# pyproject.toml
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "3d-nca"
+dynamic = ["version"]
+description = "Modular 3D Neural Cellular Automata in PyTorch"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [{name = "Michal Repcik", email = "michalrepcik9@gmail.com"}]
+dependencies = [
+    "torch>=2.3",
+    "numpy",
+    "matplotlib",
+    "tqdm",
+    "pyvista[all]",
+    "wandb",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "isort",
+    "mypy",
+    "pytest",
+    "pytest-cov",
+    "jupyter",
+]
+
+# ── Conda export hook (see scripts below) ─────────────────────
+[tool.conda]
+channels = ["pytorch", "nvidia", "conda-forge"]
+pip = [
+    "wandb",
+    "pyvista[all]",
+    "black",
+    "isort",
+    "mypy",
+    "pytest",
+    "pytest-cov",
+    "jupyter",
+]
