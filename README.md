@@ -6,21 +6,36 @@ Modular PyTorch framework for **3D Neural Cellular Automata**.
 
 ## How to Use
 
-```bash
-# Clone & setup
-git clone https://github.com/rm-a0/3d-nca
-cd 3d-nca
+1. Clone & setup
 
-# Create env (GPU-aware)
-conda env create -f conda_env.yml
-conda activate nca3d
+    ```bash
+    git clone https://github.com/rm-a0/3d-nca
+    cd 3d-nca
+    ```
 
-# Install package + dev tools
-pip install -e .[dev]
+2. Create environment (choose one)
 
-# Run live demo (VS Code or Jupyter)
-code notebooks/01_test_notebook.ipynb
-```
+    - a. Conda (GPU-aware, one-click)
+
+        ```bash
+        conda env create -f conda_env.yml
+        conda activate nca3d
+        ```
+
+    - b. Pure Poetry (developers / CI / any OS)
+
+        ```bash
+        python -m venv .venv
+        source .venv/bin/activate
+        pip install poetry
+        poetry install --with dev
+        ```
+
+3. Run (VS Code or Jupyter)
+
+    ```bash
+    code notebooks/01_test_notebook.ipynb
+    ```
 
 ## Project Structure
 
