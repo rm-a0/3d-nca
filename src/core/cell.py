@@ -10,6 +10,10 @@ class CellConfig:
     visible_channels: int = 4
     alive_threshold: int = 0.1
 
+    @property
+    def total_channels(self) -> int:
+        return self.hidden_channels + self.visible_channels
+
 class CellState(torch.nn.Module):
     def __init__(self, cfg: CellConfig):
         super().__init__()
@@ -22,7 +26,7 @@ class CellState(torch.nn.Module):
 
     @property
     def total_channels(self) -> int:
-        return self.cfg.hidden_channels + self.cfg.visible_channels
+        return self.cfg.total_channels
 
     @torch.no_grad()
     def update_alive_mask(self, state: Tensor) -> Tensor:

@@ -39,8 +39,11 @@ class Grid3D(torch.nn.Module):
     def seed_center(self, batch_size: int, device: torch.device | str) -> Tensor:
         state = self.init_empty(batch_size, device)
         center = tuple(s // 2 for s in self.cfg.size)
-        state[:, -4, center[0], center[1], center[2]] = torch.rand(batch_size, 4, 1, 1, 1, device=device)
-        state[:, -1:, center[0], center[1], center[2]] = 1.0
+        seed_vis = torch.rand(batch_size, 4, 1, 1, 1, device=device)
+        seed_vis[:, 3:] = 1.0
+        state[:, -4:, center[0]:center[0]+1,
+                    center[1]:center[1]+1,
+                    center[2]:center[2]+1] = seed_vis
         return state
     
     def step(self, state: Tensor) -> Tensor:
