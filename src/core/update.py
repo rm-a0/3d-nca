@@ -14,6 +14,7 @@ class UpdateConfig:
     stochastic_update: bool = False
     fire_rate: float = 0.5
 
+# source: https://github.com/SkyLionx/3d-cellular-automaton
 class UpdateRule(nn.Module):
     def __init__(
         self,
@@ -32,6 +33,12 @@ class UpdateRule(nn.Module):
             nn.Conv3d(upd_cfg.hidden_dim, cell_cfg.total_channels, kernel_size=1),
         )
 
+        final_conv = self.mlp[-1]
+        if isinstance(final_conv, nn.Conv3d):
+            nn.init.zeros_(final_conv.weight)
+            if final_conv.bias is not None:
+                final_conv.bias.data.fill_(0.0)
+
     def forward(self, perceived: Tensor, alive_mask: Tensor, state: Tensor) -> Tensor:
         delta = self.mlp(perceived)
 
@@ -39,6 +46,4 @@ class UpdateRule(nn.Module):
             fire = torch.rand_like(alive_mask.float()) < self.upd_cfg.fire_rate
             delta = delta * fire
 
-        gated_delta = delta * alive_mask.float()
-
-        return state + gated_delta
+        return state + delta * alive_mask.float()
