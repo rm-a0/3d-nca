@@ -61,6 +61,7 @@ outputs/
 *.lof
 *.ptc
 *.dvi
+*.out
 *~  
 
 # ── OS / Editor junk ───────────────────────────────────────
