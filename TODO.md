@@ -9,11 +9,11 @@
 
 ## Core
 
-- [ ] Implement cell
-- [ ] Add perception
-- [ ] Build update
-- [ ] Manage grid
-- [ ] Render 3D
+- [x] Implement cell
+- [x] Add perception
+- [x] Build update
+- [x] Manage grid
+- [x] Render 3D
 
 ## Quality
 
