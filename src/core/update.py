@@ -29,6 +29,9 @@ class UpdateRule(nn.Module):
 
         self.mlp = nn.Sequential(
             nn.Conv3d(in_channels, upd_cfg.hidden_dim, kernel_size=1),
+            nn.GroupNorm(4, upd_cfg.hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Conv3d(upd_cfg.hidden_dim, upd_cfg.hidden_dim, kernel_size=1),
             nn.ReLU(inplace=True),
             nn.Conv3d(upd_cfg.hidden_dim, cell_cfg.total_channels, kernel_size=1),
         )
@@ -46,4 +49,5 @@ class UpdateRule(nn.Module):
             fire = torch.rand_like(alive_mask.float()) < self.upd_cfg.fire_rate
             delta = delta * fire
 
+        delta = torch.tanh(delta) * 0.1
         return state + delta * alive_mask.float()

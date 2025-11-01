@@ -70,4 +70,5 @@ class Grid3D(torch.nn.Module):
     def forward(self, state: Tensor, steps: int = 1) -> Tensor:
         for _ in range(steps):
             state = self.step(state)
+            state = torch.clamp(state, -1.0, 1.0)
         return state
