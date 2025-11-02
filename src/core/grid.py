@@ -46,13 +46,13 @@ class Grid3D(torch.nn.Module):
         super().__init__()
         self.cfg = grid_cfg
         self.cell = CellState(cell_cfg)
-        self.perception = Perception3D(perc_cfg, self.cell.total_channels())
+        self.perception = Perception3D(perc_cfg, cell_cfg.total_channels)
         self.update = UpdateRule(perc_cfg, cell_cfg, upd_cfg)
 
     def init_empty(self, batch_size: int, device: torch.device | str) -> Tensor:
         return torch.zeros(
             batch_size,
-            self.cell.total_channels(),
+            self.cell.total_channels,
             *self.cfg.size,
             dtype=torch.float32,
             device=device
