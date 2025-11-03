@@ -9,7 +9,7 @@ State is a tensor of shape [B, C, X, Y, Z]:
 Each voxel is a cell. The update is local (3x3x3 neighborhood),
 learned via a small MLP, and damage-robust using alive masking.
 
-Original implementation heavily inspired by:
+Original implementation inspired by:
 https://github.com/SkyLionx/3d-cellular-automaton
 """
 from __future__ import annotations
