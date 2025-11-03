@@ -1,4 +1,3 @@
-# src/viz/slice.py
 """
 2-D slice visualisation - centre slice of the alpha (alive) channel.
 
@@ -8,7 +7,6 @@ Usage:
     show_comparison(state, target)      # side-by-side
     show_slice_at(state, idx)           # manual slice index
 """
-
 from __future__ import annotations
 
 import matplotlib.pyplot as plt
@@ -20,7 +18,6 @@ from typing import Optional
 def _alpha_np(tensor: Tensor) -> "np.ndarray":
     """Return alpha channel as numpy on CPU."""
     return tensor[:, -1:, ...].squeeze(0).squeeze(0).detach().cpu().numpy()
-
 
 def show_nca(
     state: Tensor,
@@ -44,7 +41,6 @@ def show_nca(
     plt.tight_layout()
     plt.show()
 
-
 def show_target(
     target: Tensor,
     *,
@@ -66,7 +62,6 @@ def show_target(
     plt.colorbar(im, fraction=0.046, pad=0.04)
     plt.tight_layout()
     plt.show()
-
 
 def show_comparison(
     state: Tensor,
@@ -91,7 +86,7 @@ def show_comparison(
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4.5))
     im1 = ax1.imshow(nca_slice, vmin=vmin, vmax=vmax, cmap=cmap, origin="lower")
-    ax1.set_title(title or f"NCA α (slice {mid})")
+    ax1.set_title(title or f"NCA alpha (slice {mid})")
     ax1.axis("off")
     plt.colorbar(im1, ax=ax1, fraction=0.046)
 
