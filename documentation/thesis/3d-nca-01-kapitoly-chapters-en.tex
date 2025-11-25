@@ -19,24 +19,82 @@ TODO
 \section{Prerequisites}
 This thesis assumes the reader is familiar with basic concepts 
 of deep learning, in particular convolutional neural networks, gradient-based 
-optimisation, and automatic differentiation in PyTorch \cite{PaszkePyTorch, PyTorchDocs}. 
+optimisation, and automatic differentiation in PyTorch~\cite{PaszkePyTorch, PyTorchDocs}. 
 
 A comprehensive introduction to these topics can be found in Goodfellow et al.~\cite{GoodfellowDeepLearning} 
-and in the official PyTorch documentation \cite{PyTorchDocs}.
+and in the official PyTorch documentation~\cite{PyTorchDocs}.
 
 The rest of the thesis is self-contained with respect to cellular automata and their neural extensions.
 
 \section{Cellular Automata}
 Cellular automata (CA) are discrete computational systems that consist of a regular grid of cells, 
 each of which can take on a finite number of states. The state of each cell evolves in parallel over discrete time steps
-according to a local update rule, which depends on the states of its neighboring cells \cite{MarinescuComplexSystems}.
+according to a local update rule, which depends on the states of its neighboring cells~\cite{MarinescuComplexSystems}. \\ \\
 Formally, a cellular automaton is defined by:
 \begin{itemize}
-    \item A lattice of cells, typically one-, two-, or three-dimensional.
-    \item A finite set of states $\mathcal{S}$ that each cell can occupy.
-    \item A neighborhood function $\mathcal{N}$ that defines which cells influence a given cell.
-    \item An update rule $f: \mathcal{S}^{|\mathcal{N}|} \rightarrow \mathcal{S}$ that computes the next state \cite{IlachinskiCellular}.
+    \item A \textbf{lattice} of cells, typically 1D, 2D, or 3D.
+    \item A \textbf{finite set of states} $\mathcal{S}$ that each cell can occupy.
+    \item A \textbf{neighborhood function} $\mathcal{N}$ that defines which cells influence a given cell.
+    \item An \textbf{update rule} $f: \mathcal{S}^{|\mathcal{N}|} \rightarrow \mathcal{S}$ that computes the next state~\cite{IlachinskiCellular}. \\
 \end{itemize}
+CA were pioneered by von Neumann in the 1940s for self-replication studies~\cite{VonNeumann1966}, and later popularized by Wolfram's 
+classification~\cite{Wolfram1983, Wolfram2002} into four classes based on behavior: 
+
+\begin{itemize}
+    \item \textbf{Class 1 - Uniform}: quickly reaches a single state.  
+    \item \textbf{Class 2 - Periodic}: static or oscillating patterns.  
+    \item \textbf{Class 3 - Chaotic}: unpredictable, noisy evolution.  
+    \item \textbf{Class 4 - Complex}: long-lived structures and computation.  
+\end{itemize}
+
+\subsection{One-Dimensional Cellular Automata}
+
+The simplest non-trivial cellular automata live on a 1D line of cells.  
+Each cell looks only at itself and its two immediate neighbours (radius = 1, neighbourhood size = 3).  
+With two states (0 or 1), there are exactly 256 possible elementary rules, numbered 
+from 0 to 255 in Wolfram's convention~\cite{Wolfram1983}. \\ \\
+A rule number is a binary representation of the next-state lookup table. For example:
+\begin{itemize}
+    \item Rule 90 produces the Sierpiński triangle from a single live cell (Class 3).
+    \item Rule 30 creates chaotic, triangle-filled patterns that look random and are often used as pseudorandom generators.
+    \item Rule 110 (Class 4) is the smallest known universal 1D CA - it supports gliders and glider collisions that can perform any computation~\cite{Cook2004}.
+\end{itemize}
+
+\subsection{Two-Dimensional Cellular Automata}
+
+In two dimensions the most common neighbourhood is the 3x3 Moore neighbourhood (8 surrounding cells + centre).  
+With two states this gives $2^{9} = 512$ possible inputs, so rules are usually described by birth/survival conditions instead of raw numbers.
+
+The most famous example is Conway's Game of Life introduced in 1970~\cite{Gardner1970}.  
+A cell becomes or stays alive if it has exactly 3 live neighbours (birth) or 2-3 live neighbours (survival); otherwise it dies.
+Despite these extremely simple rules, Game of Life exhibits:
+\begin{itemize}
+    \item still lifes (e.g. block, beehive),
+    \item oscillators (e.g. blinker, toad),
+    \item spaceships (e.g. glider, lightweight spaceship),
+    \item glider guns and other complex constructions.
+\end{itemize}
+
+Game of Life is Turing-complete~\cite{Berlekamp1982} and has inspired almost all later work on self-organising and growing 
+neural cellular automata, including the 2D Growing CA by Mordvintsev~\cite{Mordvintsev2020} that this thesis 
+builds upon and extends into three dimensions.
+
+\subsection{Three-Dimensional Cellular Automata}
+
+In three dimensions, the Moore neighbourhood includes up to 26 adjacent cells (face-, edge-, and corner-adjacent) in a 3$\times$3$\times$3 cube.  
+With binary states, this creates $2^{27} \approx 134$ million possible neighbourhood configurations, so practical 3D CA typically use 
+totalistic or outer-totalistic rules that depend only on the sum of live neighbours (not their exact positions)~\cite{Wolfram2002}. \\ \\
+Notable examples include:
+\begin{itemize}
+    \item Von Neumann's 29-state self-replicating automaton (1950s), the foundational model for CA self-reproduction~\cite{VonNeumann1966}.
+    \item Brian's Brain (1990s, 3-state rule): creates expanding "fireworks" patterns via refractory periods~\cite{DeKinderen1998}.
+    \item 3D Life variants (e.g. B3/S45678 or B5678/S45678): produce branching, crystal-like growths. \\
+\end{itemize}
+3D CAs have been studied since the 1950s but gained traction in the 2000s with better hardware for simulation~\cite{Tobias2009}.  
+Neural CA build on this by learning compact update rules that scale efficiently on GPUs, enabling stable 3D self-organisation.
+
+\section{Neural Cellular Automata}
+TODO
 
 
 \chapter{Conclusion}
