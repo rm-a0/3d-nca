@@ -87,15 +87,68 @@ totalistic or outer-totalistic rules that depend only on the sum of live neighbo
 Notable examples include:
 \begin{itemize}
     \item Von Neumann's 29-state self-replicating automaton (1950s), the foundational model for CA self-reproduction~\cite{VonNeumann1966}.
-    \item Brian's Brain (1990s, 3-state rule): creates expanding "fireworks" patterns via refractory periods~\cite{DeKinderen1998}.
+    \item Brian's Brain (1990s, 3-state rule): creates expanding ``fireworks'' patterns via refractory periods~\cite{DeKinderen1998}.
     \item 3D Life variants (e.g. B3/S45678 or B5678/S45678): produce branching, crystal-like growths. \\
 \end{itemize}
 3D CAs have been studied since the 1950s but gained traction in the 2000s with better hardware for simulation~\cite{Tobias2009}.  
 Neural CA build on this by learning compact update rules that scale efficiently on GPUs, enabling stable 3D self-organisation.
 
-\section{Neural Cellular Automata}
-TODO
+\subsection{Differentiability and Continuous Cellular Automata}
 
+This thesis uses a discrete 3D lattice, but the learned update rule is fully differentiable end-to-end.  
+This allows the same gradient-based training that is used in ordinary neural networks~\cite{Bena2025}.
+
+This connects Neural CA to continuous cellular automata, where states are real numbers (not just zeroes and ones) and updates 
+use smooth functions instead of hard rules.
+
+\textbf{SmoothLife} from 2011 is the first clear example~\cite{Rafler2011}.  
+It's a generalization of Conway's Game of Life to a continuous domain, replacing the infinite grid with an ``effective grid'' averaged 
+over disks, and turning the discrete rules into differential equations with smooth interpolation. The resulting dynamics produce 
+continuously evolving glider-like objects and turbulent backgrounds on a real-valued field instead of binary alive/dead cells.
+
+\textbf{Lenia}, from eight years later, builds on that idea~\cite{Chan2019}.  
+It generalizes Game of Life to continuous space, time, and states, using parameterized growth kernels and a growth function based on weighted 
+neighbor sums. Systematic exploration of the parameter space revealed hundreds of stable solitary patterns exhibiting translation, 
+oscillation, and shape change — collectively described by the author as an artificial ecology.
+
+These continuous setups showed gradient-based training could handle complex patterns long before neural networks were 
+applied to cellular automata~\cite{Mordvintsev2020,Bena2025}. The Neural CA in this thesis adopt exactly this differentiability while keeping a discrete 
+voxel grid, combining the advantages of precise 3D representation with the training stability of continuous models.
+
+\section{Neural Cellular Automata}
+
+Neural Cellular Automata (NCA) replace hand-crafted update rules with a small learnable neural network, usually a few convolutional layers.  
+The grid remains discrete, but the cell state becomes a real-valued vector, making the whole system 
+differentiable and trainable with gradient descent. \\
+
+The breakthrough work is “Growing Neural Cellular Automata” by Mordvintsev et al.~\cite{Mordvintsev2020}.  
+They trained a 16-channel 2D CA on semi-complex targets (lizards, emoji, butterflies, etc.) and discovered three natural training regimes:
+\begin{itemize}
+    \item \textbf{Growing models} are trained only to generate the target pattern from a small seed.  
+          As the authors note, ``Growing models were trained to generate patterns, but don't know how to persist them. 
+          Some patterns explode, some decay, but some happen to be almost stable or even regenerate parts!''~\cite{Mordvintsev2020} (Experiment 1).
+    \item \textbf{Persistent models} are explicitly trained to keep the pattern alive for hundreds of steps.  
+          Interestingly, ``they often develop some regenerative capabilities without being explicitly 
+          instructed to do so''~\cite{Mordvintsev2020} (Experiment 2).
+    \item \textbf{Regenerating models} experience random damage at every training step (e.g. large parts of the pattern are zeroed out).  
+          These models learn extremely strong regeneration, especially in the central region, as ``regenerating 
+          models were subject to pattern damages during training, so their regenerative capabilities are much 
+          stronger, especially in the central area''~\cite{Mordvintsev2020} (Experiment 3). \\
+\end{itemize}
+All three regimes use the same tiny update network ($\sim100$ parameters) and the same fixed perception filters: identity, 
+Sobel gradients (x/y), and a 3$\times$3 blur.  
+The only difference is the training objective and whether damage is injected.
+
+Follow-up work explored continuous-space variants (Lenia~\cite{Chan2019}), self-classifying embryos~\cite{Horvath2021}, and 
+persistent memory channels~\cite{Randazzo2021}, but almost everything stays in 2D and uses monolithic training scripts.
+
+Early attempts at 3D NCA exist, such as the voxel-based implementation by Rossi and Orsini~\cite{Rossi2021} 
+(originally released under the GitHub username SkyLionx), which directly extends Mordvintsev's model to 3D using PyTorch and .vox targets.  
+It supports growth from seeds, damage recovery, and 3D visualization, but ties perception/update logic into a single Colab notebook, limiting 
+reusability for extensions like custom kernels or LLM-generated targets.  
+
+This thesis builds on such prototypes by introducing a fully modular 
+architecture that separates these components for easier prototyping and research.
 
 \chapter{Conclusion}
 \label{zaver}
