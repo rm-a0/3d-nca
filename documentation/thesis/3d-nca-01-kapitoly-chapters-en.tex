@@ -18,7 +18,7 @@ TODO
 \chapter{Theoretical Foundations}
 \section{Prerequisites}
 This thesis assumes the reader is familiar with basic concepts 
-of deep learning, in particular convolutional neural networks, gradient-based 
+of deep learning, in particular convolutional neural networks (CNNs), gradient-based 
 optimisation, and automatic differentiation in PyTorch~\cite{PaszkePyTorch, PyTorchDocs}. 
 
 A comprehensive introduction to these topics can be found in Goodfellow et al.~\cite{GoodfellowDeepLearning} 
@@ -37,7 +37,7 @@ Formally, a cellular automaton is defined by:
     \item A \textbf{neighborhood function} $\mathcal{N}$ that defines which cells influence a given cell.
     \item An \textbf{update rule} $f: \mathcal{S}^{|\mathcal{N}|} \rightarrow \mathcal{S}$ that computes the next state~\cite{IlachinskiCellular}. \\
 \end{itemize}
-CA were pioneered by von Neumann in the 1940s for self-replication studies~\cite{VonNeumann1966}, and later popularized by Wolfram's 
+CA were pioneered by Ulam and von Neumann in the 1940s for self-replication studies~\cite{VonNeumann1966}, and later popularized by Wolfram's 
 classification~\cite{Wolfram1983, Wolfram2002} into four classes based on behavior: 
 
 \begin{itemize}
@@ -46,6 +46,8 @@ classification~\cite{Wolfram1983, Wolfram2002} into four classes based on behavi
     \item \textbf{Class 3 - Chaotic}: unpredictable, noisy evolution.  
     \item \textbf{Class 4 - Complex}: long-lived structures and computation.  
 \end{itemize}
+
+These behavioural classes are frequently referenced in later work on NCA, which inherit the same notions of order, chaos, and complex self-organisation.
 
 \subsection{One-Dimensional Cellular Automata}
 
@@ -117,7 +119,7 @@ voxel grid, combining the advantages of precise 3D representation with the train
 
 \section{Neural Cellular Automata}
 
-Neural Cellular Automata (NCA) replace hand-crafted update rules with a small learnable neural network, usually a few convolutional layers.  
+Neural Cellular Automata (NCA) replace hand-crafted update rules with a learnable, shared, per-cell update function parameterized by a neural network.  
 The grid remains discrete, but the cell state becomes a real-valued vector, making the whole system 
 differentiable and trainable with gradient descent. \\
 
@@ -147,8 +149,42 @@ Early attempts at 3D NCA exist, such as the voxel-based implementation by Rossi 
 It supports growth from seeds, damage recovery, and 3D visualization, but ties perception/update logic into a single Colab notebook, limiting 
 reusability for extensions like custom kernels or LLM-generated targets.  
 
-This thesis builds on such prototypes by introducing a fully modular 
-architecture that separates these components for easier prototyping and research.
+This thesis builds on such prototypes by introducing a fully modular architecture that separates these components for easier prototyping and research.
+
+\section{Core Components of a 3D Neural Cellular Automaton}
+
+The previous sections introduced classical cellular automata, continuous
+extensions, and existing neural CA models. This section focuses on the
+main theoretical components that form the basis of the three-dimensional
+neural cellular automaton used later in the thesis. The goal is to
+clarify the general concepts without referring to specific implementation
+details.
+
+\subsection{State Representation}
+
+In neural cellular automata, each voxel stores a vector of real-valued
+channels. This design follows the original Growing Neural Cellular
+Automata model by Mordvintsev et al.~\cite{Mordvintsev2020}, where a
+multi-channel state is used to support both visible pattern information
+and internal memory. These channels are typically divided into two
+categories:
+
+\begin{itemize}
+    \item \textbf{visible channels}, which represent quantities that are
+    compared to the target (for example occupancy or color),
+    \item \textbf{hidden channels}, which provide internal storage and 
+    facilitate communication between neighbouring cells.
+\end{itemize}
+
+If a cell has $C$ channels, its state is defined as
+$\mathbf{s} \in \mathbb{R}^{C}$.  
+A dedicated \emph{alive} channel is commonly included, inspired by the
+gating mechanism used in neural CA models~\cite{Mordvintsev2020}. Instead
+of a binary alive/dead signal, this channel stores a continuous value that
+determines whether the update should apply to the cell. Real-valued state
+representations enable the use of standard gradient-based training
+techniques, a property shared with continuous CAs such as SmoothLife
+\cite{Rafler2011} and Lenia~\cite{Chan2019}.
 
 \chapter{Conclusion}
 \label{zaver}
