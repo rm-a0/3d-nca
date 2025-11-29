@@ -121,7 +121,7 @@ voxel grid, combining the advantages of precise 3D representation with the train
 
 Neural Cellular Automata (NCA) replace hand-crafted update rules with a learnable, shared, per-cell update function parameterized by a neural network.  
 The grid remains discrete, but the cell state becomes a real-valued vector, making the whole system 
-differentiable and trainable with gradient descent. \\
+differentiable and trainable with gradient descent.
 
 The breakthrough work is “Growing Neural Cellular Automata” by Mordvintsev et al.~\cite{Mordvintsev2020}.  
 They trained a 16-channel 2D CA on semi-complex targets (lizards, emoji, butterflies, etc.) and discovered three natural training regimes:
@@ -173,9 +173,8 @@ categories:
     \item \textbf{visible channels}, which represent quantities that are
     compared to the target (for example occupancy or color),
     \item \textbf{hidden channels}, which provide internal storage and 
-    facilitate communication between neighbouring cells.
+    facilitate communication between neighbouring cells. \\
 \end{itemize}
-
 If a cell has $C$ channels, its state is defined as
 $\mathbf{s} \in \mathbb{R}^{C}$.  
 A dedicated \emph{alive} channel is commonly included, inspired by the
@@ -185,6 +184,81 @@ determines whether the update should apply to the cell. Real-valued state
 representations enable the use of standard gradient-based training
 techniques, a property shared with continuous CAs such as SmoothLife
 \cite{Rafler2011} and Lenia~\cite{Chan2019}.
+
+\subsection{Perception Mechanism}
+
+Although the state is continuous, the model retains the fundamental CA property that each cell only 
+interacts with a local neighborhood. In neural CA, this local perception is typically implemented 
+using convolutional operations with a fixed set of kernels, such as 3$\times$3 in 2D or 3$\times$3$\times$3 in 3D extensions.
+These kernels are fixed and extract simple local features, promoting stability and allowing the neural network to 
+concentrate on the update rule rather than spatial perception \cite{Mordvintsev2020, Sudhakaran2021}. \\ \\
+Typical filter types include:
+\begin{itemize}
+    \item \textbf{Identity filters}, which capture the cell's own state,
+    \item \textbf{Aggregation filters}, such as simple sums or averages of adjacent neighbors (e.g., face-adjacent in 3D),
+    \item \textbf{Gradient filters}, such as Sobel operators extended to 3D, which approximate directional differences to mimic 
+    biological sensing of chemical gradients \cite{Mordvintsev2020, Sudhakaran2021}. \\
+\end{itemize}
+The convolution outputs are concatenated to create a perceived state vector per cell, which feeds into the update function. 
+Fixed filters, inspired by biological gradient sensing in morphogenesis, enhance dynamic stability in 2D and 3D 
+models \cite{Mordvintsev2020, Chan2019, Sudhakaran2021}.
+
+\subsection{Update Rule}
+
+The update rule in neural cellular automata is a parameterized function that computes the next state of each cell based on its 
+perceived input. Typically implemented as a compact neural network, such as a multi-layer perceptron (MLP) with one or two hidden layers, 
+it processes the concatenated perception vector to produce state changes \cite{Mordvintsev2020}. This design ensures parallelism across 
+the grid, leveraging GPU-accelerated convolutions for efficiency in both 2D and 3D settings \cite{Sudhakaran2021}. \\ \\
+Key aspects include:
+\begin{itemize}
+    \item \textbf{Network Architecture}: Linear layers with non-linear activations (e.g., ReLU) to introduce complexity while keeping 
+    parameter counts low (often under 1,000) for stable training \cite{Mordvintsev2020}.
+    \item \textbf{Stochastic Elements}: A probabilistic ``fire rate'' (e.g., 0.5) randomly masks updates per cell and step, promoting 
+    robustness and preventing synchronized oscillations \cite{Mordvintsev2020, Niklasson2021}.
+    \item \textbf{Output Processing}: The network outputs deltas added to the current state, gated by the alive channel to restrict 
+    changes to active regions \cite{Mordvintsev2020}. \\ 
+\end{itemize}
+This learnable rule enables emergent behaviors like growth and regeneration, drawing from biological self-organization where local 
+decisions yield global patterns \cite{Chan2019}. In 3D extensions, the same principles scale to volumetric grids, supporting applications 
+like structure assembly \cite{Sudhakaran2021}.
+
+\subsection{Grid Management}
+
+The grid in neural cellular automata serves as the spatial structure hosting the cells, typically a regular 3D lattice with 
+periodic (toroidal) or zero-padded boundaries to handle edge effects \cite{Mordvintsev2020}. In 3D implementations, it manages volumetric 
+states efficiently, often using PyTorch tensors for GPU parallelism \cite{Sudhakaran2021}. \\
+Essential features include:
+\begin{itemize}
+    \item \textbf{Dimensions and Boundaries}: Fixed-size cubes (e.g., 32$\times$32$\times$32) with wrapping to simulate infinite spaces, preventing 
+    boundary artifacts during growth \cite{Niklasson2021}.
+    \item \textbf{Initialization}: Seeding with a single or small cluster of active cells, plus optional noise for robustness \cite{Mordvintsev2020}.
+    \item \textbf{Simulation Loop}: Iterative application of perception and update across the entire grid, with steps 
+    batched for training efficiency \cite{Chan2019}. \\
+\end{itemize}
+This component ensures scalable computation, enabling complex 3D self-organization while supporting extensions like sparse 
+representations for larger volumes \cite{Sudhakaran2021}.
+
+\subsection{Training and Optimization}
+
+Neural cellular automata are optimized using gradient-based methods, leveraging their differentiability to minimize a loss 
+between generated states and target patterns \cite{Mordvintsev2020}. Training typically involves unrolling the simulation over 
+multiple steps and backpropagating through time, often with techniques like sample pooling for diversity \cite{Sudhakaran2021}. \\
+Core elements include:
+\begin{itemize}
+    \item \textbf{Loss Functions}: Mean squared error (MSE) for continuous states or custom metrics like intersection-over-union 
+    for structural fidelity \cite{Mordvintsev2020, Niklasson2021}.
+    \item \textbf{Regimes}: Growth from seeds, persistence under noise, or regeneration via injected damage to encourage robustness \cite{Mordvintsev2020}.
+    \item \textbf{Optimizers and Callbacks}: Adam optimizer with learning rates around 0.001; logging (e.g., WandB) 
+    and early stopping for efficiency \cite{Sudhakaran2021}. \\
+\end{itemize}
+This process enables the discovery of rules for complex 3D self-organization, with modular implementations 
+allowing ablation studies on regimes and losses \cite{Chan2019}.
+
+\chapter{Releated Work}
+TODO
+
+\chapter{Implementation}
+TODO
 
 \chapter{Conclusion}
 \label{zaver}
