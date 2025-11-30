@@ -58,10 +58,6 @@ class UpdateRule(nn.Module):
             nn.Conv3d(in_channels, upd_cfg.hidden_dim, kernel_size=1),
             nn.GroupNorm(4, upd_cfg.hidden_dim),
             nn.ReLU(inplace=True),
-
-            nn.Conv3d(upd_cfg.hidden_dim, upd_cfg.hidden_dim, kernel_size=1),
-            nn.ReLU(inplace=True),
-
             nn.Conv3d(upd_cfg.hidden_dim, cell_cfg.total_channels, kernel_size=1),
         )
 
