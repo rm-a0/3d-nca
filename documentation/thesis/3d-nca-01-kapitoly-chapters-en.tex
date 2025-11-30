@@ -227,14 +227,15 @@ Important considerations include:
     are often batched or pooled~\cite{Chan2019}.
 \end{itemize}
 
-TODO = rework this
-Grid representations in three dimensions are computationally demanding due to the cubic scaling of voxel-based environments. Sparse and 
-block-based grid structures are commonly used in related 3D modelling and simulation domains~\cite{Mildenhall2020,Choy2019}, 
-and represent potential strategies for scaling neural cellular automata to larger volumes.
+Three-dimensional grids are computationally demanding due to the cubic scaling of voxel-based environments. To address this, research on large-scale 
+volumetric simulations frequently employs data structures designed to reduce memory usage and accelerate neighbourhood access. Common strategies include 
+sparse voxel hierarchies, such as Sparse Voxel Octrees~\cite{Laine2010} and the OpenVDB framework~\cite{Museth2013}. These approaches demonstrate how 
+locality-preserving representations can substantially improve scalability in volumetric systems and provide conceptual pathways for extending neural 
+cellular automata to larger or more adaptive 3D environments.
 
 \subsection{Training and Optimisation}
 
-Because neural CA are differentiable, they can be optimised using gradient-based methodsto minimise a loss between the generated pattern and a 
+Because neural CA are differentiable, they can be optimised using gradient-based methods to minimise a loss between the generated pattern and a 
 target configuration~\cite{Mordvintsev2020}. Training typically involves unrolling the CA dynamics over a number of steps and applying 
 backpropagation through time.
 

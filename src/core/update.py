@@ -13,11 +13,9 @@ Architecture
   1. 1x1x1 Conv -> hidden_dim
   2. GroupNorm + ReLU
   3. 1x1x1 Conv -> hidden_dim
-  4. ReLU
-  5. 1x1x1 Conv -> C channels
-  6. tanh(·) x 0.1  (bounded update)
-  7. (optional) stochastic fire
-  8. multiply by alive_mask
+  4. tanh(·) x 0.1  (bounded update)
+  5. (optional) stochastic fire
+  6. multiply by alive_mask
 
 Original implementation inspired by:
 https://github.com/SkyLionx/3d-cellular-automaton
