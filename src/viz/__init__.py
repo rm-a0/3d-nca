@@ -10,14 +10,14 @@ from .volume_mpl import (
     show_volume_comparison_mpl,
 )
 
-# from .volume_pv import (
-#     show_volume_nca_pv,
-#     show_volume_target_pv,
-#     show_volume_comparison_pv,
-#     show_volume_nca_color,
-#     show_volume_target_color,
-#     show_volume_comparison_color,
-# )
+from .volume_pv import (
+    show_volume_nca_pv,
+    show_volume_target_pv,
+    show_volume_comparison_pv,
+    show_volume_nca_color,
+    show_volume_target_color,
+    show_volume_comparison_color,
+)
 
 __all__ = [
     # 2D slices (matplotlib)
@@ -29,11 +29,11 @@ __all__ = [
     "show_volume_target_mpl",
     "show_volume_comparison_mpl",
     # 3D volumes (pyvista)
-    # "show_volume_nca_pv",
-    # "show_volume_target_pv",
-    # "show_volume_comparison_pv",
-    # "show_volume_nca_color",
-    # "show_volume_target_color",
-    # "show_volume_comparison_color",
+    "show_volume_nca_pv",
+    "show_volume_target_pv",
+    "show_volume_comparison_pv",
+    "show_volume_nca_color",
+    "show_volume_target_color",
+    "show_volume_comparison_color",
 
 ]

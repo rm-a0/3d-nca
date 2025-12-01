@@ -293,6 +293,7 @@ dependencies:
       - rfc3987-syntax==1.1.0
       - rich==14.2.0
       - rpds-py==0.28.0
+      - rtree==1.4.1
       - ruff==0.6.9
       - scikit-image==0.24.0
       - scipy==1.16.3

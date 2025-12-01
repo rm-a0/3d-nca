@@ -104,6 +104,7 @@ rfc3987-syntax = "1.1.0"
 # ------------------------------------------------------------------
 trimesh = "^4.10.0"
 vedo = "^2025.5.4"
+rtree = "^1.4.1"
 [tool.poetry.group.dev.dependencies]
 black = "^25.9"
 isort = "^7.0"

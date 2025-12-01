@@ -12,9 +12,17 @@ import torch
 from torch import Tensor
 from typing import Optional
 
+
 def _alpha_np(tensor: Tensor) -> np.ndarray:
     """Extract alpha channel as NumPy array [X, Y, Z]."""
-    return tensor[:, -1:, ...].squeeze(0).squeeze(0).detach().cpu().numpy()
+    arr = tensor.squeeze(0).detach().cpu().numpy()
+    if arr.shape[0] == 1:
+        return arr[0]
+    elif arr.shape[0] in (3, 4):
+        return arr[-1]
+    else:
+        raise ValueError(f"Unexpected channel dimension: {arr.shape[0]}")
+
 
 def _get_slice(alpha: np.ndarray, axis: int, idx: Optional[int] = None) -> np.ndarray:
     """Return 2D slice from 3D volume at given axis/index (defaults to middle)."""
@@ -28,6 +36,7 @@ def _get_slice(alpha: np.ndarray, axis: int, idx: Optional[int] = None) -> np.nd
         return alpha[:, :, idx]
     else:
         raise ValueError("axis must be 0, 1, or 2")
+
 
 def _plot_slice(
     cur: np.ndarray,
@@ -54,6 +63,7 @@ def _plot_slice(
             plt.show()
     return im
 
+
 def show_slice_nca(
     state: Tensor,
     *,
@@ -72,6 +82,7 @@ def show_slice_nca(
     title = title or f"NCA α (slice {idx or alpha.shape[axis] // 2}, axis={['X','Y','Z'][axis]})"
     return _plot_slice(cur, title=title, cmap=cmap, vmin=vmin, vmax=vmax, ax=ax, show=show)
 
+
 def show_slice_target(
     target: Tensor,
     *,
@@ -85,10 +96,11 @@ def show_slice_target(
     show: bool = True,
 ) -> None:
     """Show target slice (center or specific index)."""
-    alpha = target.squeeze(0).squeeze(0).cpu().numpy()
+    alpha = _alpha_np(target)
     cur = _get_slice(alpha, axis, idx)
     title = f"{title} (slice {idx or alpha.shape[axis] // 2}, axis={['X','Y','Z'][axis]})"
     return _plot_slice(cur, title=title, cmap=cmap, vmin=vmin, vmax=vmax, ax=ax, show=show)
+
 
 def show_slice_comparison(
     state: Tensor,

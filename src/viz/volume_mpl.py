@@ -8,9 +8,19 @@ Usage:
 from __future__ import annotations
 import matplotlib.pyplot as plt
 import numpy as np
-import torch
 from torch import Tensor
 from typing import Optional, Tuple
+
+def _extract_alpha(tensor: Tensor) -> np.ndarray:
+    arr = tensor.squeeze(0).cpu().numpy()
+    if arr.shape[0] == 1:
+        return arr[0]
+    elif arr.shape[0] == 3:
+        return arr.mean(axis=0)
+    elif arr.shape[0] == 4:
+        return arr[3]
+    else:
+        raise ValueError(f"Unexpected channel dimension: {arr.shape[0]}")
 
 def _alpha_np(tensor: Tensor) -> np.ndarray:
     """Extract alpha channel as NumPy array [X, Y, Z]."""
@@ -63,7 +73,7 @@ def show_volume_target_mpl(
     show: bool = True,
 ) -> int:
     """Show target volume as 3D scatter plot."""
-    alpha = target.squeeze(0).squeeze(0).cpu().numpy()
+    alpha = _extract_alpha(target)
     xs, ys, zs = np.nonzero(alpha > threshold)
     
     fig = plt.figure(figsize=figsize)
@@ -100,7 +110,7 @@ def show_volume_comparison_mpl(
 ) -> Tuple[int, int]:
     """Show NCA and target volumes side-by-side as 3D scatter plots."""
     alpha = _alpha_np(state)
-    target_np = target.squeeze(0).squeeze(0).cpu().numpy()
+    target_np = _extract_alpha(target)
     
     xs, ys, zs = np.nonzero(alpha > threshold)
     xs_t, ys_t, zs_t = np.nonzero(target_np > threshold)
