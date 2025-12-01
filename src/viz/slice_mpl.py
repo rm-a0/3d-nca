@@ -1,6 +1,5 @@
 import matplotlib.pyplot as plt
 import numpy as np
-import torch
 from torch import Tensor
 
 
@@ -46,12 +45,12 @@ def _get_slice(arr: np.ndarray, axis: int = 2, idx: int | None = None):
     else:
         raise ValueError(f"Expected 3D or 4D array, got shape {arr.shape}")
 
-def show_slice_nca(
+def show_slice_mpl(
     state: Tensor,
     *,
     axis: int = 2,
     idx: int | None = None,
-    title: str = "NCA",
+    title: str = "Slice",
     cmap: str = "viridis",
     vmin: float = 0,
     vmax: float = 1,
@@ -73,34 +72,7 @@ def show_slice_nca(
         plt.show()
 
 
-def show_slice_target(
-    target: Tensor,
-    *,
-    axis: int = 2,
-    idx: int | None = None,
-    title: str = "Target",
-    cmap: str = "viridis",
-    vmin: float = 0,
-    vmax: float = 1,
-    ax=None,
-    show: bool = True,
-) -> None:
-    alpha = _alpha_np(target)
-    cur = _get_slice(alpha, axis, idx)
-    
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(5, 5))
-    
-    im = ax.imshow(cur, cmap=cmap, vmin=vmin, vmax=vmax, interpolation='nearest')
-    ax.set_title(title)
-    ax.axis('off')
-    
-    if show:
-        plt.colorbar(im, ax=ax)
-        plt.show()
-
-
-def show_slice_comparison(
+def show_slice_comparison_mpl(
     state: Tensor,
     target: Tensor,
     *,
@@ -111,18 +83,18 @@ def show_slice_comparison(
     vmax: float = 1,
 ) -> None:
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4.5))
-    show_slice_nca(state, axis=axis, idx=idx, cmap=cmap, vmin=vmin, vmax=vmax, ax=ax1, show=False)
-    show_slice_target(target, axis=axis, idx=idx, cmap=cmap, vmin=vmin, vmax=vmax, ax=ax2, show=False)
+    show_slice_mpl(state, axis=axis, idx=idx, cmap=cmap, vmin=vmin, vmax=vmax, ax=ax1, show=False)
+    show_slice_mpl(target, axis=axis, idx=idx, cmap=cmap, vmin=vmin, vmax=vmax, ax=ax2, show=False)
     plt.tight_layout()
     plt.show()
 
 
-def show_slice_rgba(
+def show_slice_rgba_mpl(
     state: Tensor,
     *,
     axis: int = 2,
     idx: int | None = None,
-    title: str = "RGBA",
+    title: str = "RGBA Slice",
     ax=None,
     show: bool = True,
 ) -> None:
@@ -149,7 +121,7 @@ def show_slice_rgba(
         plt.show()
 
 
-def show_slice_comparison_rgba(
+def show_slice_comparison_rgba_mpl(
     state: Tensor,
     target: Tensor,
     *,
@@ -157,7 +129,7 @@ def show_slice_comparison_rgba(
     idx: int | None = None,
 ) -> None:
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-    show_slice_rgba(state, axis=axis, idx=idx, title="NCA Output", ax=ax1, show=False)
-    show_slice_rgba(target, axis=axis, idx=idx, title="Target", ax=ax2, show=False)
+    show_slice_rgba_mpl(state, axis=axis, idx=idx, title="NCA Output", ax=ax1, show=False)
+    show_slice_rgba_mpl(target, axis=axis, idx=idx, title="Target", ax=ax2, show=False)
     plt.tight_layout()
     plt.show()

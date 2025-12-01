@@ -2,34 +2,24 @@ import numpy as np
 from torch import Tensor
 import pyvista as pv
 
-def show_volume_nca_pv():
-    return
-
-def show_volume_target_pv():
+def show_volume_pv():
     return
 
 def show_volume_comparison_pv():
     return
 
-def show_volume_nca_color():
+def show_volume_comparison_rgba_pv():
     return
 
-def show_volume_target_color():
-    return
-
-def show_volume_comparison_color():
-    return
-
-def show_volume_target_color(
+def show_volume_rgba_pv(
     target: Tensor,
     *,
     threshold: float = 0.05,
     point_size: float = 10.0,
-    title: str = "Colored Target Volume",
+    title: str = "RGBA Volume",
     show_grid: bool = False,
     notebook: bool = False,
 ):
-    """Visualize a colored voxel volume (RGB channels) using PyVista."""
     vol = target.squeeze(0).cpu().numpy()
     r, g, b = vol[0], vol[1], vol[2]
 

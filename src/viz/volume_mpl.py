@@ -1,10 +1,3 @@
-"""
-3-D volume visualization utilities for NCA (matplotlib-based).
-Usage:
-    show_volume_nca_mpl(state)                    # Show NCA 3D scatter
-    show_volume_target_mpl(target)                # Show target 3D scatter
-    show_volume_comparison_mpl(state, target)     # Side-by-side 3D comparison
-"""
 from __future__ import annotations
 import matplotlib.pyplot as plt
 import numpy as np
@@ -26,18 +19,18 @@ def _alpha_np(tensor: Tensor) -> np.ndarray:
     """Extract alpha channel as NumPy array [X, Y, Z]."""
     return tensor[:, -1:, ...].squeeze(0).squeeze(0).detach().cpu().numpy()
 
-def show_volume_nca_mpl(
+def show_volume_mpl(
     state: Tensor,
     *,
     threshold: float = 0.2,
     figsize: Tuple[int, int] = (8, 8),
     cmap: str = "viridis",
     point_size: int = 6,
-    title: str = "NCA Volume",
+    title: str = "Volume",
     view_angle: Optional[Tuple[float, float]] = None,
     show: bool = True,
 ) -> int:
-    """Show NCA alpha channel as 3D scatter plot."""
+    """Show Tensor alpha channel as 3D scatter plot."""
     alpha = _alpha_np(state)
     xs, ys, zs = np.nonzero(alpha > threshold)
     
@@ -46,42 +39,6 @@ def show_volume_nca_mpl(
     
     if len(xs) > 0:
         ax.scatter(xs, ys, zs, s=point_size, c=alpha[alpha > threshold], cmap=cmap)
-    
-    ax.set_title(f"{title} ({len(xs)} voxels)")
-    ax.set_xlabel("X")
-    ax.set_ylabel("Y")
-    ax.set_zlabel("Z")
-    
-    if view_angle:
-        ax.view_init(elev=view_angle[0], azim=view_angle[1])
-    
-    plt.tight_layout()
-    if show:
-        plt.show()
-    
-    return len(xs)
-
-def show_volume_target_mpl(
-    target: Tensor,
-    *,
-    threshold: float = 0.2,
-    figsize: Tuple[int, int] = (8, 8),
-    cmap: str = "viridis",
-    point_size: int = 6,
-    title: str = "Target Volume",
-    view_angle: Optional[Tuple[float, float]] = None,
-    show: bool = True,
-) -> int:
-    """Show target volume as 3D scatter plot."""
-    alpha = _extract_alpha(target)
-    xs, ys, zs = np.nonzero(alpha > threshold)
-    
-    fig = plt.figure(figsize=figsize)
-    ax = fig.add_subplot(111, projection="3d")
-    
-    if len(xs) > 0:
-        ax.scatter(xs, ys, zs, s=point_size, 
-                  c=alpha[alpha > threshold], cmap=cmap)
     
     ax.set_title(f"{title} ({len(xs)} voxels)")
     ax.set_xlabel("X")
