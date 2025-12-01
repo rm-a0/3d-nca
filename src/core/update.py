@@ -78,4 +78,4 @@ class UpdateRule(nn.Module):
             delta = delta * fire
 
         delta = torch.tanh(delta) * 0.1
-        return state + delta * alive_mask.float()
+        return delta * alive_mask.float()

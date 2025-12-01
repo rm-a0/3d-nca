@@ -2,6 +2,8 @@ from .slice_mpl import (
     show_slice_nca,
     show_slice_target,
     show_slice_comparison,
+    show_slice_rgba,
+    show_slice_comparison_rgba,
 )
 
 from .volume_mpl import (
@@ -24,6 +26,8 @@ __all__ = [
     "show_slice_nca",
     "show_slice_target",
     "show_slice_comparison",
+    "show_slice_rgba",
+    "show_slice_comparison_rgba"
     # 3D volumes (matplotlib)
     "show_volume_nca_mpl",
     "show_volume_target_mpl",

@@ -1,120 +1,163 @@
-"""
-2-D slice visualization utilities for NCA alpha (alive) channel.
-Usage:
-    show_slice_nca(state)                     # Show NCA slice
-    show_slice_target(target)                 # Show target slice
-    show_slice_comparison(state, target)      # Side-by-side comparison
-"""
-from __future__ import annotations
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from torch import Tensor
-from typing import Optional
 
 
 def _alpha_np(tensor: Tensor) -> np.ndarray:
-    """Extract alpha channel as NumPy array [X, Y, Z]."""
-    arr = tensor.squeeze(0).detach().cpu().numpy()
-    if arr.shape[0] == 1:
-        return arr[0]
-    elif arr.shape[0] in (3, 4):
-        return arr[-1]
-    else:
-        raise ValueError(f"Unexpected channel dimension: {arr.shape[0]}")
+    if tensor.ndim == 5:
+        tensor = tensor[0]
+    
+    alpha = tensor[-1].detach().cpu().numpy()
+    alpha = np.clip(alpha, 0, 1)
+    
+    return alpha
 
 
-def _get_slice(alpha: np.ndarray, axis: int, idx: Optional[int] = None) -> np.ndarray:
-    """Return 2D slice from 3D volume at given axis/index (defaults to middle)."""
+def _rgba_np(tensor: Tensor) -> np.ndarray:
+    if tensor.ndim == 5:
+        tensor = tensor[0]
+    
+    rgba = tensor[-4:].detach().cpu().numpy()
+    rgba = np.transpose(rgba, (1, 2, 3, 0))
+    rgba = np.clip(rgba, 0, 1)
+    
+    return rgba
+
+
+def _get_slice(arr: np.ndarray, axis: int = 2, idx: int | None = None):
     if idx is None:
-        idx = alpha.shape[axis] // 2
-    if axis == 0:
-        return alpha[idx]
-    elif axis == 1:
-        return alpha[:, idx, :]
-    elif axis == 2:
-        return alpha[:, :, idx]
+        idx = arr.shape[axis] // 2
+    
+    if arr.ndim == 3:
+        if axis == 0:
+            return arr[idx, :, :]
+        elif axis == 1:
+            return arr[:, idx, :]
+        else:
+            return arr[:, :, idx]
+    elif arr.ndim == 4:
+        if axis == 0:
+            return arr[idx, :, :, :]
+        elif axis == 1:
+            return arr[:, idx, :, :]
+        else:
+            return arr[:, :, idx, :]
     else:
-        raise ValueError("axis must be 0, 1, or 2")
-
-
-def _plot_slice(
-    cur: np.ndarray,
-    *,
-    title: Optional[str] = None,
-    cmap: str = "viridis",
-    vmin: float = 0.0,
-    vmax: float = 1.0,
-    ax: Optional[plt.Axes] = None,
-    show: bool = True,
-) -> None:
-    """Plot a 2D slice on given axes or standalone."""
-    own_fig = False
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(5, 4.5))
-        own_fig = True
-    im = ax.imshow(cur, vmin=vmin, vmax=vmax, cmap=cmap, origin="lower")
-    ax.set_title(title or "")
-    ax.axis("off")
-    if own_fig:
-        plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-        plt.tight_layout()
-        if show:
-            plt.show()
-    return im
-
+        raise ValueError(f"Expected 3D or 4D array, got shape {arr.shape}")
 
 def show_slice_nca(
     state: Tensor,
     *,
-    axis: int = 0,
-    idx: Optional[int] = None,
-    title: Optional[str] = None,
+    axis: int = 2,
+    idx: int | None = None,
+    title: str = "NCA",
     cmap: str = "viridis",
-    vmin: float = 0.0,
-    vmax: float = 1.0,
-    ax: Optional[plt.Axes] = None,
+    vmin: float = 0,
+    vmax: float = 1,
+    ax=None,
     show: bool = True,
 ) -> None:
-    """Show NCA alpha slice (center or specific index)."""
     alpha = _alpha_np(state)
     cur = _get_slice(alpha, axis, idx)
-    title = title or f"NCA α (slice {idx or alpha.shape[axis] // 2}, axis={['X','Y','Z'][axis]})"
-    return _plot_slice(cur, title=title, cmap=cmap, vmin=vmin, vmax=vmax, ax=ax, show=show)
+    
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(5, 5))
+    
+    im = ax.imshow(cur, cmap=cmap, vmin=vmin, vmax=vmax, interpolation='nearest')
+    ax.set_title(title)
+    ax.axis('off')
+    
+    if show:
+        plt.colorbar(im, ax=ax)
+        plt.show()
 
 
 def show_slice_target(
     target: Tensor,
     *,
-    axis: int = 0,
-    idx: Optional[int] = None,
+    axis: int = 2,
+    idx: int | None = None,
     title: str = "Target",
     cmap: str = "viridis",
-    vmin: float = 0.0,
-    vmax: float = 1.0,
-    ax: Optional[plt.Axes] = None,
+    vmin: float = 0,
+    vmax: float = 1,
+    ax=None,
     show: bool = True,
 ) -> None:
-    """Show target slice (center or specific index)."""
     alpha = _alpha_np(target)
     cur = _get_slice(alpha, axis, idx)
-    title = f"{title} (slice {idx or alpha.shape[axis] // 2}, axis={['X','Y','Z'][axis]})"
-    return _plot_slice(cur, title=title, cmap=cmap, vmin=vmin, vmax=vmax, ax=ax, show=show)
+    
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(5, 5))
+    
+    im = ax.imshow(cur, cmap=cmap, vmin=vmin, vmax=vmax, interpolation='nearest')
+    ax.set_title(title)
+    ax.axis('off')
+    
+    if show:
+        plt.colorbar(im, ax=ax)
+        plt.show()
 
 
 def show_slice_comparison(
     state: Tensor,
     target: Tensor,
     *,
-    axis: int = 0,
-    idx: Optional[int] = None,
+    axis: int = 2,
+    idx: int | None = None,
     cmap: str = "viridis",
-    vmin: float = 0.0,
-    vmax: float = 1.0,
+    vmin: float = 0,
+    vmax: float = 1,
 ) -> None:
-    """Show NCA and target slices side-by-side (center or specific index)."""
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4.5))
     show_slice_nca(state, axis=axis, idx=idx, cmap=cmap, vmin=vmin, vmax=vmax, ax=ax1, show=False)
     show_slice_target(target, axis=axis, idx=idx, cmap=cmap, vmin=vmin, vmax=vmax, ax=ax2, show=False)
+    plt.tight_layout()
+    plt.show()
+
+
+def show_slice_rgba(
+    state: Tensor,
+    *,
+    axis: int = 2,
+    idx: int | None = None,
+    title: str = "RGBA",
+    ax=None,
+    show: bool = True,
+) -> None:
+    rgba = _rgba_np(state)
+    slice_2d = _get_slice(rgba, axis, idx)
+    
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(5, 5))
+    
+    h, w = slice_2d.shape[:2]
+    checker = np.indices((h, w)).sum(axis=0) % 2
+    checker = checker.astype(float) * 0.2 + 0.4
+    
+    rgb = slice_2d[:, :, :3]
+    alpha = slice_2d[:, :, 3:4]
+    
+    display = rgb * alpha + np.stack([checker]*3, axis=-1) * (1 - alpha)
+    
+    ax.imshow(np.clip(display, 0, 1), interpolation='nearest')
+    ax.set_title(title)
+    ax.axis('off')
+    
+    if show:
+        plt.show()
+
+
+def show_slice_comparison_rgba(
+    state: Tensor,
+    target: Tensor,
+    *,
+    axis: int = 2,
+    idx: int | None = None,
+) -> None:
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+    show_slice_rgba(state, axis=axis, idx=idx, title="NCA Output", ax=ax1, show=False)
+    show_slice_rgba(target, axis=axis, idx=idx, title="Target", ax=ax2, show=False)
     plt.tight_layout()
     plt.show()
