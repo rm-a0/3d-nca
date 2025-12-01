@@ -1,11 +1,9 @@
 """
 2-D slice visualization utilities for NCA alpha (alive) channel.
-
 Usage:
-    show_nca(state)                     # Show NCA slice
-    show_target(target)                 # Show target slice
-    show_comparison(state, target)      # Side-by-side comparison
-    show_slice_at(state, idx)           # Show custom slice index
+    show_slice_nca(state)                     # Show NCA slice
+    show_slice_target(target)                 # Show target slice
+    show_slice_comparison(state, target)      # Side-by-side comparison
 """
 from __future__ import annotations
 import matplotlib.pyplot as plt
@@ -15,9 +13,8 @@ from torch import Tensor
 from typing import Optional
 
 def _alpha_np(tensor: Tensor) -> np.ndarray:
-    """Extract alpha channel (last channel) as NumPy array [X, Y, Z]."""
+    """Extract alpha channel as NumPy array [X, Y, Z]."""
     return tensor[:, -1:, ...].squeeze(0).squeeze(0).detach().cpu().numpy()
-
 
 def _get_slice(alpha: np.ndarray, axis: int, idx: Optional[int] = None) -> np.ndarray:
     """Return 2D slice from 3D volume at given axis/index (defaults to middle)."""
@@ -47,11 +44,9 @@ def _plot_slice(
     if ax is None:
         fig, ax = plt.subplots(figsize=(5, 4.5))
         own_fig = True
-
     im = ax.imshow(cur, vmin=vmin, vmax=vmax, cmap=cmap, origin="lower")
     ax.set_title(title or "")
     ax.axis("off")
-
     if own_fig:
         plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
         plt.tight_layout()
@@ -59,7 +54,7 @@ def _plot_slice(
             plt.show()
     return im
 
-def show_nca(
+def show_slice_nca(
     state: Tensor,
     *,
     axis: int = 0,
@@ -77,7 +72,7 @@ def show_nca(
     title = title or f"NCA α (slice {idx or alpha.shape[axis] // 2}, axis={['X','Y','Z'][axis]})"
     return _plot_slice(cur, title=title, cmap=cmap, vmin=vmin, vmax=vmax, ax=ax, show=show)
 
-def show_target(
+def show_slice_target(
     target: Tensor,
     *,
     axis: int = 0,
@@ -95,7 +90,7 @@ def show_target(
     title = f"{title} (slice {idx or alpha.shape[axis] // 2}, axis={['X','Y','Z'][axis]})"
     return _plot_slice(cur, title=title, cmap=cmap, vmin=vmin, vmax=vmax, ax=ax, show=show)
 
-def show_comparison(
+def show_slice_comparison(
     state: Tensor,
     target: Tensor,
     *,
@@ -107,9 +102,7 @@ def show_comparison(
 ) -> None:
     """Show NCA and target slices side-by-side (center or specific index)."""
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4.5))
-
-    show_nca(state, axis=axis, idx=idx, cmap=cmap, vmin=vmin, vmax=vmax, ax=ax1, show=False)
-    show_target(target, axis=axis, idx=idx, cmap=cmap, vmin=vmin, vmax=vmax, ax=ax2, show=False)
-
+    show_slice_nca(state, axis=axis, idx=idx, cmap=cmap, vmin=vmin, vmax=vmax, ax=ax1, show=False)
+    show_slice_target(target, axis=axis, idx=idx, cmap=cmap, vmin=vmin, vmax=vmax, ax=ax2, show=False)
     plt.tight_layout()
     plt.show()
