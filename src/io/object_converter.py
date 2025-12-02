@@ -44,7 +44,6 @@ def obj_to_tensor(
             voxel_matrix[slices_src[0], slices_src[1], slices_src[2]]
         voxel_matrix = target_grid
     
-    # Convert to float
     voxel_float = voxel_matrix.astype(np.float32)
     
     if hasattr(mesh.visual, 'vertex_colors') and mesh.visual.vertex_colors is not None:

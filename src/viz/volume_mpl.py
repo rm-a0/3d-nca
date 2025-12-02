@@ -1,44 +1,29 @@
-from __future__ import annotations
 import matplotlib.pyplot as plt
 import numpy as np
-from torch import Tensor
 from typing import Optional, Tuple
+from torch import Tensor
+from .utils import extract_visible, extract_alpha, get_voxels_above_threshold
 
-def _extract_alpha(tensor: Tensor) -> np.ndarray:
-    arr = tensor.squeeze(0).cpu().numpy()
-    if arr.shape[0] == 1:
-        return arr[0]
-    elif arr.shape[0] == 3:
-        return arr.mean(axis=0)
-    elif arr.shape[0] == 4:
-        return arr[3]
-    else:
-        raise ValueError(f"Unexpected channel dimension: {arr.shape[0]}")
-
-def _alpha_np(tensor: Tensor) -> np.ndarray:
-    """Extract alpha channel as NumPy array [X, Y, Z]."""
-    return tensor[:, -1:, ...].squeeze(0).squeeze(0).detach().cpu().numpy()
-
-def show_volume_mpl(
-    state: Tensor,
-    *,
+def show_volume_alpha_mpl(
+    tensor: Tensor,
+    visible_channels: Optional[int] = None,
     threshold: float = 0.2,
     figsize: Tuple[int, int] = (8, 8),
     cmap: str = "viridis",
     point_size: int = 6,
-    title: str = "Volume",
+    title: str = "Alpha Volume",
     view_angle: Optional[Tuple[float, float]] = None,
     show: bool = True,
 ) -> int:
-    """Show Tensor alpha channel as 3D scatter plot."""
-    alpha = _alpha_np(state)
-    xs, ys, zs = np.nonzero(alpha > threshold)
+    visible = extract_visible(tensor, visible_channels)
+    alpha = extract_alpha(visible)
+    xs, ys, zs, values = get_voxels_above_threshold(alpha, threshold)
     
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111, projection="3d")
     
     if len(xs) > 0:
-        ax.scatter(xs, ys, zs, s=point_size, c=alpha[alpha > threshold], cmap=cmap)
+        ax.scatter(xs, ys, zs, s=point_size, c=values, cmap=cmap)
     
     ax.set_title(f"{title} ({len(xs)} voxels)")
     ax.set_xlabel("X")
@@ -54,10 +39,10 @@ def show_volume_mpl(
     
     return len(xs)
 
-def show_volume_comparison_mpl(
+def show_volume_alpha_comparison_mpl(
     state: Tensor,
     target: Tensor,
-    *,
+    visible_channels: Optional[int] = None,
     threshold: float = 0.2,
     figsize: Tuple[int, int] = (14, 6),
     cmap: str = "viridis",
@@ -65,19 +50,15 @@ def show_volume_comparison_mpl(
     title_prefix: str = "",
     view_angle: Optional[Tuple[float, float]] = None,
 ) -> Tuple[int, int]:
-    """Show NCA and target volumes side-by-side as 3D scatter plots."""
-    alpha = _alpha_np(state)
-    target_np = _extract_alpha(target)
-    
-    xs, ys, zs = np.nonzero(alpha > threshold)
-    xs_t, ys_t, zs_t = np.nonzero(target_np > threshold)
-    
     fig = plt.figure(figsize=figsize)
     
     ax1 = fig.add_subplot(121, projection="3d")
-    if len(xs) > 0:
-        ax1.scatter(xs, ys, zs, s=point_size, c=alpha[alpha > threshold], cmap=cmap)
-    ax1.set_title(f"{title_prefix}Predicted ({len(xs)} voxels)")
+    visible_t = extract_visible(target, visible_channels)
+    alpha_t = extract_alpha(visible_t)
+    xs_t, ys_t, zs_t, vals_t = get_voxels_above_threshold(alpha_t, threshold)
+    if len(xs_t) > 0:
+        ax1.scatter(xs_t, ys_t, zs_t, s=point_size, c=vals_t, cmap=cmap)
+    ax1.set_title(f"{title_prefix}Target ({len(xs_t)} voxels)")
     ax1.set_xlabel("X")
     ax1.set_ylabel("Y")
     ax1.set_zlabel("Z")
@@ -85,9 +66,12 @@ def show_volume_comparison_mpl(
         ax1.view_init(elev=view_angle[0], azim=view_angle[1])
     
     ax2 = fig.add_subplot(122, projection="3d")
-    if len(xs_t) > 0:
-        ax2.scatter(xs_t, ys_t, zs_t, s=point_size, c=target_np[target_np > threshold], cmap=cmap)
-    ax2.set_title(f"{title_prefix}Target ({len(xs_t)} voxels)")
+    visible_s = extract_visible(state, visible_channels)
+    alpha_s = extract_alpha(visible_s)
+    xs_s, ys_s, zs_s, vals_s = get_voxels_above_threshold(alpha_s, threshold)
+    if len(xs_s) > 0:
+        ax2.scatter(xs_s, ys_s, zs_s, s=point_size, c=vals_s, cmap=cmap)
+    ax2.set_title(f"{title_prefix}Predicted ({len(xs_s)} voxels)")
     ax2.set_xlabel("X")
     ax2.set_ylabel("Y")
     ax2.set_zlabel("Z")
@@ -97,4 +81,4 @@ def show_volume_comparison_mpl(
     plt.tight_layout()
     plt.show()
     
-    return len(xs), len(xs_t)
+    return len(xs_t), len(xs_s)
