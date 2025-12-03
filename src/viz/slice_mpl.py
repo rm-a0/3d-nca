@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import numpy as np
 from typing import Optional
 from torch import Tensor
 from .utils import extract_visible, extract_alpha, extract_rgba, get_slice_2d, generate_checkerboard
