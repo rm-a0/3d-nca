@@ -25,18 +25,19 @@ class NCA_PG_CellProperties(bpy.types.PropertyGroup):
     ) # type: ignore
 
 class NCA_PG_PerceptionProperties(bpy.types.PropertyGroup):
+    kernel_radius: bpy.props.IntProperty(
+        name="Kernel Radius",
+        description="Radius of the perception kernel",
+        default=1,
+        min=1
+    ) # type: ignore
     channel_groups: bpy.props.IntProperty(
         name="Channel Groups",
         description="Number of channel groups for perception",
         default=4,
         min=1
     ) # type: ignore
-    perception_radius: bpy.props.IntProperty(
-        name="Perception Radius",
-        description="Radius for perception",
-        default=1,
-        min=1
-    ) # type: ignore
+    
 
 class NCA_PG_UpdateProperties(bpy.types.PropertyGroup):
     hidden_dim: bpy.props.IntProperty(
@@ -58,7 +59,7 @@ class NCA_PG_UpdateProperties(bpy.types.PropertyGroup):
         max=1.0
     ) # type: ignore
 
-class NA_CA_PG_GridProperties(bpy.types.PropertyGroup):
+class NCA_PG_GridProperties(bpy.types.PropertyGroup):
     grid_size: bpy.props.IntVectorProperty(
         name="Grid Size",
         description="Size of the NCA grid",
@@ -119,7 +120,7 @@ classes = (
     NCA_PG_CellProperties,
     NCA_PG_PerceptionProperties,
     NCA_PG_UpdateProperties,
-    NA_CA_PG_GridProperties,
+    NCA_PG_GridProperties,
     NCA_PG_TrainingProperties,
     NCA_PG_VisualizationProperties,
 )
@@ -131,7 +132,7 @@ def register():
     bpy.types.Scene.nca_cell_props = bpy.props.PointerProperty(type=NCA_PG_CellProperties)
     bpy.types.Scene.nca_perception_props = bpy.props.PointerProperty(type=NCA_PG_PerceptionProperties)
     bpy.types.Scene.nca_update_props = bpy.props.PointerProperty(type=NCA_PG_UpdateProperties)
-    bpy.types.Scene.nca_grid_props = bpy.props.PointerProperty(type=NA_CA_PG_GridProperties)
+    bpy.types.Scene.nca_grid_props = bpy.props.PointerProperty(type=NCA_PG_GridProperties)
     bpy.types.Scene.nca_training_props = bpy.props.PointerProperty(type=NCA_PG_TrainingProperties)
     bpy.types.Scene.nca_visualization_props = bpy.props.PointerProperty(type=NCA_PG_VisualizationProperties)
 

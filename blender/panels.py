@@ -1,3 +1,4 @@
+from blender.operators import NCA_OT_RunSimulationOperator
 import bpy
 
 class NCA_PT_BasePanel(bpy.types.Panel):
@@ -48,8 +49,8 @@ class NCA_PT_PerceptionSettings(NCA_PT_BasePanel):
         layout = self.layout
         perc_props = context.scene.nca_perception_props
 
+        layout.prop(perc_props, "kernel_radius", text="Kernel Radius")
         layout.prop(perc_props, "channel_groups", text="Channel Groups")
-        layout.prop(perc_props, "perception_radius", text="Perception Radius")
 
 class NCA_PT_UpdateSettings(NCA_PT_BasePanel):
     bl_label = "Update Settings"
@@ -114,9 +115,9 @@ class NCA_PT_VisualizationSettings(NCA_PT_BasePanel):
         layout.prop(vis_props, "show_grid", text="Show Grid")
         layout.prop(vis_props, "animation_speed", text="Animation Speed")
 
-class NCA_PT_RunPanel(NCA_PT_BasePanel):
+class NCA_PT_SimulationControlPanel(NCA_PT_BasePanel):
     bl_label = "Run NCA"
-    bl_idname = "NCA_PT_run_panel"
+    bl_idname = "NCA_PT_simulation_control_panel"
     bl_parent_id = "NCA_PT_main_panel"
     bl_options = {'HIDE_HEADER'}
     bl_order = 10
@@ -125,8 +126,10 @@ class NCA_PT_RunPanel(NCA_PT_BasePanel):
         super().draw(context)
 
         layout = self.layout
-        layout.operator("nca.run_simulation", text="Run Simulation")
-        layout.operator("nca.stop_simulation", text="Stop Simulation")
+        if NCA_OT_RunSimulationOperator._is_running:
+            layout.operator("nca.stop_simulation", text="Stop Simulation", icon='PAUSE')
+        else:   
+            layout.operator("nca.run_simulation", text="Run Simulation", icon='PLAY')
 
 classes = (
     NCA_PT_MainPanel,
@@ -136,7 +139,7 @@ classes = (
     NCA_PT_GridSettings,
     NCA_PT_TrainingSettings,
     NCA_PT_VisualizationSettings,
-    NCA_PT_RunPanel,
+    NCA_PT_SimulationControlPanel,
 )
 
 def register():
