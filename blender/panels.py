@@ -5,6 +5,11 @@ class NCA_PT_BasePanel(bpy.types.Panel):
     bl_region_type = 'UI'
     bl_category = 'NCA'
 
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+
 class NCA_PT_MainPanel(NCA_PT_BasePanel):
     bl_label = "3D NCA Settings"
     bl_idname = "NCA_PT_main_panel"
@@ -22,6 +27,8 @@ class NCA_PT_CellSettings(NCA_PT_BasePanel):
     bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
+        super().draw(context)
+
         layout = self.layout
         cell_props = context.scene.nca_cell_props
 
@@ -36,6 +43,8 @@ class NCA_PT_PerceptionSettings(NCA_PT_BasePanel):
     bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
+        super().draw(context)
+
         layout = self.layout
         perc_props = context.scene.nca_perception_props
 
@@ -49,6 +58,8 @@ class NCA_PT_UpdateSettings(NCA_PT_BasePanel):
     bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
+        super().draw(context)
+
         layout = self.layout
         upd_props = context.scene.nca_update_props
 
@@ -63,11 +74,12 @@ class NCA_PT_GridSettings(NCA_PT_BasePanel):
     bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
+        super().draw(context)
+
         layout = self.layout
         grid_props = context.scene.nca_grid_props
 
         layout.prop(grid_props, "grid_size", text="Grid Size")
-        layout.prop(grid_props, "cell_size", text="Cell Size")
 
 class NCA_PT_TrainingSettings(NCA_PT_BasePanel):
     bl_label = "Training Settings"
@@ -76,6 +88,8 @@ class NCA_PT_TrainingSettings(NCA_PT_BasePanel):
     bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
+        super().draw(context)
+
         layout = self.layout
         train_props = context.scene.nca_training_props
 
@@ -90,10 +104,13 @@ class NCA_PT_VisualizationSettings(NCA_PT_BasePanel):
     bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
+        super().draw(context)
+
         layout = self.layout
         vis_props = context.scene.nca_visualization_props
 
         layout.prop(vis_props, "cell_shape", text="Cell Shape")
+        layout.prop(vis_props, "cell_size", text="Cell Size")
         layout.prop(vis_props, "show_grid", text="Show Grid")
         layout.prop(vis_props, "animation_speed", text="Animation Speed")
 
@@ -105,6 +122,8 @@ class NCA_PT_RunPanel(NCA_PT_BasePanel):
     bl_order = 10
 
     def draw(self, context):
+        super().draw(context)
+
         layout = self.layout
         layout.operator("nca.run_simulation", text="Run Simulation")
         layout.operator("nca.stop_simulation", text="Stop Simulation")
