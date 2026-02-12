@@ -42,13 +42,10 @@ Formally, a cellular automaton is defined by:
 \end{itemize}
 
 The foundational work of Ulam and von Neumann in the 1940s established CA as a model for self-replication~\cite{VonNeumann1966}.  
-Later, Wolfram proposed a widely used behavioural classification of CA into four qualitative classes:
-\begin{itemize}
-    \item \textbf{Class 1 - Uniform}: quickly reaches a single state.  
-    \item \textbf{Class 2 - Periodic}: static or oscillating patterns.  
-    \item \textbf{Class 3 - Chaotic}: unpredictable, noisy evolution.  
-    \item \textbf{Class 4 - Complex}: long-lived structures and computation~\cite{Wolfram1983, Wolfram2002}.  
-\end{itemize}
+Later, Wolfram proposed a widely used behavioural classification of CA into four qualitative classes~\cite{Wolfram1983, Wolfram2002}. 
+Class 1 systems quickly converge to a uniform state. Class 2 systems evolve into static or periodically oscillating patterns. 
+Class 3 systems exhibit chaotic and seemingly unpredictable behaviour. Class 4 systems demonstrate complex dynamics characterised 
+by long-lived structures capable of interaction and computation.
 
 These classes remain a reference point in subsequent work on both classical and neural CA.
 
@@ -58,26 +55,19 @@ The simplest non-trivial CA operate on a one-dimensional array of cells. In the 
 its own state and that of its two immediate neighbours (radius 1, neighbourhood size 3). With binary states, the update rule 
 has $2^{3} = 8$ possible neighbourhood configurations, yielding $2^{8} = 256$ distinct rules in Wolfram's enumeration scheme~\cite{Wolfram1983}.
 
-A rule number encodes the next-state lookup table in binary. Notable examples include:
-\begin{itemize}
-    \item \textbf{Rule 90}, which generates the well-known Sierpiński triangle from a single active seed (Class 3),
-    \item \textbf{Rule 30}, whose chaotic evolution has been used as a source of pseudorandomness,
-    \item \textbf{Rule 110}, (Class 4) is the smallest known Turing-complete 1D CA, supporting gliders and 
-    glider collisions that can perform any computation~\cite{Cook2004}.
-\end{itemize}
+A rule number encodes the next-state lookup table in binary. Notable examples include Rule 90, which generates 
+the well-known Sierpiński triangle from a single active seed (Class 3), and Rule 30, whose chaotic evolution 
+has been used as a source of pseudorandomness. Rule 110 (Class 4) is the smallest known Turing-complete 1D CA, 
+supporting gliders and glider collisions that can perform universal computation~\cite{Cook2004}.
 
 \subsection{Two-Dimensional Cellular Automata}
 
 In 2D, the Moore neighbourhood (a $3 \times 3$ block) is the most common. Because the space of lookup tables is 
 large ($2^9$ input combinations), rules are often expressed using birth/survival notation.
 
-Conway's Game of Life~\cite{Gardner1970} remains the most influential 2D CA, featuring:
-\begin{itemize}
-    \item still lifes (e.g. block, beehive),
-    \item oscillators (e.g. blinker, toad),
-    \item spaceships (e.g. glider, lightweight spaceship),
-    \item glider guns and other computational structures.
-\end{itemize}
+Conway's Game of Life~\cite{Gardner1970} remains the most influential 2D CA, featuring a wide variety of emergent structures, 
+including still lifes (e.g. block, beehive), oscillators (e.g. blinker, toad), spaceships (e.g. glider, lightweight spaceship), 
+and more complex constructions such as glider guns and other computational structures.
 
 Life is Turing-complete~\cite{Berlekamp1982} and has influenced much of the later work on self-organising neural CA models.
 
@@ -87,12 +77,9 @@ In three dimensions, the Moore neighbourhood includes up to 26 adjacent cells (f
 With binary states, this creates $2^{27} \approx 134$ million possible neighbourhood configurations, so practical 3D CA typically use 
 totalistic or outer-totalistic rules that depend only on the sum of live neighbours (not their exact positions)~\cite{Wolfram2002}.
 
-Notable examples include:
-\begin{itemize}
-    \item von Neumann's 29-state self-replicating automaton~\cite{VonNeumann1966},
-    \item excitable-media rules such as Brian's Brain extended to 3D~\cite{DeKinderen1998},
-    \item 3D Game of Life variants producing branching and crystal-like growths.
-\end{itemize}
+Notable examples include von Neumann's 29-state self-replicating automaton~\cite{VonNeumann1966}, 
+excitable-media rules such as Brian's Brain extended to 3D~\cite{DeKinderen1998}, 
+and three-dimensional Game of Life variants capable of producing branching and crystal-like growth patterns.
 
 Advances in computing hardware in the 2000s facilitated larger-scale 3D CA studies~\cite{Tobias2009}.  
 These volumetric models later aligned naturally with neural CA research.
@@ -125,14 +112,14 @@ Their experiments reveal three characteristic training regimes:
     noting that some patterns may ``explode,'' ``decay,'' or become ``almost stable''~\cite[Experiment 1]{Mordvintsev2020}.
     \item \textbf{Persistent models}, trained to maintain the generated pattern over hundreds of simulation steps.  
     These models often develop limited regenerative abilities ``without being explicitly instructed to do so''~\cite[Experiment 2]{Mordvintsev2020}.
-    \item \textbf{Regenerating models}, trained under random damage—large regions of the pattern are zeroed at each step.  
+    \item \textbf{Regenerating models}, trained under random damage-large regions of the pattern are zeroed at each step.  
     As observed in the original experiments, such models acquire strong regenerative capabilities,  
     ``especially in the central area``~\cite[Experiment 3]{Mordvintsev2020}.
 \end{itemize}
 
 Across all regimes, the architecture consists of a small update network (approximately 100 parameters)
 and a fixed set of local perception filters (identity, Sobel-like gradients, and blur kernels).
-The training objective-growth, persistence, or regeneration—is the key distinguishing factor.
+The training objective - growth, persistence, or regeneration is the key distinguishing factor.
 
 Subsequent work explored memory channels~\cite{Randazzo2021}, self-classifying multicellular structures~\cite{Horvath2021}, and other 
 pattern-forming systems. While most research on neural cellular automata remains focused on two-dimensional grids, several early voxel-based 
@@ -199,13 +186,11 @@ The update function is typically realized as a lightweight neural network applie
 perceptron or a sequence of $1 \times 1$ (or $1 \times 1 \times 1$ in 3D) convolutions~\cite{Mordvintsev2020}. These architectures ensure 
 that the update rule depends only on locally perceived information while keeping the parameter count low enough to maintain stable training.
 
-Two mechanisms commonly appear across neural CA formulations:
-\begin{itemize}
-    \item \textbf{Alive gating}: a continuous ``alive'' signal modulates whether a cell applies the update, providing a soft analogue of 
-    classical alive/dead states while improving long-term stability~\cite{Mordvintsev2020}.
-    \item \textbf{Stochastic update masking}: a probabilistic update rate (or ``fire rate'') introduces randomness into the execution of the 
-    update rule, which helps prevent rigid synchronisation and encourages robustness~\cite{Mordvintsev2020}.
-\end{itemize}
+Two mechanisms commonly appear across neural CA formulations. Alive gating uses a continuous ``alive'' signal 
+to modulate whether a cell applies the update, providing a soft analogue of classical alive/dead states while 
+improving long-term stability~\cite{Mordvintsev2020}. Stochastic update masking introduces a probabilistic update 
+rate (or ``fire rate'') into the execution of the update rule, helping to prevent rigid synchronisation and 
+encouraging robustness~\cite{Mordvintsev2020}.
 
 These design elements support the emergence of behaviours such as growth, pattern persistence, and regeneration, phenomena also studied in 
 continuous morphogenetic systems like Lenia~\cite{Chan2019}. Recent three-dimensional neural CA models~\cite{Rossi2021,Sudhakaran2021,Aadityaza2024} 
@@ -217,15 +202,10 @@ The grid provides the spatial substrate on which the neural CA evolves.
 It is typically a finite 3D lattice, although different boundary conditions may be used
 depending on the experiment~\cite{Mordvintsev2020}.
 
-Important considerations include:
-\begin{itemize}
-    \item \textbf{Dimensions and boundary conditions}:
-    Fixed lattice sizes (e.g., 32$^{3}$) with periodic or zero-padding boundaries to avoid artefacts at edges~\cite{Niklasson2021}.
-    \item \textbf{Initialization}: Grids are commonly seeded with one or a few active voxels, sometimes with added noise to increase 
-    robustness~\cite{Mordvintsev2020}.
-    \item \textbf{Simulation loop}: The perception and update steps are iterated for multiple time steps; for training efficiency, simulations 
-    are often batched or pooled~\cite{Chan2019}.
-\end{itemize}
+Important considerations include lattice dimensions and boundary conditions, which are often fixed at sizes such as $32^3$ with 
+periodic or zero-padding boundaries to avoid edge artefacts~\cite{Niklasson2021}. Initialization typically involves seeding the grid 
+with one or a few active voxels, occasionally with added noise to improve robustness~\cite{Mordvintsev2020}. The simulation loop 
+iterates the perception and update steps over multiple time steps, with batched or pooled simulations used to improve training efficiency~\cite{Chan2019}.
 
 Three-dimensional grids are computationally demanding due to the cubic scaling of voxel-based environments. To address this, research on large-scale 
 volumetric simulations frequently employs data structures designed to reduce memory usage and accelerate neighbourhood access. Common strategies include 
@@ -239,19 +219,10 @@ Because neural CA are differentiable, they can be optimised using gradient-based
 target configuration~\cite{Mordvintsev2020}. Training typically involves unrolling the CA dynamics over a number of steps and applying 
 backpropagation through time.
 
-Major components include:
-
-\begin{itemize}
-    \item \textbf{Loss functions}:
-    Mean squared error (MSE) is commonly used for continuous targets,
-    while structural tasks may use intersection-over-union or other domain-specific metrics~\cite{Mordvintsev2020, Niklasson2021}.
-    \item \textbf{Training regimes}:  
-    Growth, persistence, and regeneration training regimes induce  
-    distinct behaviours and robustness properties~\cite{Mordvintsev2020}.
-    \item \textbf{Optimisation strategies}:  
-    Adam is widely used with learning rates around 0.001,  
-    often supplemented by early stopping, data pooling, or logging frameworks~\cite{Sudhakaran2021}.
-\end{itemize}
+Common loss functions include mean squared error (MSE) for continuous targets and intersection-over-union or other domain-specific metrics for 
+structural tasks~\cite{Mordvintsev2020, Niklasson2021}. The choice of training regime-growth, persistence, or regeneration strongly influences the emergent 
+behaviour and robustness of the model. Optimisation typically employs the Adam algorithm with learning rates around 0.001, often supplemented by early 
+stopping, data pooling, or logging frameworks~\cite{Sudhakaran2021}.
 
 These training strategies allow the discovery of update rules capable of producing stable and robust self-organising structures in both 2D 
 and early 3D systems~\cite{Rossi2021,Sudhakaran2021,Aadityaza2024}.
