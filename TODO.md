@@ -1,28 +1,13 @@
-# TODO – 3D NCA
-
-## Setup
-
-- [x] Create cond_env.yml (dependencies)
-- [x] Create pyproject.toml (configuration)
-- [x] Build skeleton
-- [x] Create git repo and push to Github
-
-## Core
-
-- [x] Implement cell
-- [x] Add perception
-- [x] Build update
-- [x] Manage grid
-- [x] Render 3D
-
-## Quality
-
-- [ ] Write tests
-- [ ] Run pytest
-- [ ] Format code
-- [ ] Type check
-
-## Docs
-
-- [ ] Write thesis
-- [ ] Add figures
+## Project Goals and Structure
+- [ ] Blender Add On for 3D Visualization
+    - [x] User Interface
+    - [ ] Mesh to Voxel Converter
+    - [ ] Visualization for Target and NCA in Blender
+- [ ] Protocol for Client - Server communication (for the addon)
+    - [ ] 
+- [ ] Experiments
+    - [ ] Alive Channel Optimization using Material ID + Alpha instead of RGBA
+    - [ ] Morphogenesis using different targets during training
+        - [ ] Simulate Pokemon Evolutions
+        - [ ] Simulate Butterfly Evolution
+    - [ ] Compare Regeneration of multi stage metamorphosis vs single stage metamorphosis in a different setting
