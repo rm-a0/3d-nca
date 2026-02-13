@@ -1,9 +1,7 @@
-from .trainer import NCATrainer
 from .server import NCAServer
 
 def main():
-    trainer = NCATrainer()
-    server = NCAServer(trainer)
+    server = NCAServer()
     server.start()
 
 if __name__ == "__main__":

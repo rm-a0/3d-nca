@@ -1,12 +1,12 @@
 import socket
 import threading
 
+from .trainer import NCATrainer 
 from .protocol import recv_msg, send_msg, b64_to_tensor, tensor_to_b64
 
-
 class NCAServer:
-    def __init__(self, trainer, host='127.0.0.1', port=5555):
-        self.trainer = trainer
+    def __init__(self, host='127.0.0.1', port=5555):
+        self.trainer = NCATrainer()
         self.host = host 
         self.port = port
         self._sock = None
@@ -22,7 +22,6 @@ class NCAServer:
         while True:
             client, addr = self._sock.accept()
             print(f"Client connected from {addr}")
-            self._client = client
             try:
                 self._handle_client(client)
             except Exception as e:
@@ -33,8 +32,13 @@ class NCAServer:
                 print(f"Client disconnected from {addr}")
 
     def _handle_client(self, client):
+
+        def send_fn(msg):
+            send_msg(client, msg)
+
         while True:
             msg = recv_msg(client)
+            print(f"Received message: {msg}")
             if msg is None:
                 break
                 
@@ -43,7 +47,7 @@ class NCAServer:
             if msg_type == "init":
                 config = msg["config"]
                 target = b64_to_tensor(msg["target"], msg["target_shape"])
-                self.trainer.init(config, target)
+                self.trainer.init(config, target, send_fn)
                 send_msg(client, {"type": "ack", "message": "Initialized"})
 
             elif msg_type == "stop":
