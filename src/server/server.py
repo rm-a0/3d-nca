@@ -9,20 +9,14 @@ class NCAServer:
         self.trainer = trainer
         self.host = host 
         self.port = port
-
-        self.sock = None
-        self._client = None
-        self._train_thread = None
-        self._stop_event = threading.Event()
-        self._pause_event = threading.Event()
-        self._pause_event.set()
+        self._sock = None
+       
 
     def start(self):
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._sock.bind((self.host, self.port))
         self._sock.listen(1)
-
         print(f"Server started on {self.host}:{self.port}")
 
         while True:
@@ -34,8 +28,8 @@ class NCAServer:
             except Exception as e:
                 print(f"Error handling client: {e}")
             finally:
+                self.trainer.stop()
                 client.close()
-                self._cleanup_training()
                 print(f"Client disconnected from {addr}")
 
     def _handle_client(self, client):
@@ -43,35 +37,26 @@ class NCAServer:
             msg = recv_msg(client)
             if msg is None:
                 break
+                
+            msg_type = msg.get("type")
 
-            handler = {
-                "init": self._handle_init,
-                "stop": self._handle_stop,
-                "pause": self._handle_pause,
-                "resume": self._handle_resume,
-                "get_state": self._handle_get_state,
-                "ping": self._handle_ping,
-            }.get(msg.get("type"))
+            if msg_type == "init":
+                config = msg["config"]
+                target = b64_to_tensor(msg["target"], msg["target_shape"])
+                self.trainer.init(config, target)
+                send_msg(client, {"type": "ack", "message": "Initialized"})
 
-            if handler:
-                handler(client, msg)
+            elif msg_type == "stop":
+                self.trainer.stop()
+                send_msg(client, {"type": "ack", "message": "Stopped"})
+
+            elif msg_type == "pause":
+                self.trainer.pause()
+                send_msg(client, {"type": "ack", "message": "Paused"})
+
+            elif msg_type == "resume":
+                self.trainer.resume()
+                send_msg(client, {"type": "ack", "message": "Resumed"})
+
             else:
-                send_msg(client, {"type": "error", "message": "Unknown message type"})
-
-            def _handle_init(self, client, msg):
-                pass
-
-            def _handle_stop(self, client, msg):
-                pass
-
-            def _handle_pause(self, client, msg):
-                pass
-
-            def _handle_resume(self, client, msg):
-                pass
-
-            def _handle_get_state(self, client, msg):   
-                pass
-
-            def _handle_ping(self, client, msg):
-                pass
+                send_msg(client, {"type": "error", "message": f"Unknown message type: {msg_type}"})
