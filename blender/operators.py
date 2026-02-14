@@ -104,17 +104,17 @@ class NCA_OT_StopTraining(bpy.types.Operator):
         global _client
 
         if _client and _client.connected:
-            self.report({'INFO'}, "Stopped training and disconnected from NCA server 1/3")
-            _client.send_stop()
-            self.report({'INFO'}, "Stopped training and disconnected from NCA server 2/3")
+            try:
+                _client.send_stop()
+            except Exception:
+                pass
             _client.disconnect()
-            self.report({'INFO'}, "Stopped training and disconnected from NCA server 3/3")
             _client = None
             self.report({'INFO'}, "Stopped training and disconnected from NCA server")
         else:
             self.report({'WARNING'}, "Not connected to NCA server")
-        return {'FINISHED'}
-    
+        return {'FINISHED'}   
+
 class NCA_OT_PauseTraining(bpy.types.Operator):
     bl_idname = "nca.pause_training"
     bl_label = "Pause Training"

@@ -20,20 +20,23 @@ class NCAClient:
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._sock.settimeout(timeout)
         self._sock.connect((self.host, self.port))
-        self._sock.settimeout(None)
+        self._sock.settimeout(2.0)
 
     def disconnect(self) -> None:
         self._running = False
+        if self._listener_thread is not None and self._listener_thread.is_alive():
+            self._listener_thread.join(timeout=5.0)
+        self._listener_thread = None
         if self._sock:
             try:
                 self._sock.shutdown(socket.SHUT_RDWR)
             except Exception:
                 pass
-            self._sock.close()
+            try:
+                self._sock.close()
+            except Exception:
+                pass
             self._sock = None
-        if self._listener_thread:
-            self._listener_thread.join(timeout=3)
-            self._listener_thread = None
 
     def send_init(self, config: dict, target: np.ndarray) -> None:
         send_msg(self._sock, {
@@ -76,7 +79,13 @@ class NCAClient:
         on_disconnect: Optional[Callable[[], None]]
     ):
         while self._running:
-            msg = recv_msg(self._sock)
+            try:
+                msg = recv_msg(self._sock)
+            except socket.timeout:
+                continue
+            except OSError:
+                break
+
             if msg is None:
                 if on_disconnect:
                     on_disconnect()

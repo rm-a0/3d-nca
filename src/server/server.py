@@ -52,7 +52,7 @@ class NCAServer:
 
             elif msg_type == "stop":
                 self.trainer.stop()
-                send_msg(client, {"type": "ack", "message": "Stopped"})
+                break
 
             elif msg_type == "pause":
                 self.trainer.pause()
