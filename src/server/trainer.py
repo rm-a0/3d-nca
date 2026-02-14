@@ -61,6 +61,12 @@ class NCATrainer:
         self._pause_event.set()
         print("Training resumed")
 
+    def stop(self):
+        self._stop_event.set()
+        if self._train_thread is not None:
+            self._train_thread.join()
+        print("Training stopped")
+
     @property
     def is_running(self):
         return self._train_thread is not None and self._train_thread.is_alive()

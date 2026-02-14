@@ -1,3 +1,4 @@
+"""Duplicate of the protocol code in the main repo, to avoid import dependencies."""
 import json
 import socket
 import struct
