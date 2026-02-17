@@ -1,5 +1,6 @@
 import base64
 import threading
+import time
 from typing import Any, Callable, Dict
 import numpy as np
 import torch
@@ -23,7 +24,7 @@ class NCATrainer:
         self._pause_event = threading.Event()
         self._pause_event.set() # not paused by default
 
-    def init(self, config: dict, target: torch.Tensor, send_fn: SendFn):
+    def init(self, config: dict, target: np.ndarray, send_fn: SendFn):
         cell_cfg = CellConfig(**config["cell"])
         perc_cfg = PerceptionConfig(**config["perception"])
         upd_cfg = UpdateConfig(**config["update"])
@@ -34,11 +35,11 @@ class NCATrainer:
             self.model.parameters(), 
             lr=config["training"]["learning_rate"]
         )
-        self.target = target
-        self.state = self.model.seed_center(
-            batch_size=config["training"]["batch_size"],
-            device=torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-        )
+        # target arrives as (D, H, W, C) from the client;
+        # convert to (C, D, H, W) which is the PyTorch / server convention
+        self.target = np.transpose(target, (3, 0, 1, 2)).astype(np.float32)
+        # For now, just use the target as the state for testing
+        self.state = self.target.copy()
 
         self.current_epoch = 0
         self.total_epochs = config["training"]["num_epochs"]
@@ -87,7 +88,9 @@ class NCATrainer:
             loss = self._step()
             self.current_epoch = epoch
             self.latest_loss = loss
+            self._send_state()
             print(f"Epoch {epoch}/{self.total_epochs} - Loss: {loss:.4f}")
+            time.sleep(0.1)  # throttle to avoid flooding the socket
 
         print("Training completed")
 
@@ -113,10 +116,15 @@ class NCATrainer:
         if self._send_fn is None or self.state is None:
             return
         try:
-            arr = self.state.detach().cpu().numpy()
+            # Convert to numpy if torch tensor
+            if isinstance(self.state, torch.Tensor):
+                arr = self.state.detach().cpu().numpy()
+            else:
+                arr = self.state
+            arr = arr.astype(np.float32)
             self._send_fn({
                 "type": "state",
-                "data": base64.b64encode(arr.astype(np.float32).tobytes()).decode("ascii"),
+                "data": base64.b64encode(arr.tobytes()).decode("ascii"),
                 "shape": list(arr.shape),
                 "epoch": self.current_epoch,
             })

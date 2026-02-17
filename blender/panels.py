@@ -45,17 +45,36 @@ class NCA_PT_TargetPanel(NCA_PT_BasePanel):
     def draw(self, context):
         super().draw(context)
         layout = self.layout
+        target_props = context.scene.nca_target_props
 
+        # --- Step 1: Select mesh(es) in viewport ---
+        box = layout.box()
+        box.label(text="Step 1: Select source mesh", icon='RESTRICT_SELECT_OFF')
         meshes = [o for o in context.selected_objects if o.type == 'MESH']
         if meshes:
             names = ", ".join(o.name for o in meshes)
-            layout.label(text=f"Source: {names}", icon='MESH_DATA')
+            box.label(text=names, icon='MESH_DATA')
         else:
-            layout.label(text="Select mesh(es) in viewport", icon='INFO')
+            box.label(text="No mesh selected", icon='INFO')
 
-        row = layout.row(align=True)
+        # --- Step 2: Voxelize ---
+        box = layout.box()
+        box.label(text="Step 2: Voxelize", icon='MESH_GRID')
+        row = box.row(align=True)
         row.operator("nca.voxelize_target", text="Voxelize", icon='MESH_GRID')
         row.operator("nca.clear_target_voxels", text="Clear", icon='X')
+        row.enabled = len(meshes) > 0 or target_props.is_voxelized
+
+        # --- Voxelized target status ---
+        if target_props.is_voxelized:
+            status_box = layout.box()
+            status_box.label(text="Target ready to send", icon='CHECKMARK')
+            status_box.label(text=f"Source: {target_props.source_names}")
+            status_box.label(text=f"Voxels: {target_props.voxel_count}")
+        else:
+            status_box = layout.box()
+            status_box.label(text="No target voxelized", icon='ERROR')
+            status_box.label(text="Voxelize a mesh before training")
 
 
 class NCA_PT_CellSettings(NCA_PT_BasePanel):

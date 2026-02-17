@@ -93,7 +93,7 @@ class NCAClient:
 
             msg_type = msg.get("type")
             if msg_type == "state" and on_state:
-                state = b64_to_tensor(msg["state"], msg["state_shape"])
+                state = b64_to_tensor(msg["data"], msg["shape"])
                 on_state(state)
             elif msg_type == "error" and on_error:
                 on_error(msg.get("message", "Unknown error"))

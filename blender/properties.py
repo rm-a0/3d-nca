@@ -94,6 +94,23 @@ class NCA_PG_TrainingProperties(bpy.types.PropertyGroup):
         min=1
     ) # type: ignore
 
+class NCA_PG_TargetProperties(bpy.types.PropertyGroup):
+    is_voxelized: bpy.props.BoolProperty(
+        name="Is Voxelized",
+        description="Whether a target has been voxelized",
+        default=False
+    ) # type: ignore
+    source_names: bpy.props.StringProperty(
+        name="Source Names",
+        description="Names of the source meshes that were voxelized",
+        default=""
+    ) # type: ignore
+    voxel_count: bpy.props.IntProperty(
+        name="Voxel Count",
+        description="Number of alive voxels in the target",
+        default=0
+    ) # type: ignore
+
 class NCA_PG_VisualizationProperties(bpy.types.PropertyGroup):
     cell_shape: bpy.props.EnumProperty(
         name="Cell Shape",
@@ -128,6 +145,7 @@ classes = (
     NCA_PG_UpdateProperties,
     NCA_PG_GridProperties,
     NCA_PG_TrainingProperties,
+    NCA_PG_TargetProperties,
     NCA_PG_VisualizationProperties,
 )
 
@@ -140,6 +158,7 @@ def register():
     bpy.types.Scene.nca_update_props = bpy.props.PointerProperty(type=NCA_PG_UpdateProperties)
     bpy.types.Scene.nca_grid_props = bpy.props.PointerProperty(type=NCA_PG_GridProperties)
     bpy.types.Scene.nca_training_props = bpy.props.PointerProperty(type=NCA_PG_TrainingProperties)
+    bpy.types.Scene.nca_target_props = bpy.props.PointerProperty(type=NCA_PG_TargetProperties)
     bpy.types.Scene.nca_visualization_props = bpy.props.PointerProperty(type=NCA_PG_VisualizationProperties)
 
 def unregister():
@@ -151,4 +170,5 @@ def unregister():
     del bpy.types.Scene.nca_update_props
     del bpy.types.Scene.nca_grid_props
     del bpy.types.Scene.nca_training_props
+    del bpy.types.Scene.nca_target_props
     del bpy.types.Scene.nca_visualization_props

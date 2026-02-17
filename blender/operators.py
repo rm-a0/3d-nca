@@ -1,5 +1,6 @@
 import bpy
 import numpy as np
+import threading
 
 from .client import NCAClient
 
@@ -12,6 +13,11 @@ from .voxel_utils import (
 
 _client : NCAClient | None = None
 _target_array: np.ndarray | None = None
+
+# Thread-safe pending state buffer
+_pending_state: np.ndarray | None = None
+_pending_lock = threading.Lock()
+_timer_running = False
 
 TARGET_COLLECTION = "NCA_Target"
 STATE_COLLECTION  = "NCA_State"
@@ -74,20 +80,49 @@ def visualize_voxel(tensor):
     )
 
 def _on_state(array: np.ndarray):
-    """Listener callback - runs on a background thread."""
-    vis_channels_map = {'ALPHA': 1, 'RGBA': 4, 'ALPHA_MATERIAL_ID': 2}
-    vis_ch = vis_channels_map.get(
-        bpy.context.scene.nca_cell_props.visible_channels, 4
-    )
-    display_arr = server_state_to_voxel_array(array, visible_channels=vis_ch)
-    bpy.app.timers.register(lambda: _update_state_display(display_arr))
+    """Listener callback — runs on a background thread.
 
-def _update_state_display(arr: np.ndarray):
-    """Timer callback on Blender's main thread."""
+    IMPORTANT: Do NOT access bpy.context here; it is not thread-safe.
+    Instead, store the raw array and let the main-thread timer pick it up.
+    """
+    global _pending_state, _timer_running
+    with _pending_lock:
+        _pending_state = array  # always keep only the latest
+        if not _timer_running:
+            _timer_running = True
+            bpy.app.timers.register(_poll_state, first_interval=0.05)
+
+
+def _poll_state() -> float | None:
+    """Recurring timer on Blender's main thread — drains the pending buffer."""
+    global _pending_state, _timer_running
+
+    with _pending_lock:
+        arr = _pending_state
+        _pending_state = None
+
+    if arr is None:
+        # Nothing new; check if client is still alive
+        if _client is None or not _client.connected:
+            _timer_running = False
+            return None  # unregister timer
+        return 0.1  # keep polling
+
     try:
-        visualize_voxel(arr)
+        # Safe to read bpy.context here — we are on the main thread
+        vis_channels_map = {'ALPHA': 1, 'RGBA': 4, 'ALPHA_MATERIAL_ID': 2}
+        vis_ch = vis_channels_map.get(
+            bpy.context.scene.nca_cell_props.visible_channels, 4
+        )
+        display_arr = server_state_to_voxel_array(arr, visible_channels=vis_ch)
+        visualize_voxel(display_arr)
     except Exception as e:
         print(f"Error updating state visualization: {e}")
+
+    # Keep polling while connected
+    if _client is not None and _client.connected:
+        return 0.1
+    _timer_running = False
     return None
 
 def _on_error(error_msg: str):
@@ -137,7 +172,7 @@ class NCA_OT_StopTraining(bpy.types.Operator):
     bl_description = "Stop training and disconnect from NCA server"
 
     def execute(self, context):
-        global _client
+        global _client, _timer_running
 
         if _client and _client.connected:
             try:
@@ -146,6 +181,7 @@ class NCA_OT_StopTraining(bpy.types.Operator):
                 pass
             _client.disconnect()
             _client = None
+            _timer_running = False
             self.report({'INFO'}, "Stopped training and disconnected from NCA server")
         else:
             self.report({'WARNING'}, "Not connected to NCA server")
@@ -231,6 +267,13 @@ class NCA_OT_VoxelizeTarget(bpy.types.Operator):
         alpha = combined_data[..., 3] if n_ch >= 4 else combined_data[..., 0]
         n_alive = int((alpha > cell_props.alive_threshold).sum())
         names = ", ".join(o.name for o in objs)
+
+        # Store metadata for UI display
+        target_props = context.scene.nca_target_props
+        target_props.source_names = names
+        target_props.voxel_count = n_alive
+        target_props.is_voxelized = True
+
         self.report({'INFO'}, f"Voxelized [{names}] → {n_alive} voxels")
         return {'FINISHED'}
 
@@ -246,6 +289,12 @@ class NCA_OT_ClearTargetVoxels(bpy.types.Operator):
             clear_collection(bpy.data.collections[TARGET_COLLECTION])
 
         _target_array = None
+
+        target_props = context.scene.nca_target_props
+        target_props.source_names = ""
+        target_props.voxel_count = 0
+        target_props.is_voxelized = False
+
         self.report({'INFO'}, "Cleared target voxels")
         return {'FINISHED'}
 
