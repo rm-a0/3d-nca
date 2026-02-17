@@ -36,6 +36,27 @@ class NCA_PT_ControlPanel(NCA_PT_BasePanel):
         layout.operator("nca.pause_training", text="Pause Training")
         layout.operator("nca.resume_training", text="Resume Training")
 
+class NCA_PT_TargetPanel(NCA_PT_BasePanel):
+    bl_label = "Target"
+    bl_idname = "NCA_PT_target_panel"
+    bl_parent_id = "NCA_PT_main_panel"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    def draw(self, context):
+        super().draw(context)
+        layout = self.layout
+
+        meshes = [o for o in context.selected_objects if o.type == 'MESH']
+        if meshes:
+            names = ", ".join(o.name for o in meshes)
+            layout.label(text=f"Source: {names}", icon='MESH_DATA')
+        else:
+            layout.label(text="Select mesh(es) in viewport", icon='INFO')
+
+        row = layout.row(align=True)
+        row.operator("nca.voxelize_target", text="Voxelize", icon='MESH_GRID')
+        row.operator("nca.clear_target_voxels", text="Clear", icon='X')
+
 
 class NCA_PT_CellSettings(NCA_PT_BasePanel):
     bl_label = "Cell Settings"
@@ -97,6 +118,7 @@ class NCA_PT_GridSettings(NCA_PT_BasePanel):
         grid_props = context.scene.nca_grid_props
 
         layout.prop(grid_props, "grid_size", text="Grid Size")
+        layout.prop(grid_props, "grid_offset", text="Grid Offset")
 
 class NCA_PT_TrainingSettings(NCA_PT_BasePanel):
     bl_label = "Training Settings"
@@ -134,6 +156,7 @@ class NCA_PT_VisualizationSettings(NCA_PT_BasePanel):
 classes = (
     NCA_PT_MainPanel,
     NCA_PT_ControlPanel,
+    NCA_PT_TargetPanel,
     NCA_PT_CellSettings,
     NCA_PT_PerceptionSettings,
     NCA_PT_UpdateSettings,

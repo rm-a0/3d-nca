@@ -67,6 +67,12 @@ class NCA_PG_GridProperties(bpy.types.PropertyGroup):
         size=3,
         min=1
     ) # type: ignore
+    grid_offset: bpy.props.IntProperty(
+        name="Grid Offset",
+        description="Voxel offset from grid edges",
+        default=1,
+        min=0
+    ) # type: ignore
 
 class NCA_PG_TrainingProperties(bpy.types.PropertyGroup):
     learning_rate: bpy.props.FloatProperty(

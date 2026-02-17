@@ -1,0 +1,282 @@
+﻿"""
+Utilities for voxelizing meshes and displaying voxel arrays in Blender.
+
+Note: these functions were from the most part implemented by Claue Opus 4.6,
+with some adjustments by me.
+"""
+import bpy
+import bmesh
+import numpy as np
+import colorsys
+from mathutils import Vector
+from mathutils.bvhtree import BVHTree
+from typing import List, Optional, Tuple
+
+
+def get_or_create_collection(name: str) -> bpy.types.Collection:
+    """Return existing collection name or create one linked to the scene."""
+    if name in bpy.data.collections:
+        return bpy.data.collections[name]
+    col = bpy.data.collections.new(name)
+    bpy.context.scene.collection.children.link(col)
+    return col
+
+
+def clear_collection(collection: bpy.types.Collection) -> None:
+    """Remove every object (and its orphan mesh data) from collection."""
+    for obj in list(collection.objects):
+        data = obj.data
+        bpy.data.objects.remove(obj, do_unlink=True)
+        if data and data.users == 0 and isinstance(data, bpy.types.Mesh):
+            bpy.data.meshes.remove(data)
+
+
+def mesh_to_voxel_array(
+    obj: bpy.types.Object,
+    grid_size: Tuple[int, int, int],
+    visible_channels: str = "RGBA",
+    offset: int = 1,
+) -> Tuple[np.ndarray, np.ndarray, List]:
+    """Voxelize obj into (D,H,W,C), preserving aspect ratio.
+
+    The mesh is uniformly scaled so its longest axis spans
+    `grid_axis - 2*offset` voxels, then centred in the grid.
+
+    Returns (voxel_data, material_index_map, materials_list).
+    """
+    channel_map = {"ALPHA": 1, "RGBA": 4, "ALPHA_MATERIAL_ID": 2}
+    n_ch = channel_map.get(visible_channels, 4)
+    D, H, W = grid_size
+    voxels = np.zeros((D, H, W, n_ch), dtype=np.float32)
+    mat_index_map = np.full((D, H, W), -1, dtype=np.int32)
+
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    eval_obj = obj.evaluated_get(depsgraph)
+    eval_mesh = eval_obj.data
+    bvh = BVHTree.FromObject(eval_obj, depsgraph, epsilon=0.0)
+
+    local_corners = [Vector(c) for c in obj.bound_box]
+    bb_min = Vector(min(c[i] for c in local_corners) for i in range(3))
+    bb_max = Vector(max(c[i] for c in local_corners) for i in range(3))
+
+    mesh_span = bb_max - bb_min
+    grid_dims = np.array([D, H, W], dtype=np.float64)
+    usable = np.maximum(grid_dims - 2.0 * offset, 1.0)
+    mesh_extents = np.maximum(
+        np.array([mesh_span.x, mesh_span.y, mesh_span.z], dtype=np.float64), 1e-8
+    )
+
+    scale = float(np.min(usable / mesh_extents))
+    scaled_extents = mesh_extents * scale
+    grid_origin = (grid_dims - scaled_extents) * 0.5
+
+    poly_mat_ids = np.array(
+        [p.material_index for p in eval_mesh.polygons], dtype=np.int32
+    )
+    materials: list = [slot.material for slot in obj.material_slots]
+    n_mats = max(len(materials), 1)
+    mat_norm = float(max(n_mats - 1, 1))
+
+    for i in range(D):
+        tx = bb_min.x + (i - grid_origin[0] + 0.5) / scale
+        for j in range(H):
+            ty = bb_min.y + (j - grid_origin[1] + 0.5) / scale
+            for k in range(W):
+                tz = bb_min.z + (k - grid_origin[2] + 0.5) / scale
+
+                inside, face_idx = _is_inside_mesh_with_face(
+                    bvh, Vector((tx, ty, tz))
+                )
+                if not inside:
+                    continue
+
+                mi = int(poly_mat_ids[face_idx]) if face_idx is not None else 0
+                mat_index_map[i, j, k] = mi
+
+                if visible_channels == "ALPHA_MATERIAL_ID":
+                    voxels[i, j, k] = [1.0, float(mi) / mat_norm]
+                elif n_ch >= 4:
+                    color = _get_material_base_color(
+                        materials[mi] if mi < len(materials) else None
+                    )
+                    voxels[i, j, k] = [color[0], color[1], color[2], 1.0]
+                else:
+                    voxels[i, j, k, 0] = 1.0
+
+    return voxels, mat_index_map, materials
+
+
+def _get_material_base_color(mat) -> np.ndarray:
+    """Principled BSDF base colour of *mat*, or white."""
+    if mat and mat.use_nodes:
+        for node in mat.node_tree.nodes:
+            if node.type == "BSDF_PRINCIPLED":
+                c = node.inputs["Base Color"].default_value
+                return np.array([c[0], c[1], c[2]], dtype=np.float32)
+    return np.array([1.0, 1.0, 1.0], dtype=np.float32)
+
+
+def _is_inside_mesh_with_face(
+    bvh: BVHTree, point: Vector
+) -> Tuple[bool, Optional[int]]:
+    """Ray-cast parity test. Returns (inside, first_hit_face_index)."""
+    direction = Vector((0, 0, 1))
+    origin = point.copy()
+    count = 0
+    first_face: Optional[int] = None
+    for _ in range(100):
+        hit, _normal, idx, _dist = bvh.ray_cast(origin, direction)
+        if hit is None:
+            break
+        if count == 0:
+            first_face = idx
+        count += 1
+        origin = hit + direction * 1e-4
+    return (count % 2 == 1, first_face)
+
+
+_FACE_DEFS = [
+    (0, 1, 2, 3),
+    (4, 7, 6, 5),
+    (0, 4, 5, 1),
+    (2, 6, 7, 3),
+    (0, 3, 7, 4),
+    (1, 5, 6, 2),
+]
+
+
+def voxel_array_to_blender(
+    voxel_data: np.ndarray,
+    collection_name: str,
+    object_name: str = "NCA_Voxels",
+    cell_size: float = 0.1,
+    alive_threshold: float = 0.02,
+    material_map: Optional[np.ndarray] = None,
+    materials: Optional[list] = None,
+) -> Optional[bpy.types.Object]:
+    """Display a (D,H,W,C) voxel array as a merged-cube mesh.
+
+    Source materials are assigned per-face when *material_map* / *materials*
+    are given; otherwise falls back to vertex colours.
+    """
+    collection = get_or_create_collection(collection_name)
+
+    for old in [o for o in collection.objects if o.name == object_name]:
+        data = old.data
+        bpy.data.objects.remove(old, do_unlink=True)
+        if data and data.users == 0 and isinstance(data, bpy.types.Mesh):
+            bpy.data.meshes.remove(data)
+
+    n_ch = voxel_data.shape[-1]
+    alpha = voxel_data[..., 3] if n_ch >= 4 else voxel_data[..., 0]
+    occupied = np.argwhere(alpha > alive_threshold)
+
+    if len(occupied) == 0:
+        return None
+
+    use_source_mats = (
+        material_map is not None
+        and materials is not None
+        and len(materials) > 0
+    )
+    use_vcol = not use_source_mats and (n_ch >= 4 or n_ch == 2)
+
+    mesh_data = bpy.data.meshes.new(f"{object_name}_mesh")
+    bm = bmesh.new()
+    color_layer = bm.loops.layers.color.new("Col") if use_vcol else None
+
+    s = cell_size * 0.5
+
+    for pos in occupied:
+        d, h, w = int(pos[0]), int(pos[1]), int(pos[2])
+        cx, cy, cz = d * cell_size, h * cell_size, w * cell_size
+
+        v = [
+            bm.verts.new((cx - s, cy - s, cz - s)),
+            bm.verts.new((cx + s, cy - s, cz - s)),
+            bm.verts.new((cx + s, cy + s, cz - s)),
+            bm.verts.new((cx - s, cy + s, cz - s)),
+            bm.verts.new((cx - s, cy - s, cz + s)),
+            bm.verts.new((cx + s, cy - s, cz + s)),
+            bm.verts.new((cx + s, cy + s, cz + s)),
+            bm.verts.new((cx - s, cy + s, cz + s)),
+        ]
+
+        mi = 0
+        if use_source_mats:
+            mi = int(material_map[d, h, w])
+            mi = max(0, min(mi, len(materials) - 1))
+
+        col = None
+        if use_vcol:
+            if n_ch >= 4:
+                rgba = voxel_data[d, h, w]
+                col = (float(rgba[0]), float(rgba[1]), float(rgba[2]), float(rgba[3]))
+            elif n_ch == 2:
+                col = _matid_to_color(float(voxel_data[d, h, w, 1]))
+
+        for fi in _FACE_DEFS:
+            face = bm.faces.new([v[i] for i in fi])
+            if use_source_mats:
+                face.material_index = mi
+            if col and color_layer:
+                for loop in face.loops:
+                    loop[color_layer] = col
+
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(mesh_data)
+    bm.free()
+
+    obj = bpy.data.objects.new(object_name, mesh_data)
+    collection.objects.link(obj)
+
+    if use_source_mats:
+        for mat in materials:
+            obj.data.materials.append(mat)
+    elif use_vcol:
+        _assign_vertex_color_material(obj, f"{object_name}_mat", "Col")
+
+    return obj
+
+
+def _matid_to_color(mat_val: float) -> Tuple[float, float, float, float]:
+    """Map normalised mat-ID [0,1] to a distinct RGBA via HSV hue rotation."""
+    r, g, b = colorsys.hsv_to_rgb(mat_val, 0.9, 0.9)
+    return (r, g, b, 1.0)
+
+
+def _assign_vertex_color_material(
+    obj: bpy.types.Object, mat_name: str, attr_name: str
+) -> None:
+    """Assign a Principled BSDF material reading colour attribute *attr_name*."""
+    mat = bpy.data.materials.get(mat_name)
+    if mat is None:
+        mat = bpy.data.materials.new(mat_name)
+    mat.use_nodes = True
+    tree = mat.node_tree
+    tree.nodes.clear()
+
+    output = tree.nodes.new("ShaderNodeOutputMaterial")
+    output.location = (300, 0)
+    bsdf = tree.nodes.new("ShaderNodeBsdfPrincipled")
+    bsdf.location = (0, 0)
+    attr = tree.nodes.new("ShaderNodeAttribute")
+    attr.location = (-300, 0)
+    attr.attribute_name = attr_name
+    attr.attribute_type = "GEOMETRY"
+
+    tree.links.new(attr.outputs["Color"], bsdf.inputs["Base Color"])
+    tree.links.new(bsdf.outputs["BSDF"], output.inputs["Surface"])
+
+    obj.data.materials.clear()
+    obj.data.materials.append(mat)
+
+
+def server_state_to_voxel_array(
+    raw: np.ndarray, visible_channels: int = 4
+) -> np.ndarray:
+    """Convert (B,C_total,D,H,W) server tensor to (D,H,W,C_vis) for display."""
+    if raw.ndim == 5:
+        raw = raw[0]
+    vis = raw[-visible_channels:]
+    return np.transpose(vis, (1, 2, 3, 0)).astype(np.float32)
