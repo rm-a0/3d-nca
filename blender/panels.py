@@ -47,7 +47,6 @@ class NCA_PT_TargetPanel(NCA_PT_BasePanel):
         layout = self.layout
         target_props = context.scene.nca_target_props
 
-        # --- Step 1: Select mesh(es) in viewport ---
         box = layout.box()
         box.label(text="Step 1: Select source mesh", icon='RESTRICT_SELECT_OFF')
         meshes = [o for o in context.selected_objects if o.type == 'MESH']
@@ -57,7 +56,6 @@ class NCA_PT_TargetPanel(NCA_PT_BasePanel):
         else:
             box.label(text="No mesh selected", icon='INFO')
 
-        # --- Step 2: Voxelize ---
         box = layout.box()
         box.label(text="Step 2: Voxelize", icon='MESH_GRID')
         row = box.row(align=True)
@@ -65,7 +63,6 @@ class NCA_PT_TargetPanel(NCA_PT_BasePanel):
         row.operator("nca.clear_target_voxels", text="Clear", icon='X')
         row.enabled = len(meshes) > 0 or target_props.is_voxelized
 
-        # --- Voxelized target status ---
         if target_props.is_voxelized:
             status_box = layout.box()
             status_box.label(text="Target ready to send", icon='CHECKMARK')

@@ -9,16 +9,18 @@ from .voxel_utils import (
     voxel_array_to_blender,
     server_state_to_voxel_array,
     clear_collection,
+    get_slot_offset,
+    place_source_in_scene,
 )
 
 _client : NCAClient | None = None
 _target_array: np.ndarray | None = None
 
-# Thread-safe pending state buffer
 _pending_state: np.ndarray | None = None
 _pending_lock = threading.Lock()
 _timer_running = False
 
+SOURCE_COLLECTION = "NCA_Source"
 TARGET_COLLECTION = "NCA_Target"
 STATE_COLLECTION  = "NCA_State"
 
@@ -71,23 +73,23 @@ def visualize_voxel(tensor):
     """Display a voxel array in the viewport (called for server state updates)."""
     vis = bpy.context.scene.nca_visualization_props
     cell = bpy.context.scene.nca_cell_props
-    voxel_array_to_blender(
+    grid = bpy.context.scene.nca_grid_props
+    obj = voxel_array_to_blender(
         tensor,
         collection_name=STATE_COLLECTION,
         object_name="NCA_State",
         cell_size=vis.cell_size,
         alive_threshold=cell.alive_threshold,
     )
+    if obj:
+        grid_size = tuple(int(x) for x in grid.grid_size)
+        obj.location.x = get_slot_offset(2, grid_size, vis.cell_size)
 
 def _on_state(array: np.ndarray):
-    """Listener callback — runs on a background thread.
-
-    IMPORTANT: Do NOT access bpy.context here; it is not thread-safe.
-    Instead, store the raw array and let the main-thread timer pick it up.
-    """
+    """Listener callback — runs on a background thread."""
     global _pending_state, _timer_running
     with _pending_lock:
-        _pending_state = array  # always keep only the latest
+        _pending_state = array
         if not _timer_running:
             _timer_running = True
             bpy.app.timers.register(_poll_state, first_interval=0.05)
@@ -102,14 +104,12 @@ def _poll_state() -> float | None:
         _pending_state = None
 
     if arr is None:
-        # Nothing new; check if client is still alive
         if _client is None or not _client.connected:
             _timer_running = False
-            return None  # unregister timer
-        return 0.1  # keep polling
+            return None
+        return 0.1
 
     try:
-        # Safe to read bpy.context here — we are on the main thread
         vis_channels_map = {'ALPHA': 1, 'RGBA': 4, 'ALPHA_MATERIAL_ID': 2}
         vis_ch = vis_channels_map.get(
             bpy.context.scene.nca_cell_props.visible_channels, 4
@@ -119,7 +119,6 @@ def _poll_state() -> float | None:
     except Exception as e:
         print(f"Error updating state visualization: {e}")
 
-    # Keep polling while connected
     if _client is not None and _client.connected:
         return 0.1
     _timer_running = False
@@ -253,7 +252,9 @@ class NCA_OT_VoxelizeTarget(bpy.types.Operator):
 
         _target_array = combined_data
 
-        voxel_array_to_blender(
+        place_source_in_scene(objs, grid_size, vis_props.cell_size)
+
+        vox_obj = voxel_array_to_blender(
             combined_data,
             collection_name=TARGET_COLLECTION,
             object_name="NCA_Target",
@@ -262,13 +263,14 @@ class NCA_OT_VoxelizeTarget(bpy.types.Operator):
             material_map=combined_mat_map,
             materials=all_materials,
         )
+        if vox_obj:
+            vox_obj.location.x = get_slot_offset(1, grid_size, vis_props.cell_size)
 
         n_ch = combined_data.shape[-1]
         alpha = combined_data[..., 3] if n_ch >= 4 else combined_data[..., 0]
         n_alive = int((alpha > cell_props.alive_threshold).sum())
         names = ", ".join(o.name for o in objs)
 
-        # Store metadata for UI display
         target_props = context.scene.nca_target_props
         target_props.source_names = names
         target_props.voxel_count = n_alive
@@ -287,6 +289,8 @@ class NCA_OT_ClearTargetVoxels(bpy.types.Operator):
 
         if TARGET_COLLECTION in bpy.data.collections:
             clear_collection(bpy.data.collections[TARGET_COLLECTION])
+        if SOURCE_COLLECTION in bpy.data.collections:
+            clear_collection(bpy.data.collections[SOURCE_COLLECTION])
 
         _target_array = None
 

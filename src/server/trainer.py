@@ -35,10 +35,7 @@ class NCATrainer:
             self.model.parameters(), 
             lr=config["training"]["learning_rate"]
         )
-        # target arrives as (D, H, W, C) from the client;
-        # convert to (C, D, H, W) which is the PyTorch / server convention
         self.target = np.transpose(target, (3, 0, 1, 2)).astype(np.float32)
-        # For now, just use the target as the state for testing
         self.state = self.target.copy()
 
         self.current_epoch = 0
@@ -64,6 +61,7 @@ class NCATrainer:
 
     def stop(self):
         self._stop_event.set()
+        self._pause_event.set()  # unblock thread if paused
         if self._train_thread is not None:
             self._train_thread.join()
         print("Training stopped")
