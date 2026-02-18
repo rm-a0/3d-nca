@@ -2,7 +2,10 @@ import socket
 import threading
 
 from .trainer import NCATrainer 
-from .protocol import recv_msg, send_msg, b64_to_tensor, tensor_to_b64
+from .protocol import (
+    recv_msg, send_msg,
+    parse_init_msg, build_ack_msg, build_error_msg,
+)
 
 class NCAServer:
     def __init__(self, host='127.0.0.1', port=5555):
@@ -45,10 +48,9 @@ class NCAServer:
             msg_type = msg.get("type")
 
             if msg_type == "init":
-                config = msg["config"]
-                target = b64_to_tensor(msg["target"], msg["target_shape"])
+                config, target = parse_init_msg(msg)
                 self.trainer.init(config, target, send_fn)
-                send_msg(client, {"type": "ack", "message": "Initialized"})
+                send_msg(client, build_ack_msg("Initialized"))
 
             elif msg_type == "stop":
                 self.trainer.stop()
@@ -56,11 +58,11 @@ class NCAServer:
 
             elif msg_type == "pause":
                 self.trainer.pause()
-                send_msg(client, {"type": "ack", "message": "Paused"})
+                send_msg(client, build_ack_msg("Paused"))
 
             elif msg_type == "resume":
                 self.trainer.resume()
-                send_msg(client, {"type": "ack", "message": "Resumed"})
+                send_msg(client, build_ack_msg("Resumed"))
 
             else:
-                send_msg(client, {"type": "error", "message": f"Unknown message type: {msg_type}"})
+                send_msg(client, build_error_msg(f"Unknown message type: {msg_type}"))

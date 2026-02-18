@@ -70,8 +70,15 @@ def place_source_in_scene(
     # World-space bounding box of all source meshes
     all_corners = []
     for obj in objs:
+        try:
+            _ = obj.name  # validate the StructRNA reference is still alive
+        except ReferenceError:
+            continue
         for corner in obj.bound_box:
             all_corners.append(obj.matrix_world @ Vector(corner))
+
+    if not all_corners:
+        return
 
     bb_min = Vector((min(c[i] for c in all_corners) for i in range(3)))
     bb_max = Vector((max(c[i] for c in all_corners) for i in range(3)))
@@ -89,6 +96,10 @@ def place_source_in_scene(
     empty.scale = (scale_factor, scale_factor, scale_factor)
 
     for obj in objs:
+        try:
+            _ = obj.name
+        except ReferenceError:
+            continue
         dup = obj.copy()  # linked duplicate (shares mesh data)
         collection.objects.link(dup)
         dup.parent = empty
@@ -236,12 +247,20 @@ def voxel_array_to_blender(
         if data and data.users == 0 and isinstance(data, bpy.types.Mesh):
             bpy.data.meshes.remove(data)
 
+    MAX_VOXELS = 50_000  # safety cap — prevent GPU driver crashes
+
     n_ch = voxel_data.shape[-1]
     alpha = voxel_data[..., 3] if n_ch >= 4 else voxel_data[..., 0]
     occupied = np.argwhere(alpha > alive_threshold)
 
     if len(occupied) == 0:
         return None
+
+    # If too many voxels, keep only the highest-alpha ones
+    if len(occupied) > MAX_VOXELS:
+        alpha_vals = alpha[occupied[:, 0], occupied[:, 1], occupied[:, 2]]
+        top_indices = np.argpartition(alpha_vals, -MAX_VOXELS)[-MAX_VOXELS:]
+        occupied = occupied[top_indices]
 
     N = len(occupied)
 
@@ -368,8 +387,14 @@ def _assign_vertex_color_material(
 def server_state_to_voxel_array(
     raw: np.ndarray, visible_channels: int = 4
 ) -> np.ndarray:
-    """Convert (B,C_total,D,H,W) server tensor to (D,H,W,C_vis) for display."""
+    """Convert (B,C_total,D,H,W) server tensor to (D,H,W,C_vis) for display.
+
+    Clamps visible channels to [0, 1] so alpha thresholding and
+    vertex colours behave correctly (NCA can output values in [-1, 1]).
+    """
     if raw.ndim == 5:
         raw = raw[0]
     vis = raw[-visible_channels:]
-    return np.transpose(vis, (1, 2, 3, 0)).astype(np.float32)
+    arr = np.transpose(vis, (1, 2, 3, 0)).astype(np.float32)
+    np.clip(arr, 0.0, 1.0, out=arr)
+    return arr

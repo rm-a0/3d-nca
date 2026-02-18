@@ -47,6 +47,7 @@ class NCA_PT_TargetPanel(NCA_PT_BasePanel):
         layout = self.layout
         target_props = context.scene.nca_target_props
 
+        layout.prop(target_props, "cell_size", text="Cell Size")
         box = layout.box()
         box.label(text="Step 1: Select source mesh", icon='RESTRICT_SELECT_OFF')
         meshes = [o for o in context.selected_objects if o.type == 'MESH']
@@ -72,7 +73,6 @@ class NCA_PT_TargetPanel(NCA_PT_BasePanel):
             status_box = layout.box()
             status_box.label(text="No target voxelized", icon='ERROR')
             status_box.label(text="Voxelize a mesh before training")
-
 
 class NCA_PT_CellSettings(NCA_PT_BasePanel):
     bl_label = "Cell Settings"
@@ -152,22 +152,6 @@ class NCA_PT_TrainingSettings(NCA_PT_BasePanel):
         layout.prop(train_props, "batch_size", text="Batch Size")
         layout.prop(train_props, "num_epochs", text="Number of Epochs")
 
-class NCA_PT_VisualizationSettings(NCA_PT_BasePanel):
-    bl_label = "Visualization Settings"
-    bl_idname = "NCA_PT_visualization_settings"
-    bl_parent_id = "NCA_PT_main_panel"
-    bl_options = {'DEFAULT_CLOSED'}
-
-    def draw(self, context):
-        super().draw(context)
-
-        layout = self.layout
-        vis_props = context.scene.nca_visualization_props
-
-        layout.prop(vis_props, "cell_shape", text="Cell Shape")
-        layout.prop(vis_props, "cell_size", text="Cell Size")
-        layout.prop(vis_props, "show_grid", text="Show Grid")
-        layout.prop(vis_props, "animation_speed", text="Animation Speed")
 
 classes = (
     NCA_PT_MainPanel,
@@ -178,7 +162,6 @@ classes = (
     NCA_PT_UpdateSettings,
     NCA_PT_GridSettings,
     NCA_PT_TrainingSettings,
-    NCA_PT_VisualizationSettings,
 )
 
 def register():

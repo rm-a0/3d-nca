@@ -34,7 +34,7 @@ class NCA_PG_PerceptionProperties(bpy.types.PropertyGroup):
     channel_groups: bpy.props.IntProperty(
         name="Channel Groups",
         description="Number of channel groups for perception",
-        default=4,
+        default=3,
         min=1
     ) # type: ignore
     
@@ -110,33 +110,11 @@ class NCA_PG_TargetProperties(bpy.types.PropertyGroup):
         description="Number of alive voxels in the target",
         default=0
     ) # type: ignore
-
-class NCA_PG_VisualizationProperties(bpy.types.PropertyGroup):
-    cell_shape: bpy.props.EnumProperty(
-        name="Cell Shape",
-        description="Shape used to visualize cells",
-        items=[
-            ('CUBE', "Cube", "Visualize cells as cubes"),
-            ('SPHERE', "Sphere", "Visualize cells as spheres"),
-        ],
-        default='CUBE'
-    ) # type: ignore
     cell_size: bpy.props.FloatProperty(
         name="Cell Size",
         description="Size of each cell in the visualization",
         default=0.1,
         min=0.01
-    ) # type: ignore
-    show_grid: bpy.props.BoolProperty(
-        name="Show Grid",
-        description="Toggle grid visibility",
-        default=True
-    ) # type: ignore
-    animation_speed: bpy.props.FloatProperty(
-        name="Animation Speed",
-        description="Speed of the NCA animation",
-        default=1.0,
-        min=0.1
     ) # type: ignore
 
 classes = (
@@ -146,7 +124,6 @@ classes = (
     NCA_PG_GridProperties,
     NCA_PG_TrainingProperties,
     NCA_PG_TargetProperties,
-    NCA_PG_VisualizationProperties,
 )
 
 def register():
@@ -159,7 +136,6 @@ def register():
     bpy.types.Scene.nca_grid_props = bpy.props.PointerProperty(type=NCA_PG_GridProperties)
     bpy.types.Scene.nca_training_props = bpy.props.PointerProperty(type=NCA_PG_TrainingProperties)
     bpy.types.Scene.nca_target_props = bpy.props.PointerProperty(type=NCA_PG_TargetProperties)
-    bpy.types.Scene.nca_visualization_props = bpy.props.PointerProperty(type=NCA_PG_VisualizationProperties)
 
 def unregister():
     for cls in reversed(classes):
@@ -171,4 +147,3 @@ def unregister():
     del bpy.types.Scene.nca_grid_props
     del bpy.types.Scene.nca_training_props
     del bpy.types.Scene.nca_target_props
-    del bpy.types.Scene.nca_visualization_props

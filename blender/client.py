@@ -1,8 +1,13 @@
 import threading
-from .protocol import send_msg, recv_msg, tensor_to_b64, b64_to_tensor
 import socket
 import numpy as np
 from typing import Callable, Dict, Optional
+
+from .protocol import (
+    send_msg, recv_msg,
+    build_init_msg, build_stop_msg, build_pause_msg, build_resume_msg,
+    parse_state_msg,
+)
 
 class NCAClient:
     def __init__(self, host: str = "127.0.0.1", port: int = 5555):
@@ -39,21 +44,16 @@ class NCAClient:
             self._sock = None
 
     def send_init(self, config: dict, target: np.ndarray) -> None:
-        send_msg(self._sock, {
-            "type": "init",
-            "config": config,
-            "target": tensor_to_b64(target),
-            "target_shape": list(target.shape),
-        })
+        send_msg(self._sock, build_init_msg(config, target))
 
     def send_stop(self):
-        send_msg(self._sock, {"type": "stop"})
+        send_msg(self._sock, build_stop_msg())
 
     def send_pause(self):
-        send_msg(self._sock, {"type": "pause"}) 
+        send_msg(self._sock, build_pause_msg())
 
-    def send_resume(self):  
-        send_msg(self._sock, {"type": "resume"})
+    def send_resume(self):
+        send_msg(self._sock, build_resume_msg())
 
     def send_ping(self):
         send_msg(self._sock, {"type": "ping"})
@@ -93,7 +93,7 @@ class NCAClient:
 
             msg_type = msg.get("type")
             if msg_type == "state" and on_state:
-                state = b64_to_tensor(msg["data"], msg["shape"])
+                state, _epoch, _loss = parse_state_msg(msg)
                 on_state(state)
             elif msg_type == "error" and on_error:
                 on_error(msg.get("message", "Unknown error"))

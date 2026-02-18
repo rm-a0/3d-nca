@@ -71,19 +71,19 @@ def selected_meshes_to_voxel_array():
 
 def visualize_voxel(tensor):
     """Display a voxel array in the viewport (called for server state updates)."""
-    vis = bpy.context.scene.nca_visualization_props
+    target_props = bpy.context.scene.nca_target_props
     cell = bpy.context.scene.nca_cell_props
     grid = bpy.context.scene.nca_grid_props
     obj = voxel_array_to_blender(
         tensor,
         collection_name=STATE_COLLECTION,
         object_name="NCA_State",
-        cell_size=vis.cell_size,
+        cell_size=target_props.cell_size,
         alive_threshold=cell.alive_threshold,
     )
     if obj:
         grid_size = tuple(int(x) for x in grid.grid_size)
-        obj.location.x = get_slot_offset(2, grid_size, vis.cell_size)
+        obj.location.x = get_slot_offset(2, grid_size, target_props.cell_size)
 
 def _on_state(array: np.ndarray):
     """Listener callback — runs on a background thread."""
@@ -226,7 +226,7 @@ class NCA_OT_VoxelizeTarget(bpy.types.Operator):
 
         cell_props = context.scene.nca_cell_props
         grid_props = context.scene.nca_grid_props
-        vis_props = context.scene.nca_visualization_props
+        target_props = context.scene.nca_target_props
 
         objs = [o for o in context.selected_objects if o.type == 'MESH']
         if not objs:
@@ -252,19 +252,19 @@ class NCA_OT_VoxelizeTarget(bpy.types.Operator):
 
         _target_array = combined_data
 
-        place_source_in_scene(objs, grid_size, vis_props.cell_size)
+        place_source_in_scene(objs, grid_size, target_props.cell_size)
 
         vox_obj = voxel_array_to_blender(
             combined_data,
             collection_name=TARGET_COLLECTION,
             object_name="NCA_Target",
-            cell_size=vis_props.cell_size,
+            cell_size=target_props.cell_size,
             alive_threshold=cell_props.alive_threshold,
             material_map=combined_mat_map,
             materials=all_materials,
         )
         if vox_obj:
-            vox_obj.location.x = get_slot_offset(1, grid_size, vis_props.cell_size)
+            vox_obj.location.x = get_slot_offset(1, grid_size, target_props.cell_size)
 
         n_ch = combined_data.shape[-1]
         alpha = combined_data[..., 3] if n_ch >= 4 else combined_data[..., 0]

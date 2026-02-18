@@ -101,10 +101,6 @@ class Grid3D(torch.nn.Module):
 
         dx = self.update(perceived, pre_life, state)
 
-        if self.update.upd_cfg.stochastic_update:
-            fire = (torch.rand(batch, 1, *self.cfg.size, device=device) <= self.update.upd_cfg.fire_rate)
-            dx = dx * fire.float()
-
         post_life = self.cell.update_alive_mask(state + dx)
         life_mask = pre_life & post_life
         result = (state + dx) * life_mask.float()

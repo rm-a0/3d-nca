@@ -7,6 +7,15 @@ from .protocol import (
     b64_to_tensor,
     encode_message,
     decode_message,
+    build_init_msg,
+    parse_init_msg,
+    build_state_msg,
+    parse_state_msg,
+    build_stop_msg,
+    build_pause_msg,
+    build_resume_msg,
+    build_ack_msg,
+    build_error_msg,
 )
 
 __all__ = [
@@ -18,4 +27,13 @@ __all__ = [
     "b64_to_tensor",
     "encode_message",
     "decode_message",
+    "build_init_msg",
+    "parse_init_msg",
+    "build_state_msg",
+    "parse_state_msg",
+    "build_stop_msg",
+    "build_pause_msg",
+    "build_resume_msg",
+    "build_ack_msg",
+    "build_error_msg",
 ]
