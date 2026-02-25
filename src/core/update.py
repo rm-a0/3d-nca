@@ -39,7 +39,8 @@ class UpdateConfig:
 
 class UpdateRule(nn.Module):
     """
-    Two-hidden-layer 1x1x1 MLP with GroupNorm and bounded output.
+    1x1x1 MLP with two hidden layers, GroupNorm, and bounded output.
+    Deeper than the minimal NCA variant to handle complex spatial patterns.
     """
     def __init__(
         self,
@@ -51,14 +52,20 @@ class UpdateRule(nn.Module):
         self.upd_cfg = upd_cfg
 
         in_channels = cell_cfg.total_channels * perc_cfg.channel_groups
+        hid = upd_cfg.hidden_dim
+        out = cell_cfg.total_channels
 
         self.mlp = nn.Sequential(
-            nn.Conv3d(in_channels, upd_cfg.hidden_dim, kernel_size=1),
-            nn.GroupNorm(4, upd_cfg.hidden_dim),
+            nn.Conv3d(in_channels, hid, kernel_size=1),
+            nn.GroupNorm(4, hid),
             nn.ReLU(inplace=True),
-            nn.Conv3d(upd_cfg.hidden_dim, cell_cfg.total_channels, kernel_size=1),
+            nn.Conv3d(hid, hid, kernel_size=1),
+            nn.GroupNorm(4, hid),
+            nn.ReLU(inplace=True),
+            nn.Conv3d(hid, out, kernel_size=1),
         )
 
+        # Zero-init final layer for safe starting point
         final_conv = self.mlp[-1]
         if isinstance(final_conv, nn.Conv3d):
             nn.init.zeros_(final_conv.weight)
@@ -67,9 +74,13 @@ class UpdateRule(nn.Module):
 
     def forward(self, perceived: Tensor, alive_mask: Tensor, state: Tensor) -> Tensor:
         """
-        Predict bounded change `dx` and apply alive-mask.
+        Predict bounded change `dx`.
 
-        Returns updated state:  state + dx * alive_mask
+        Alive-masking is NOT applied here — Grid3D handles it via
+        post-step alive masking so that dead neighbors of alive cells
+        can receive nonzero updates and come to life (growth).
+
+        Returns: dx [B, C, X, Y, Z]
         """
         delta = self.mlp(perceived)
 
@@ -78,4 +89,4 @@ class UpdateRule(nn.Module):
             delta = delta * fire
 
         delta = torch.tanh(delta) * 0.1
-        return delta * alive_mask.float()
+        return delta

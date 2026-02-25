@@ -57,29 +57,37 @@ class Perception3D(torch.nn.Module):
     def _init_perception_kernels(self) -> None:
         """Initialize the fixed perception weights (no gradients).
 
-            1. Group 0 : identity (center voxel)
-            2. Group 1 : sum of 6 direct neighbours (positions relative to centre)
-            3. Group 2 : gradient (center - neighbours)
-            4. Normalise so each group sums to 1
+        Weight shape: [out_channels, 1, kD, kH, kW]
+        out_channels = in_channels * channel_groups.
+        With groups=in_channels, for input channel i the 3 output
+        filters sit at indices 3*i+0, 3*i+1, 3*i+2 along dim 0.
+
+            Group 0 (offset 0): identity — center voxel only
+            Group 1 (offset 1): 6-neighbor sum
+            Group 2 (offset 2): Laplacian (center − neighbors)
+
+        No normalization — matches Mordvintsev et al. convention.
         """
         with torch.no_grad():
-            w = self.depthwise.weight
+            w = self.depthwise.weight          # [3*C, 1, 3, 3, 3]
             w.zero_()
-            k = self.cfg.kernel_radius
-            g = self.cfg.channel_groups
+            k = self.cfg.kernel_radius         # center index in kernel
+            g = self.cfg.channel_groups        # 3
 
-            w[:, 0:g, k, k, k] = 1.0
+            for c in range(self.in_channels):
+                base = c * g
 
-            w[:, g:2*g, k, k, k] = 1.0
-            for dx, dy, dz in [(1,0,0), (-1,0,0), (0,1,0), (0,-1,0), (0,0,1), (0,0,-1)]:
-                w[:, g:2*g, k+dx, k+dy, k+dz] = 1.0
+                # Group 0 — identity
+                w[base + 0, 0, k, k, k] = 1.0
 
-            w[:, 2*g:, k, k, k] = -1.0
-            for dx, dy, dz in [(1,0,0), (-1,0,0), (0,1,0), (0,-1,0), (0,0,1), (0,0,-1)]:
-                w[:, 2*g:, k+dx, k+dy, k+dz] = 1.0
+                # Group 1 — sum of 6 face-adjacent neighbors
+                for dx, dy, dz in [(1,0,0),(-1,0,0),(0,1,0),(0,-1,0),(0,0,1),(0,0,-1)]:
+                    w[base + 1, 0, k+dx, k+dy, k+dz] = 1.0
 
-            norm = w.abs().sum(dim=(2,3,4), keepdim=True).clamp(min=1e-6)
-            w.div_(norm)
+                # Group 2 — Laplacian: 6·center − neighbors
+                w[base + 2, 0, k, k, k] = 6.0
+                for dx, dy, dz in [(1,0,0),(-1,0,0),(0,1,0),(0,-1,0),(0,0,1),(0,0,-1)]:
+                    w[base + 2, 0, k+dx, k+dy, k+dz] = -1.0
 
     def forward(self, state: Tensor) -> Tensor:
         """

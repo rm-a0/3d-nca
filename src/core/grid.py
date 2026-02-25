@@ -17,14 +17,15 @@ from dataclasses import dataclass
 from typing import Tuple
 
 import torch
-from torch import Tensor 
+from torch import Tensor
+from torch.utils.checkpoint import checkpoint
 from .cell import CellState, CellConfig
 from .perception import Perception3D, PerceptionConfig
 from .update import UpdateConfig, UpdateRule
 
 @dataclass(frozen=True)
 class GridConfig:
-    """Lattice dimensions. Must be odd for clean center seeding."""
+    """Lattice dimensions."""
     size: Tuple[int, int, int] = (32, 32, 32)
     padding_mode: str = "zeros"
 
@@ -78,41 +79,51 @@ class Grid3D(torch.nn.Module):
         """
         Advance the NCA one iteration.
 
-        1. Compute pre_life: which cells are alive now (max(alpha of cell + 26 neighbors) > threshold)
-        2. Apply fixed 3x3x3 perception filters
-        3. MLP predicts `dx` (change to apply to each cell's state)
-        4. (Optional) Stochastic fire (randomly zero out some updates)
-        5. Add `dx` to current `state` (temporary next state)
-        6. Compute `post_life` (which cells would be alive after the update)
-        7. Final update: keep changes only where `pre_life & post_life` is True
+        1. Compute pre_life: which cells are alive now
+        2. Apply fixed 3x3x3 perception filters (all cells perceive)
+        3. MLP predicts `dx` for every cell
+        4. (Optional) Stochastic fire masks some updates
+        5. new_state = state + dx
+        6. Compute post_life on new_state
+        7. Zero out cells where post_life is False
 
-        The `pre & post` intersection ensures:
-          - Dead cells can't come back to life
-          - Living cells don't die from a single bad update
-          - Growth is stable and damage-resistant
-
-        Source: https://github.com/SkyLionx/3d-cellular-automaton
+        Growth mechanism: dead cells adjacent to alive cells receive
+        nonzero perception (neighbor info leaks in), so the MLP can
+        produce a positive alpha delta that brings them to life.  The
+        post_life mask then validates only cells with sufficient alpha.
         """
-        device = state.device
-        batch = state.shape[0]
-
         pre_life = self.cell.update_alive_mask(state)
         perceived = self.perception(state)
 
         dx = self.update(perceived, pre_life, state)
 
-        post_life = self.cell.update_alive_mask(state + dx)
-        life_mask = pre_life & post_life
-        result = (state + dx) * life_mask.float()
+        new_state = state + dx
+        post_life = self.cell.update_alive_mask(new_state)
+        return new_state * post_life.float()
 
-        return result
-
-    def forward(self, state: Tensor, steps: int = 1) -> Tensor:
+    def forward(
+        self,
+        state: Tensor,
+        steps: int = 1,
+        use_checkpointing: bool = True,
+    ) -> Tensor:
         """
         Run `steps` iterations with clamping to [-1, 1] after each step.
-        Prevents value explosion during training or long rollouts.
+
+        Optimization using checkpointing suggested by Claude Opus 4.6:
+
+        When `use_checkpointing` is True (default) each step is wrapped in
+        `torch.utils.checkpoint.checkpoint` so that intermediate activations
+        are recomputed during the backward pass instead of being stored.
+        This trades ~2x compute for O(1) memory w.r.t. step count — critical
+        for long unrolls on low-VRAM GPUs.
         """
         for _ in range(steps):
-            state = self.step(state)
+            if use_checkpointing and state.requires_grad:
+                state = checkpoint(
+                    self.step, state, use_reentrant=False
+                )
+            else:
+                state = self.step(state)
             state = torch.clamp(state, -1.0, 1.0)
         return state
