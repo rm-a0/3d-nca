@@ -1,7 +1,9 @@
 import base64
+import math
+import random
 import threading
 import time
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, List
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -9,6 +11,25 @@ from src.core import Grid3D, CellConfig, PerceptionConfig, UpdateConfig, GridCon
 from .protocol import build_state_msg
 
 SendFn = Callable[[Dict[str, Any]], None] # type alias for callback
+
+# Hardcoded training hyper-parameters for simplicity. These could be made configurable later.
+# Training hyper-parameters (pool-based, per Mordvintsev et al.)
+POOL_SIZE = 32            # number of persistent states
+DAMAGE_PROB = 0.0         # probability of random damage per sample (0 = off)
+BATCH_SIZE = 4            # samples per training iteration
+
+# Steps ramp linearly from STEP_MIN_START to STEP_MIN_END over CURRICULUM_EPOCHS
+STEP_MIN_START = 8        # early training: few steps (learn core shape)
+STEP_MIN_END   = 32       # late training: more steps  (refine details)
+STEP_MAX_START = 16
+STEP_MAX_END   = 64
+CURRICULUM_EPOCHS = 2000  # epochs over which to ramp
+
+# Loss Weights
+ALPHA_WEIGHT   = 4.0      # shape/occupancy matters most
+COLOR_WEIGHT   = 1.0      # color loss only where target is alive
+OVERFLOW_WEIGHT = 2.0     # penalise alive cells outside target
+
 
 class NCATrainer:
     def __init__(self):
@@ -20,6 +41,8 @@ class NCATrainer:
         self.current_epoch = 0
         self.total_epochs = 0
         self.latest_loss = 0.0
+
+        self._pool: List[torch.Tensor] = []   # state pool
 
         self._train_thread = None
         self._stop_event = threading.Event()
@@ -42,13 +65,22 @@ class NCATrainer:
             lr=config["training"]["learning_rate"],
             weight_decay=1e-5,
         )
+        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            self.optimizer,
+            T_max=config["training"]["num_epochs"],
+            eta_min=1e-5,
+        )
 
         # (D,H,W,C) channels-last
         target_chw = np.transpose(target, (3, 0, 1, 2)).astype(np.float32)
         self.target = torch.from_numpy(target_chw).unsqueeze(0).to(self._device)
 
-        # Start from a single seed cell
-        self.state = self.model.seed_center(1, self._device)
+        # Initialize pool with seed states
+        self._pool = [
+            self.model.seed_center(1, self._device)
+            for _ in range(POOL_SIZE)
+        ]
+        self.state = self._pool[0]
 
         self.current_epoch = 0
         self.total_epochs = config["training"]["num_epochs"]
@@ -104,32 +136,92 @@ class NCATrainer:
 
         print("Training completed")
 
+    def _get_step_range(self) -> tuple[int, int]:
+        """Return (min_steps, max_steps) for the current epoch via curriculum."""
+        t = min(self.current_epoch / max(CURRICULUM_EPOCHS, 1), 1.0)
+        lo = int(STEP_MIN_START + t * (STEP_MIN_END - STEP_MIN_START))
+        hi = int(STEP_MAX_START + t * (STEP_MAX_END - STEP_MAX_START))
+        return max(lo, 4), max(hi, lo + 1)
+
     def _step(self):
-        """One training iteration"""
+        """One pool-based training iteration with structured loss & curriculum.
+
+        1. Compute step count from curriculum
+        2. Sample a batch from the pool
+        3. Replace the highest-loss sample with a fresh seed
+        4. Forward pass
+        5. Structured loss: alpha + color + overflow
+        6. Write updated states back to the pool
+        """
         device = self._device
         cell_cfg = self._cell_cfg
-        n_steps = 8
+        batch_size = min(len(self._pool), BATCH_SIZE)
+        lo, hi = self._get_step_range()
+        n_steps = random.randint(lo, hi)
+
+        # sample batch from pool
+        indices = random.sample(range(len(self._pool)), batch_size)
+        batch = torch.cat([self._pool[i] for i in indices], dim=0)
+
+        # replace the highest-loss element with a fresh seed
+        vis = cell_cfg.visible_channels
+        with torch.no_grad():
+            per_sample_loss = [
+                F.mse_loss(batch[i:i+1, -vis:], self.target[:, -vis:]).item()
+                for i in range(batch_size)
+            ]
+            worst = int(np.argmax(per_sample_loss))
+            batch[worst:worst+1] = self.model.seed_center(1, device)
 
         self.optimizer.zero_grad()
 
-        state = self.model.seed_center(1, device)
+        # forward pass
+        state = batch
+        state = self.model(state, steps=n_steps)
 
-        state = state + 0.02 * torch.randn_like(state)
+        # structured loss
+        pred_vis = state[:, -vis:]                         # [B, V, X, Y, Z]
+        tgt_vis  = self.target[:, -vis:].expand_as(pred_vis)
 
-        loss = torch.tensor(0.0, device=device)
-        vis = cell_cfg.visible_channels
-        for _ in range(n_steps):
-            state = self.model(state, steps=1)
-            pred = state[:, -vis:]
-            tgt = self.target[:, :vis]
-            loss = loss + F.mse_loss(pred, tgt)
+        pred_alpha = pred_vis[:, -1:]                      # [B, 1, X, Y, Z]
+        tgt_alpha  = tgt_vis[:, -1:]
+
+        # 1) Alpha / occupancy loss — shape fidelity
+        loss_alpha = F.mse_loss(pred_alpha, tgt_alpha)
+
+        # 2) Color loss — only where the target IS occupied
+        tgt_mask = (tgt_alpha > cell_cfg.alive_threshold).float()
+        if vis > 1:
+            pred_color = pred_vis[:, :-1]                  # [B, V-1, X, Y, Z]
+            tgt_color  = tgt_vis[:, :-1]
+            color_diff = (pred_color - tgt_color) ** 2 * tgt_mask
+            loss_color = color_diff.sum() / tgt_mask.sum().clamp(min=1.0)
+        else:
+            loss_color = torch.tensor(0.0, device=device)
+
+        # 3) Overflow loss — penalise alive voxels outside the target
+        overflow_mask = (1.0 - tgt_mask)                   # where target is dead
+        overflow = (pred_alpha * overflow_mask) ** 2
+        loss_overflow = overflow.mean()
+
+        loss = (
+            ALPHA_WEIGHT   * loss_alpha
+          + COLOR_WEIGHT   * loss_color
+          + OVERFLOW_WEIGHT * loss_overflow
+        )
 
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
         self.optimizer.step()
+        self.scheduler.step()
 
-        # Store for visualization / sending to client
-        self.state = state.detach()
+        # write states back to pool
+        with torch.no_grad():
+            for j, idx in enumerate(indices):
+                self._pool[idx] = state[j:j+1].detach()
+
+        # Store the first sample for visualization
+        self.state = state[0:1].detach()
 
         return loss.item()
     
@@ -147,5 +239,3 @@ class NCATrainer:
         except Exception as e:
             self._stop_event.set()
             print(f"Error sending state: {e}")
-
-

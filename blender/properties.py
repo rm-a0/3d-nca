@@ -4,8 +4,8 @@ class NCA_PG_CellProperties(bpy.types.PropertyGroup):
     hidden_channels: bpy.props.IntProperty(
         name="Hidden Channels",
         description="Number of hidden channels in the NCA",
-        default=8,
-        min=0
+        default=16,
+        min=1
     ) # type: ignore
     visible_channels: bpy.props.EnumProperty(
         name="Visible Channels",
@@ -43,7 +43,7 @@ class NCA_PG_UpdateProperties(bpy.types.PropertyGroup):
     hidden_dim: bpy.props.IntProperty(
         name="Hidden Dimension",
         description="Dimension of the hidden layer",
-        default=64,
+        default=96,
         min=1
     ) # type: ignore
     stochastic_update: bpy.props.BoolProperty(
@@ -84,13 +84,13 @@ class NCA_PG_TrainingProperties(bpy.types.PropertyGroup):
     batch_size: bpy.props.IntProperty(
         name="Batch Size",
         description="Batch size for training",
-        default=16,
+        default=4,
         min=1
     ) # type: ignore
     num_epochs: bpy.props.IntProperty(
         name="Number of Epochs",
         description="Number of epochs for training",
-        default=2000,
+        default=5000,
         min=1
     ) # type: ignore
 
