@@ -388,6 +388,57 @@ In particular, the transition from 2D to 3D increases neighbourhood size, comput
 Whether the stability and regenerative behaviours observed in planar domains persist under these conditions is not addressed in the original 
 work and forms a central motivation for the experiments conducted here.
 
+\section{Three-Dimensional Neural Cellular Automata in Interactive Environments}
+
+An important step toward practical three-dimensional Neural Cellular Automata (NCA) systems was presented by Sudhakaran et al.~\cite{Sudhakaran2021}. 
+In contrast to purely synthetic voxel experiments, their work explored 3D NCA within an interactive environment, namely the sandbox game \emph{Minecraft}. 
+This setting enabled the authors to evaluate volumetric growth processes under real-time constraints and user interaction.
+
+The proposed model extends the 2D growing NCA paradigm introduced by Mordvintsev et al. to a three-dimensional voxel grid. 
+Each voxel stores a state vector consisting of visible channels and multiple hidden channels. Perception is implemented using local 
+$3 \times 3 \times 3$ neighborhoods, including identity features and spatial gradients, which are processed by a small neural network applied 
+identically at every voxel. The system is trained via gradient-based optimization to grow a predefined 3D target structure from a single seeded cell.
+
+A key contribution of the work lies in demonstrating that neural cellular automata can successfully generate coherent volumetric structures in a 
+dynamic, interactive 3D environment. The learned rules remain local and homogeneous across space, preserving the cellular automaton paradigm while 
+enabling complex global structure formation. The experiments show that the model is capable of converging toward target voxel configurations and can 
+recover from certain types of perturbations, illustrating partial regenerative behavior.
+
+\subsection{Experimental Scope and Constraints}
+
+While the work establishes the feasibility of 3D NCA in an applied environment, the experimental scope is primarily focused on 
+proof-of-concept demonstrations. The evaluation concentrates on successful growth toward predefined voxel targets and qualitative assessment 
+of structural coherence. Quantitative metrics for long-term stability, regeneration under systematic damage, or comparative benchmarking 
+against alternative 3D generative approaches are limited.
+
+Furthermore, the \emph{Minecraft} environment naturally imposes constraints on voxel representation, rendering pipeline, and interaction mechanisms. 
+Although this provides a valuable real-time testbed, it also bounds the range of geometric complexity, material expressiveness, and experimental 
+instrumentation available to the researchers.
+
+These aspects should not be interpreted as shortcomings, but rather as design decisions aligned with the goal of demonstrating interactive feasibility.
+
+\subsection{Relation to the Present Thesis}
+
+The work of Sudhakaran et al.~\cite{Sudhakaran2021} serves as a direct methodological inspiration for the present thesis. In particular, the extension 
+of growing neural cellular automata from two-dimensional image grids to fully volumetric $3 \times 3 \times 3$ perception neighborhoods informs 
+the architectural design adopted here.
+
+The present thesis builds upon this foundation by transferring the 3D NCA framework into a Blender-based environment. Unlike a sandbox game engine, 
+Blender provides a fully open-source, professionally oriented 3D creation platform with direct access to mesh data structures, volumetric representations, 
+programmable shaders, and scripting interfaces. This transition significantly expands experimental flexibility: voxel resolutions are not constrained 
+by game-specific mechanics, rendering is fully customizable, and intermediate cellular states can be inspected, logged, and modified programmatically.
+
+Consequently, the Blender integration is not merely an implementation change, but an extension of the experimental framework. It enables systematic evaluation, 
+reproducibility, integration with procedural modeling pipelines, and future exploration of hybrid approaches combining neural cellular automata with 
+established 3D content generation workflows. In this sense, the present thesis generalizes the interactive 3D NCA concept toward a more open and research-oriented 
+volumetric modeling environment.
+
+\section{Other Open-Source Implementations of 3D Neural Cellular Automata}
+TODO
+
+\chapter{Architectural Design}
+TODO
+
 \chapter{Implementation}
 TODO
 
