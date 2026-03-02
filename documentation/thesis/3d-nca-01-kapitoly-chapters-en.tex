@@ -255,15 +255,138 @@ in both two- and three-dimensional systems~\cite{Rossi2021,Sudhakaran2021,Aadity
 %=========================================================================
 \chapter{Related Work}
 
-The development of three-dimensional neural cellular automata draws on a lineage of contributions spanning mathematical biology,
-continuous self-organising systems, and modern deep learning. This chapter surveys the most relevant prior work, organised thematically,
-and concludes each section by relating the discussed contributions to the present thesis.
+This chapter reviews prior work most directly related to neural cellular automata and their extensions.
+The focus is on implementations, training regimes, evaluation strategies, and attempts to extend these systems beyond two dimensions.
+Each section concludes by identifying limitations or open questions that motivate the three-dimensional framework developed in this thesis.
 
 Some of the concepts discussed in this chapter were already introduced in Chapter~\ref{chap:theoretical-foundations}. There, they were 
 presented to establish the formal and conceptual background required for the definition of three-dimensional neural cellular automata. 
 In contrast, the present chapter considers the same works from the perspective of prior research contributions, experimental results, and 
 architectural design choices that serve as a direct basis for the approach developed in this thesis. 
 
+\section{Growing Neural Cellular Automata}
+The development of neural cellular automata draws on a lineage of contributions spanning continuous self-organising systems, reaction-diffusion 
+models of morphogenesis, and modern deep learning techniques for differentiable simulation. This section focuses on the seminal work of 
+Mordvintsev, Randazzo, Niklasson, and Levin (2020)~\cite{Mordvintsev2020}, which introduced the core paradigm of Growing Neural Cellular Automata and 
+serves as the primary methodological foundation for the present thesis.
+
+In their 2020 contribution, Mordvintsev et al. replaced the traditional discrete lookup-table transition rules of classical cellular automata 
+with a small, shared neural network whose parameters are optimised end-to-end via gradient descent. The resulting model preserves the strict spatial 
+locality of classical CA while enabling task-driven optimisation of the update dynamics, allowing the system to grow and persistently maintain 
+predefined target patterns starting from simple initial conditions (often a single live cell or small seed).
+
+Unlike earlier continuous or parameterised CA systems, which were often explored through manual parameter tuning or dynamical systems analysis, neural 
+cellular automata emphasise supervised optimisation of update dynamics. Instead of searching for interesting rule sets, the transition function itself is 
+trained to produce a predefined target pattern. This shift—from exploratory rule discovery to differentiable, task-driven optimisation—forms the methodological 
+basis for the three-dimensional extension developed in this thesis.
+
+While the core principles of neural cellular automata were introduced in Chapter~\ref{chap:theoretical-foundations}, the focus here is on the 
+concrete design and empirical properties of the 2020 implementation. In particular, the architectural structure, stochastic update 
+mechanism, and training procedure are analysed, as they define the core design principles underlying the three-dimensional extension developed in this thesis.
+
+\subsection{State Representation}
+
+Each cell in the original 2D model maintains a real-valued state vector of 16 channels. Four channels encode visible RGBA colour 
+values compared directly against a target image. The remaining twelve channels serve as hidden internal memory.
+
+The inclusion of hidden channels enables each cell to store and propagate information across time steps, effectively functioning as a distributed 
+memory system embedded in the spatial lattice. Because updates are strictly local, long-range coordination must emerge from iterative short-range 
+interactions. The hidden channels provide the representational capacity necessary for this coordination.
+
+This architectural decision is central to the stability and regenerative behaviour observed in later experiments and directly informs the channel 
+configurations adopted in subsequent work.
+
+\subsection{Perception Mechanism}
+
+Perception in the 2D neural CA is implemented through a fixed set of non-learnable convolutional filters applied to the full multi-channel grid. 
+The standard configuration includes:
+
+\begin{itemize}
+    \item An identity filter,
+    \item Sobel filters approximating spatial derivatives in the {x} and {y} directions
+    \item A Laplacian filter capturing local curvature-like information.
+\end{itemize}
+
+Applied across all 16 channels, these filters produce a 48-dimensional perception vector at each spatial location. A small multilayer 
+perceptron operating independently at each cell transforms this perception vector into a state increment.
+
+The use of fixed perception filters serves two purposes. First, it enforces locality and translation invariance. Second, it stabilises 
+optimisation by constraining the form of spatial information available to the update rule. This design choice becomes particularly 
+relevant in volumetric extensions, where filter dimensionality and neighbourhood size increase substantially.
+
+\subsection{Update Rule and Parameter Sharing}
+
+The update rule is implemented as a lightweight neural network shared across all cells. The output is a state 
+increment added residually to the current state:
+
+\[
+\mathbf{s}_{t+1} = \mathbf{s}_t + \Delta \mathbf{s}.
+\]
+
+Residual updates contribute to dynamical stability by encouraging incremental modifications rather than abrupt state transitions. 
+Because the same parameters are applied at every spatial location, the learned rule defines a homogeneous 
+dynamical system over the entire grid.
+
+The complete architecture contains approximately 8000 trainable parameters, a scale small enough to emphasise that the 
+complexity of the resulting structures arises from iterative local interaction rather than network size.
+
+\subsubsection{Stabilisation Mechanisms}
+
+Two mechanisms play a critical role in the robustness of the learned dynamics.
+
+\begin{itemize}
+    \item \textbf{Alive gating} conditions state updates on whether a designated alpha channel exceeds a threshold. 
+    This introduces a soft analogue of classical alive/dead states and prevents inactive regions from destabilising active structures.
+    \item \textbf{Stochastic update masking} applies updates to a randomly selected subset of cells at each time step. This prevents 
+    rigid synchronisation artefacts and encourages robustness to asynchronous perturbations.
+\end{itemize}
+
+These mechanisms collectively enhance long-term stability and regenerative capacity, properties that become increasingly significant when 
+extending the model to larger or higher-dimensional grids.
+
+
+\subsection{Training Regimes}
+
+Mordvintsev et al.~\cite{Mordvintsev2020} introduced three principal training regimes: growing, persistent, and regenerating. Each of these 
+regimes was designed to shape different aspects of the emergent dynamics. These regimes serve as the direct methodological foundation for the 
+training strategies explored in the three-dimensional extension developed in this thesis. Rather than relying solely on exploratory parameter 
+search as in earlier continuous CA systems, neural cellular automata exploit gradient-based optimisation to discover update rules 
+tailored to specific behavioural objectives, with the choice of regime determining the balance between initial pattern formation, 
+long-term stability, and robustness to perturbation.
+
+\subsubsection{Growing Regime}
+
+In the growing regime, the model is trained to produce a target image from a single active seed. The loss is computed after a fixed number 
+of update steps. The model learns to expand outward and approximate the target pattern.
+
+Once the target is reached, no additional constraint is imposed. As a result, long-term stability is not guaranteed. Patterns may drift, 
+decay, or diverge if simulation continues beyond the training horizon.
+
+\subsubsection{Persistent Regime}
+
+The persistent regime extends training beyond initial convergence. The loss is evaluated at multiple time steps 
+after the target is reached, encouraging the system to maintain the pattern over extended simulations.
+
+This regime induces greater dynamical stability. Interestingly, persistent models exhibit limited regenerative behaviour even 
+without explicit damage training, suggesting that stability mechanisms learned for persistence partially generalise to perturbation recovery.
+
+\subsubsection{Regenerating Regime}
+
+In the regenerating regime, random damage is introduced during training by zeroing out contiguous regions of the grid. The model must 
+reconstruct the target pattern from the damaged configuration.
+
+This explicit training objective leads to robust regenerative dynamics. Regenerating models can recover from substantial 
+perturbations and maintain structural integrity over long simulation horizons.
+
+\subsection{Relevance to the Present Thesis}
+
+The present thesis adopts the architectural principles, training regimes, and optimisation strategy introduced by Mordvintsev 
+et al.~\cite{Mordvintsev2020} as its baseline. The central contribution lies in extending this framework to three-dimensional voxel 
+lattices and systematically examining how architectural adaptation and training strategy interact with volumetric spatial structure.
+
+In particular, the transition from 2D to 3D increases neighbourhood size, computational cost, and information propagation requirements. 
+Whether the stability and regenerative behaviours observed in planar domains persist under these conditions is not addressed in the original 
+work and forms a central motivation for the experiments conducted here.
 
 \chapter{Implementation}
 TODO
