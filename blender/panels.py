@@ -43,13 +43,17 @@ class NCA_PT_TargetPanel(NCA_PT_BasePanel):
     bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
+        from .operators import is_training_active
         super().draw(context)
         layout = self.layout
         target_props = context.scene.nca_target_props
 
+        active = not is_training_active()
+
         layout.prop(target_props, "cell_size")
 
         row = layout.row(align=True)
+        row.enabled = active
         row.prop(target_props, "source_object", text="Source Mesh")
         row.operator("nca.clear_target_voxels", text="", icon='X')
 
@@ -70,9 +74,11 @@ class NCA_PT_CellSettings(NCA_PT_BasePanel):
     bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
+        from .operators import is_training_active
         super().draw(context)
 
         layout = self.layout
+        layout.enabled = not is_training_active()
         cell_props = context.scene.nca_cell_props
 
         layout.prop(cell_props, "hidden_channels", text="Hidden Channels")
@@ -86,9 +92,11 @@ class NCA_PT_PerceptionSettings(NCA_PT_BasePanel):
     bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
+        from .operators import is_training_active
         super().draw(context)
 
         layout = self.layout
+        layout.enabled = not is_training_active()
         perc_props = context.scene.nca_perception_props
 
         layout.prop(perc_props, "kernel_radius", text="Kernel Radius")
@@ -101,9 +109,11 @@ class NCA_PT_UpdateSettings(NCA_PT_BasePanel):
     bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
+        from .operators import is_training_active
         super().draw(context)
 
         layout = self.layout
+        layout.enabled = not is_training_active()
         upd_props = context.scene.nca_update_props
 
         layout.prop(upd_props, "hidden_dim", text="Hidden Dimension")
@@ -117,9 +127,11 @@ class NCA_PT_GridSettings(NCA_PT_BasePanel):
     bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
+        from .operators import is_training_active
         super().draw(context)
 
         layout = self.layout
+        layout.enabled = not is_training_active()
         grid_props = context.scene.nca_grid_props
 
         layout.prop(grid_props, "grid_size", text="Grid Size")
@@ -132,14 +144,69 @@ class NCA_PT_TrainingSettings(NCA_PT_BasePanel):
     bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
+        from .operators import is_training_active
         super().draw(context)
 
         layout = self.layout
+        layout.enabled = not is_training_active()
         train_props = context.scene.nca_training_props
 
         layout.prop(train_props, "learning_rate", text="Learning Rate")
         layout.prop(train_props, "batch_size", text="Batch Size")
         layout.prop(train_props, "num_epochs", text="Number of Epochs")
+
+class NCA_UL_ScheduleEventList(bpy.types.UIList):
+    """Draws one row per schedule event."""
+    bl_idname = "NCA_UL_schedule_event_list"
+
+    def draw_item(self, context, layout, data, item, icon, active_data, active_property, index):
+        if self.layout_type in {'DEFAULT', 'COMPACT'}:
+            row = layout.row(align=True)
+            if item.epoch == -1:
+                row.label(text="Now")
+            else:
+                row.prop(item, "epoch", text="", emboss=False)
+            row.prop(item, "event_type", text="", emboss=False)
+            row.prop(item, "value", text="", emboss=False)
+        elif self.layout_type == 'GRID':
+            layout.alignment = 'CENTER'
+            layout.label(text="", icon='EVENT_S')
+
+class NCA_PT_SchedulePanel(NCA_PT_BasePanel):
+    bl_label = "Schedule"
+    bl_idname = "NCA_PT_schedule_panel"
+    bl_parent_id = "NCA_PT_main_panel"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    def draw(self, context):
+        from .operators import is_training_active
+        super().draw(context)
+
+        layout = self.layout
+        sched = context.scene.nca_schedule_props
+
+        row = layout.row()
+        row.template_list(
+            "NCA_UL_schedule_event_list", "",
+            sched, "events",
+            sched, "active_event_index",
+            rows=3,
+        )
+
+        col = row.column(align=True)
+        col.operator("nca.add_schedule_event", icon='ADD', text="")
+        col.operator("nca.remove_schedule_event", icon='REMOVE', text="")
+
+        if sched.events and 0 <= sched.active_event_index < len(sched.events):
+            ev = sched.events[sched.active_event_index]
+            box = layout.box()
+            box.prop(ev, "epoch")
+            box.prop(ev, "event_type")
+            box.prop(ev, "value")
+
+        row = layout.row()
+        row.enabled = is_training_active()
+        row.operator("nca.send_schedule", icon='EXPORT')
 
 classes = (
     NCA_PT_MainPanel,
@@ -150,6 +217,8 @@ classes = (
     NCA_PT_UpdateSettings,
     NCA_PT_GridSettings,
     NCA_PT_TrainingSettings,
+    NCA_UL_ScheduleEventList,
+    NCA_PT_SchedulePanel,
 )
 
 def register():

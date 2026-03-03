@@ -4,7 +4,8 @@ import threading
 from .trainer import NCATrainer 
 from .protocol import (
     recv_msg, send_msg,
-    parse_init_msg, build_ack_msg, build_error_msg,
+    parse_init_msg, parse_schedule_msg,
+    build_ack_msg, build_error_msg,
 )
 
 class NCAServer:
@@ -62,6 +63,11 @@ class NCAServer:
             elif msg_type == "resume":
                 self.trainer.resume()
                 send_msg(client, build_ack_msg("Resumed"))
+
+            elif msg_type == "update_schedule":
+                events = parse_schedule_msg(msg)
+                self.trainer.update_schedule(events)
+                send_msg(client, build_ack_msg("Schedule updated"))
 
             elif msg_type == "ping":
                 send_msg(client, {"type": "pong"})

@@ -6,6 +6,7 @@ from typing import Callable, Dict, Optional
 from .protocol import (
     send_msg, recv_msg,
     build_init_msg, build_stop_msg, build_pause_msg, build_resume_msg,
+    build_schedule_msg,
     parse_state_msg,
 )
 
@@ -54,6 +55,9 @@ class NCAClient:
 
     def send_resume(self) -> None:
         send_msg(self._sock, build_resume_msg())
+
+    def send_schedule(self, events: list) -> None:
+        send_msg(self._sock, build_schedule_msg(events))
 
     def start_listener(
         self, 

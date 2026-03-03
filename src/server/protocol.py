@@ -133,3 +133,11 @@ def build_ack_msg(message: str) -> Dict[str, Any]:
 def build_error_msg(message: str) -> Dict[str, Any]:
     """Pack an error response with a description."""
     return {"type": "error", "message": message}
+
+def build_schedule_msg(events: list) -> Dict[str, Any]:
+    """Pack an update_schedule message."""
+    return {"type": "update_schedule", "events": events}
+
+def parse_schedule_msg(msg: Dict[str, Any]) -> list:
+    """Unpack an update_schedule message."""
+    return msg["events"]

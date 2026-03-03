@@ -147,6 +147,45 @@ def _on_source_changed(target_props, context):
     else:
         ops.clear_target(context)
 
+SCHEDULE_EVENT_TYPES = [
+    ('LEARNING_RATE',   "Learning Rate",   "Change the optimizer learning rate"),
+    ('BATCH_SIZE',      "Batch Size",      "Change the training batch size"),
+    ('ALPHA_WEIGHT',    "Alpha Weight",    "Change the alpha/occupancy loss weight"),
+    ('COLOR_WEIGHT',    "Color Weight",    "Change the color loss weight"),
+    ('OVERFLOW_WEIGHT', "Overflow Weight", "Change the overflow loss weight"),
+]
+
+class NCA_PG_ScheduleEvent(bpy.types.PropertyGroup):
+    """A single scheduled parameter change."""
+    epoch: bpy.props.IntProperty(
+        name="Epoch",
+        description="Epoch when the event fires (-1 = NOW, executes immediately)",
+        default=1,
+        min=-1,
+    ) # type: ignore
+    event_type: bpy.props.EnumProperty(
+        name="Type",
+        description="Which parameter to change",
+        items=SCHEDULE_EVENT_TYPES,
+        default='LEARNING_RATE',
+    ) # type: ignore
+    value: bpy.props.FloatProperty(
+        name="Value",
+        description="New value for the parameter",
+        default=0.001,
+        precision=6,
+    ) # type: ignore
+
+class NCA_PG_ScheduleProperties(bpy.types.PropertyGroup):
+    """Container for the event list shown in the Schedule panel."""
+    events: bpy.props.CollectionProperty(
+        type=NCA_PG_ScheduleEvent,
+    ) # type: ignore
+    active_event_index: bpy.props.IntProperty(
+        name="Active Event",
+        default=0,
+    ) # type: ignore
+
 classes = (
     NCA_PG_CellProperties,
     NCA_PG_PerceptionProperties,
@@ -154,6 +193,8 @@ classes = (
     NCA_PG_GridProperties,
     NCA_PG_TrainingProperties,
     NCA_PG_TargetProperties,
+    NCA_PG_ScheduleEvent,
+    NCA_PG_ScheduleProperties,
 )
 
 def register():
@@ -166,6 +207,7 @@ def register():
     bpy.types.Scene.nca_grid_props = bpy.props.PointerProperty(type=NCA_PG_GridProperties)
     bpy.types.Scene.nca_training_props = bpy.props.PointerProperty(type=NCA_PG_TrainingProperties)
     bpy.types.Scene.nca_target_props = bpy.props.PointerProperty(type=NCA_PG_TargetProperties)
+    bpy.types.Scene.nca_schedule_props = bpy.props.PointerProperty(type=NCA_PG_ScheduleProperties)
 
 def unregister():
     for cls in reversed(classes):
@@ -177,3 +219,4 @@ def unregister():
     del bpy.types.Scene.nca_grid_props
     del bpy.types.Scene.nca_training_props
     del bpy.types.Scene.nca_target_props
+    del bpy.types.Scene.nca_schedule_props

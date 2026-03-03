@@ -7,6 +7,7 @@ import torch
 import torch.nn.functional as F
 from src.core import Grid3D, CellConfig, PerceptionConfig, UpdateConfig, GridConfig
 from .protocol import build_state_msg
+from .schedule import Event, Schedule
 
 SendFn = Callable[[Dict[str, Any]], None] # type alias for callback
 
@@ -20,12 +21,12 @@ STEP_MIN_START = 8        # early training: few steps (learn core shape)
 STEP_MIN_END   = 32       # late training: more steps  (refine details)
 STEP_MAX_START = 16
 STEP_MAX_END   = 64
-CURRICULUM_EPOCHS = 2000  # epochs over which to ramp
+CURRICULUM_EPOCHS = 2000
 
-# Loss Weights
-ALPHA_WEIGHT   = 4.0      # shape/occupancy matters most
-COLOR_WEIGHT   = 1.0      # color loss only where target is alive
-OVERFLOW_WEIGHT = 2.0     # penalise alive cells outside target
+# Default loss weights (used to initialise trainer instance attributes)
+DEFAULT_ALPHA_WEIGHT    = 4.0   # shape/occupancy matters most
+DEFAULT_COLOR_WEIGHT    = 1.0   # color loss only where target is alive
+DEFAULT_OVERFLOW_WEIGHT = 2.0   # penalise alive cells outside target
 
 class NCATrainer:
     def __init__(self):
@@ -37,6 +38,13 @@ class NCATrainer:
         self.current_epoch = 0
         self.total_epochs = 0
         self.latest_loss = 0.0
+
+        # Mutable loss weights (can be changed by the schedule mid-training)
+        self._alpha_weight: float    = DEFAULT_ALPHA_WEIGHT
+        self._color_weight: float    = DEFAULT_COLOR_WEIGHT
+        self._overflow_weight: float = DEFAULT_OVERFLOW_WEIGHT
+
+        self._schedule = Schedule()
 
         self._pool: List[torch.Tensor] = []   # state pool
 
@@ -100,6 +108,12 @@ class NCATrainer:
         self._pause_event.set()
         print("Training resumed")
 
+    def update_schedule(self, events_data: List[dict]) -> None:
+        """Replace the current schedule."""
+        events = [Event.from_dict(d) for d in events_data]
+        self._schedule.replace(events)
+        print(f"Schedule updated: {len(self._schedule.events)} pending event(s)")
+
     def stop(self):
         self._stop_event.set()
         self._pause_event.set()
@@ -127,6 +141,7 @@ class NCATrainer:
             loss = self._step()
             self.current_epoch = epoch
             self.latest_loss = loss
+            self._schedule.check_and_execute(epoch, self)
             self._send_state()
             print(f"Epoch {epoch}/{self.total_epochs} - Loss: {loss:.4f}")
             time.sleep(0.1)  # throttle to avoid flooding the socket
@@ -202,9 +217,9 @@ class NCATrainer:
         loss_overflow = overflow.mean()
 
         loss = (
-            ALPHA_WEIGHT   * loss_alpha
-          + COLOR_WEIGHT   * loss_color
-          + OVERFLOW_WEIGHT * loss_overflow
+            self._alpha_weight   * loss_alpha
+          + self._color_weight   * loss_color
+          + self._overflow_weight * loss_overflow
         )
 
         loss.backward()

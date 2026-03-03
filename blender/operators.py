@@ -31,6 +31,13 @@ VISIBLE_CHANNELS_MAP = {
     'ALPHA_MATERIAL_ID': 2,
 }
 
+def is_training_active() -> bool:
+    """Return True when a training session is connected (running or paused).
+
+    Used by panels to gray-out settings that must not change mid-training.
+    """
+    return _client is not None and _client.connected
+
 def setup_configs(context) -> dict:
     """Build the full config dict from Blender scene properties."""
     cell_props = context.scene.nca_cell_props
@@ -308,7 +315,6 @@ class NCA_OT_ResumeTraining(bpy.types.Operator):
             self.report({'WARNING'}, "Not connected to NCA server")
         return {'FINISHED'}
 
-
 class NCA_OT_VoxelizeTarget(bpy.types.Operator):
     bl_idname = "nca.voxelize_target"
     bl_label = "Voxelize"
@@ -342,6 +348,63 @@ class NCA_OT_ClearTargetVoxels(bpy.types.Operator):
         self.report({'INFO'}, "Cleared target voxels")
         return {'FINISHED'}
 
+class NCA_OT_AddScheduleEvent(bpy.types.Operator):
+    bl_idname = "nca.add_schedule_event"
+    bl_label = "Add Event"
+    bl_description = "Add a new event to the training schedule"
+
+    def execute(self, context):
+        sched = context.scene.nca_schedule_props
+        item = sched.events.add()
+        item.epoch = -1
+        item.event_type = 'LEARNING_RATE'
+        item.value = 0.01
+        sched.active_event_index = len(sched.events) - 1
+        return {'FINISHED'}
+
+class NCA_OT_RemoveScheduleEvent(bpy.types.Operator):
+    bl_idname = "nca.remove_schedule_event"
+    bl_label = "Remove Event"
+    bl_description = "Remove the selected event from the training schedule"
+
+    @classmethod
+    def poll(cls, context):
+        sched = context.scene.nca_schedule_props
+        return len(sched.events) > 0
+
+    def execute(self, context):
+        sched = context.scene.nca_schedule_props
+        idx = sched.active_event_index
+        sched.events.remove(idx)
+        sched.active_event_index = max(0, idx - 1)
+        return {'FINISHED'}
+
+class NCA_OT_SendSchedule(bpy.types.Operator):
+    bl_idname = "nca.send_schedule"
+    bl_label = "Send Schedule"
+    bl_description = "Send the current schedule to the training server"
+
+    @classmethod
+    def poll(cls, context):
+        return is_training_active()
+
+    def execute(self, context):
+        sched = context.scene.nca_schedule_props
+        events = []
+        for ev in sched.events:
+            events.append({
+                "epoch": ev.epoch,
+                "event_type": ev.event_type,
+                "value": ev.value,
+            })
+        try:
+            _client.send_schedule(events)
+            self.report({'INFO'}, f"Sent schedule with {len(events)} event(s)")
+        except Exception as e:
+            self.report({'ERROR'}, f"Failed to send schedule: {e}")
+            return {'CANCELLED'}
+        return {'FINISHED'}
+
 classes = (
     NCA_OT_StartTraining,
     NCA_OT_StopTraining,
@@ -349,6 +412,9 @@ classes = (
     NCA_OT_ResumeTraining,
     NCA_OT_VoxelizeTarget,
     NCA_OT_ClearTargetVoxels,
+    NCA_OT_AddScheduleEvent,
+    NCA_OT_RemoveScheduleEvent,
+    NCA_OT_SendSchedule,
 )
 
 def register():
