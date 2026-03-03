@@ -1,10 +1,10 @@
 ## Project Goals and Structure
-- [ ] Blender Add On for 3D Visualization
-    - [x] User Interface
-    - [ ] Mesh to Voxel Converter
-    - [ ] Visualization for Target and NCA in Blender
-- [ ] Protocol for Client - Server communication (for the addon)
-    - [ ] 
+- [x] Blender Add On for 3D Visualization
+- [x] Protocol for Client - Server communication (for the addon)
+- [ ] Update readme
+- [ ] Clean up .toml - remove unused packages, split them into categories
+- [ ] Set up config, schedule and resources for experiments
+- [ ] Find a good GPU cluster with ssh connection
 - [ ] Experiments
     - [ ] Alive Channel Optimization using Material ID + Alpha instead of RGBA
     - [ ] Morphogenesis using different targets during training
