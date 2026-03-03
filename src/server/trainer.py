@@ -1,5 +1,3 @@
-import base64
-import math
 import random
 import threading
 import time
@@ -15,8 +13,7 @@ SendFn = Callable[[Dict[str, Any]], None] # type alias for callback
 # Hardcoded training hyper-parameters for simplicity. These could be made configurable later.
 # Training hyper-parameters (pool-based, per Mordvintsev et al.)
 POOL_SIZE = 32            # number of persistent states
-DAMAGE_PROB = 0.0         # probability of random damage per sample (0 = off)
-BATCH_SIZE = 4            # samples per training iteration
+DEFAULT_BATCH_SIZE = 4    # samples per training iteration (overridden by config)
 
 # Steps ramp linearly from STEP_MIN_START to STEP_MIN_END over CURRICULUM_EPOCHS
 STEP_MIN_START = 8        # early training: few steps (learn core shape)
@@ -29,7 +26,6 @@ CURRICULUM_EPOCHS = 2000  # epochs over which to ramp
 ALPHA_WEIGHT   = 4.0      # shape/occupancy matters most
 COLOR_WEIGHT   = 1.0      # color loss only where target is alive
 OVERFLOW_WEIGHT = 2.0     # penalise alive cells outside target
-
 
 class NCATrainer:
     def __init__(self):
@@ -84,6 +80,7 @@ class NCATrainer:
 
         self.current_epoch = 0
         self.total_epochs = config["training"]["num_epochs"]
+        self._batch_size = config["training"].get("batch_size", DEFAULT_BATCH_SIZE)
         self.latest_loss = 0.0
         self._send_fn = send_fn
 
@@ -155,7 +152,7 @@ class NCATrainer:
         """
         device = self._device
         cell_cfg = self._cell_cfg
-        batch_size = min(len(self._pool), BATCH_SIZE)
+        batch_size = min(len(self._pool), self._batch_size)
         lo, hi = self._get_step_range()
         n_steps = random.randint(lo, hi)
 

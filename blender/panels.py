@@ -47,32 +47,21 @@ class NCA_PT_TargetPanel(NCA_PT_BasePanel):
         layout = self.layout
         target_props = context.scene.nca_target_props
 
-        layout.prop(target_props, "cell_size", text="Cell Size")
-        box = layout.box()
-        box.label(text="Step 1: Select source mesh", icon='RESTRICT_SELECT_OFF')
-        meshes = [o for o in context.selected_objects if o.type == 'MESH']
-        if meshes:
-            names = ", ".join(o.name for o in meshes)
-            box.label(text=names, icon='MESH_DATA')
-        else:
-            box.label(text="No mesh selected", icon='INFO')
+        layout.prop(target_props, "cell_size")
 
-        box = layout.box()
-        box.label(text="Step 2: Voxelize", icon='MESH_GRID')
-        row = box.row(align=True)
-        row.operator("nca.voxelize_target", text="Voxelize", icon='MESH_GRID')
-        row.operator("nca.clear_target_voxels", text="Clear", icon='X')
-        row.enabled = len(meshes) > 0 or target_props.is_voxelized
+        row = layout.row(align=True)
+        row.prop(target_props, "source_object", text="Source Mesh")
+        row.operator("nca.clear_target_voxels", text="", icon='X')
 
         if target_props.is_voxelized:
-            status_box = layout.box()
-            status_box.label(text="Target ready to send", icon='CHECKMARK')
-            status_box.label(text=f"Source: {target_props.source_names}")
-            status_box.label(text=f"Voxels: {target_props.voxel_count}")
+            box = layout.box()
+            box.label(text="Target ready", icon='CHECKMARK')
+            if target_props.source_object:
+                box.label(text=f"Source: {target_props.source_object.name}")
+            box.label(text=f"Voxels: {target_props.voxel_count}")
         else:
-            status_box = layout.box()
-            status_box.label(text="No target voxelized", icon='ERROR')
-            status_box.label(text="Voxelize a mesh before training")
+            box = layout.box()
+            box.label(text="No target voxelized", icon='ERROR')
 
 class NCA_PT_CellSettings(NCA_PT_BasePanel):
     bl_label = "Cell Settings"
@@ -151,7 +140,6 @@ class NCA_PT_TrainingSettings(NCA_PT_BasePanel):
         layout.prop(train_props, "learning_rate", text="Learning Rate")
         layout.prop(train_props, "batch_size", text="Batch Size")
         layout.prop(train_props, "num_epochs", text="Number of Epochs")
-
 
 classes = (
     NCA_PT_MainPanel,

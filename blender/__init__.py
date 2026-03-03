@@ -3,8 +3,8 @@ from . import properties, operators, panels
 
 bl_info = {
     "name": "3D NCA Simulator",
-    "author": "Your Name",
-    "version": (1, 0, 0),
+    "author": "Michal Repcik",
+    "version": (1, 0, 1),
     "blender": (3, 0, 0),
     "location": "View3D > Sidebar > NCA",
     "description": "3D Neural Cellular Automata Simulator",

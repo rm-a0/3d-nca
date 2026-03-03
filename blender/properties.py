@@ -1,5 +1,24 @@
 import bpy
 
+NCA_COLLECTIONS = {"NCA_Source", "NCA_Target", "NCA_State"}
+
+def _is_source_mesh_candidate(self, obj: bpy.types.Object) -> bool:
+    """Poll filter for the source mesh picker.
+
+    Returns True only for MESH objects that are NOT generated NCA voxels:
+    - Must be a MESH type
+    - Must not have a name starting with 'NCA_'
+    - Must not belong to any NCA-managed collection
+    """
+    if obj.type != 'MESH':
+        return False
+    if obj.name.startswith("NCA_"):
+        return False
+    for col in obj.users_collection:
+        if col.name in NCA_COLLECTIONS:
+            return False
+    return True
+
 class NCA_PG_CellProperties(bpy.types.PropertyGroup):
     hidden_channels: bpy.props.IntProperty(
         name="Hidden Channels",
@@ -37,7 +56,6 @@ class NCA_PG_PerceptionProperties(bpy.types.PropertyGroup):
         default=3,
         min=1
     ) # type: ignore
-    
 
 class NCA_PG_UpdateProperties(bpy.types.PropertyGroup):
     hidden_dim: bpy.props.IntProperty(
@@ -95,15 +113,17 @@ class NCA_PG_TrainingProperties(bpy.types.PropertyGroup):
     ) # type: ignore
 
 class NCA_PG_TargetProperties(bpy.types.PropertyGroup):
+    source_object: bpy.props.PointerProperty(
+        name="Source Mesh",
+        description="Mesh object to voxelize as the NCA target",
+        type=bpy.types.Object,
+        poll=_is_source_mesh_candidate,
+        update=lambda self, ctx: _on_source_changed(self, ctx),
+    ) # type: ignore
     is_voxelized: bpy.props.BoolProperty(
         name="Is Voxelized",
         description="Whether a target has been voxelized",
         default=False
-    ) # type: ignore
-    source_names: bpy.props.StringProperty(
-        name="Source Names",
-        description="Names of the source meshes that were voxelized",
-        default=""
     ) # type: ignore
     voxel_count: bpy.props.IntProperty(
         name="Voxel Count",
@@ -116,6 +136,16 @@ class NCA_PG_TargetProperties(bpy.types.PropertyGroup):
         default=0.1,
         min=0.01
     ) # type: ignore
+
+def _on_source_changed(target_props, context):
+    """Auto-voxelize when a new source mesh is picked, or clear when set to None."""
+    # Import here to avoid circular imports
+    from . import operators as ops
+
+    if target_props.source_object is not None:
+        ops.voxelize_and_display(context, [target_props.source_object])
+    else:
+        ops.clear_target(context)
 
 classes = (
     NCA_PG_CellProperties,

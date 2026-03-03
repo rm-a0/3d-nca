@@ -1,6 +1,7 @@
 import bpy
 import numpy as np
 import threading
+from typing import List, Tuple
 
 from .client import NCAClient
 
@@ -13,7 +14,7 @@ from .voxel_utils import (
     place_source_in_scene,
 )
 
-_client : NCAClient | None = None
+_client: NCAClient | None = None
 _target_array: np.ndarray | None = None
 
 _pending_state: np.ndarray | None = None
@@ -24,22 +25,23 @@ SOURCE_COLLECTION = "NCA_Source"
 TARGET_COLLECTION = "NCA_Target"
 STATE_COLLECTION  = "NCA_State"
 
-def setup_configs(context):
+VISIBLE_CHANNELS_MAP = {
+    'ALPHA': 1,
+    'RGBA': 4,
+    'ALPHA_MATERIAL_ID': 2,
+}
+
+def setup_configs(context) -> dict:
+    """Build the full config dict from Blender scene properties."""
     cell_props = context.scene.nca_cell_props
     perception_props = context.scene.nca_perception_props
     update_props = context.scene.nca_update_props
     grid_props = context.scene.nca_grid_props
 
-    visible_channels_map = {
-        'ALPHA': 1,
-        'RGBA': 4,
-        'ALPHA_MATERIAL_ID': 2,
-    }
-
-    cfg = {
+    return {
         "cell": {
             "hidden_channels": int(cell_props.hidden_channels),
-            "visible_channels": visible_channels_map.get(cell_props.visible_channels, 4),
+            "visible_channels": VISIBLE_CHANNELS_MAP.get(cell_props.visible_channels, 4),
             "alive_threshold": float(cell_props.alive_threshold),
         },
         "perception": {
@@ -60,16 +62,96 @@ def setup_configs(context):
             "batch_size": int(context.scene.nca_training_props.batch_size),
         },
     }
-    return cfg
 
-def selected_meshes_to_voxel_array():
-    """Return the cached target array."""
-    global _target_array
+def get_target_array(context) -> np.ndarray:
+    """Return the cached target array, or a zero array matching grid_size."""
     if _target_array is not None:
         return _target_array
-    return np.zeros((32, 32, 32, 4), dtype=np.float32)
+    grid_props = context.scene.nca_grid_props
+    size = tuple(int(x) for x in grid_props.grid_size)
+    vis = VISIBLE_CHANNELS_MAP.get(
+        context.scene.nca_cell_props.visible_channels, 4
+    )
+    return np.zeros((*size, vis), dtype=np.float32)
 
-def visualize_voxel(tensor):
+def voxelize_and_display(
+    context, objs: List[bpy.types.Object]
+) -> Tuple[bool, str]:
+    """Voxelize *objs*, display in viewport, update target properties.
+
+    Returns (success: bool, message: str).
+    """
+    global _target_array
+
+    cell_props = context.scene.nca_cell_props
+    grid_props = context.scene.nca_grid_props
+    target_props = context.scene.nca_target_props
+
+    if not objs:
+        return False, "No mesh objects provided"
+
+    grid_size = tuple(int(x) for x in grid_props.grid_size)
+    vis_ch = cell_props.visible_channels
+    grid_offset = int(grid_props.grid_offset)
+
+    results = [
+        mesh_to_voxel_array(obj, grid_size, vis_ch, offset=grid_offset)
+        for obj in objs
+    ]
+
+    combined_data = results[0][0].copy()
+    combined_mat_map = results[0][1].copy()
+    all_materials = list(results[0][2])
+
+    for data, mat_map, mats in results[1:]:
+        mat_offset = len(all_materials)
+        all_materials.extend(mats)
+        new_occupied = mat_map >= 0
+        combined_mat_map[new_occupied] = mat_map[new_occupied] + mat_offset
+        combined_data = np.maximum(combined_data, data)
+
+    _target_array = combined_data
+
+    place_source_in_scene(objs, grid_size, target_props.cell_size)
+
+    vox_obj = voxel_array_to_blender(
+        combined_data,
+        collection_name=TARGET_COLLECTION,
+        object_name="NCA_Target",
+        cell_size=target_props.cell_size,
+        alive_threshold=cell_props.alive_threshold,
+        material_map=combined_mat_map,
+        materials=all_materials,
+    )
+    if vox_obj:
+        vox_obj.location.x = get_slot_offset(1, grid_size, target_props.cell_size)
+
+    n_ch = combined_data.shape[-1]
+    alpha = combined_data[..., 3] if n_ch >= 4 else combined_data[..., 0]
+    n_alive = int((alpha > cell_props.alive_threshold).sum())
+    names = ", ".join(o.name for o in objs)
+
+    target_props.voxel_count = n_alive
+    target_props.is_voxelized = True
+
+    return True, f"Voxelized [{names}] → {n_alive} voxels"
+
+def clear_target(context) -> None:
+    """Remove target/source collections and reset target state."""
+    global _target_array
+
+    if TARGET_COLLECTION in bpy.data.collections:
+        clear_collection(bpy.data.collections[TARGET_COLLECTION])
+    if SOURCE_COLLECTION in bpy.data.collections:
+        clear_collection(bpy.data.collections[SOURCE_COLLECTION])
+
+    _target_array = None
+
+    target_props = context.scene.nca_target_props
+    target_props.voxel_count = 0
+    target_props.is_voxelized = False
+
+def visualize_voxel(tensor: np.ndarray) -> None:
     """Display a voxel array in the viewport (called for server state updates)."""
     target_props = bpy.context.scene.nca_target_props
     cell = bpy.context.scene.nca_cell_props
@@ -85,7 +167,7 @@ def visualize_voxel(tensor):
         grid_size = tuple(int(x) for x in grid.grid_size)
         obj.location.x = get_slot_offset(2, grid_size, target_props.cell_size)
 
-def _on_state(array: np.ndarray):
+def _on_state(array: np.ndarray) -> None:
     """Listener callback — runs on a background thread."""
     global _pending_state, _timer_running
     with _pending_lock:
@@ -93,7 +175,6 @@ def _on_state(array: np.ndarray):
         if not _timer_running:
             _timer_running = True
             bpy.app.timers.register(_poll_state, first_interval=0.05)
-
 
 def _poll_state() -> float | None:
     """Recurring timer on Blender's main thread — drains the pending buffer."""
@@ -110,8 +191,7 @@ def _poll_state() -> float | None:
         return 0.1
 
     try:
-        vis_channels_map = {'ALPHA': 1, 'RGBA': 4, 'ALPHA_MATERIAL_ID': 2}
-        vis_ch = vis_channels_map.get(
+        vis_ch = VISIBLE_CHANNELS_MAP.get(
             bpy.context.scene.nca_cell_props.visible_channels, 4
         )
         display_arr = server_state_to_voxel_array(arr, visible_channels=vis_ch)
@@ -124,11 +204,11 @@ def _poll_state() -> float | None:
     _timer_running = False
     return None
 
-def _on_error(error_msg: str):
+def _on_error(error_msg: str) -> None:
     """Handle server error messages."""
     print(f"Error from NCA server: {error_msg}")
 
-def _on_disconnect():
+def _on_disconnect() -> None:
     """Handle server disconnection."""
     print("Disconnected from NCA server")
 
@@ -136,6 +216,10 @@ class NCA_OT_StartTraining(bpy.types.Operator):
     bl_idname = "nca.start_training"
     bl_label = "Start Training"
     bl_description = "Connect to NCA server and start training"
+
+    @classmethod
+    def poll(cls, context):
+        return (_client is None or not _client.connected) and _target_array is not None
 
     def execute(self, context):
         global _client
@@ -145,7 +229,7 @@ class NCA_OT_StartTraining(bpy.types.Operator):
             return {'CANCELLED'}
 
         config = setup_configs(context)
-        target = selected_meshes_to_voxel_array()
+        target = get_target_array(context)
 
         _client = NCAClient(host="127.0.0.1", port=5555)
         try:
@@ -170,6 +254,10 @@ class NCA_OT_StopTraining(bpy.types.Operator):
     bl_label = "Stop Training"
     bl_description = "Stop training and disconnect from NCA server"
 
+    @classmethod
+    def poll(cls, context):
+        return _client is not None and _client.connected
+
     def execute(self, context):
         global _client, _timer_running
 
@@ -191,9 +279,11 @@ class NCA_OT_PauseTraining(bpy.types.Operator):
     bl_label = "Pause Training"
     bl_description = "Pause training on NCA server"
 
-    def execute(self, context):
-        global _client
+    @classmethod
+    def poll(cls, context):
+        return _client is not None and _client.connected
 
+    def execute(self, context):
         if _client and _client.connected:
             _client.send_pause()
             self.report({'INFO'}, "Paused training on NCA server")
@@ -206,9 +296,11 @@ class NCA_OT_ResumeTraining(bpy.types.Operator):
     bl_label = "Resume Training"
     bl_description = "Resume training on NCA server"
 
-    def execute(self, context):
-        global _client
+    @classmethod
+    def poll(cls, context):
+        return _client is not None and _client.connected
 
+    def execute(self, context):
         if _client and _client.connected:
             _client.send_resume()
             self.report({'INFO'}, "Resumed training on NCA server")
@@ -216,68 +308,25 @@ class NCA_OT_ResumeTraining(bpy.types.Operator):
             self.report({'WARNING'}, "Not connected to NCA server")
         return {'FINISHED'}
 
+
 class NCA_OT_VoxelizeTarget(bpy.types.Operator):
     bl_idname = "nca.voxelize_target"
     bl_label = "Voxelize"
     bl_description = "Voxelize the selected viewport mesh into a voxel grid and display it"
 
     def execute(self, context):
-        global _target_array
-
-        cell_props = context.scene.nca_cell_props
-        grid_props = context.scene.nca_grid_props
-        target_props = context.scene.nca_target_props
-
         objs = [o for o in context.selected_objects if o.type == 'MESH']
         if not objs:
             self.report({'ERROR'}, "No mesh objects selected in the viewport")
             return {'CANCELLED'}
 
-        grid_size = tuple(int(x) for x in grid_props.grid_size)
-        vis_ch = cell_props.visible_channels
-
-        offset = int(grid_props.grid_offset)
-        results = [mesh_to_voxel_array(obj, grid_size, vis_ch, offset=offset) for obj in objs]
-
-        combined_data = results[0][0].copy()
-        combined_mat_map = results[0][1].copy()
-        all_materials = list(results[0][2])
-
-        for data, mat_map, mats in results[1:]:
-            offset = len(all_materials)
-            all_materials.extend(mats)
-            new_occupied = mat_map >= 0
-            combined_mat_map[new_occupied] = mat_map[new_occupied] + offset
-            combined_data = np.maximum(combined_data, data)
-
-        _target_array = combined_data
-
-        place_source_in_scene(objs, grid_size, target_props.cell_size)
-
-        vox_obj = voxel_array_to_blender(
-            combined_data,
-            collection_name=TARGET_COLLECTION,
-            object_name="NCA_Target",
-            cell_size=target_props.cell_size,
-            alive_threshold=cell_props.alive_threshold,
-            material_map=combined_mat_map,
-            materials=all_materials,
-        )
-        if vox_obj:
-            vox_obj.location.x = get_slot_offset(1, grid_size, target_props.cell_size)
-
-        n_ch = combined_data.shape[-1]
-        alpha = combined_data[..., 3] if n_ch >= 4 else combined_data[..., 0]
-        n_alive = int((alpha > cell_props.alive_threshold).sum())
-        names = ", ".join(o.name for o in objs)
-
-        target_props = context.scene.nca_target_props
-        target_props.source_names = names
-        target_props.voxel_count = n_alive
-        target_props.is_voxelized = True
-
-        self.report({'INFO'}, f"Voxelized [{names}] → {n_alive} voxels")
-        return {'FINISHED'}
+        success, message = voxelize_and_display(context, objs)
+        if success:
+            self.report({'INFO'}, message)
+            return {'FINISHED'}
+        else:
+            self.report({'ERROR'}, message)
+            return {'CANCELLED'}
 
 class NCA_OT_ClearTargetVoxels(bpy.types.Operator):
     bl_idname = "nca.clear_target_voxels"
@@ -285,19 +334,10 @@ class NCA_OT_ClearTargetVoxels(bpy.types.Operator):
     bl_description = "Remove the voxelized target from the viewport"
 
     def execute(self, context):
-        global _target_array
-
-        if TARGET_COLLECTION in bpy.data.collections:
-            clear_collection(bpy.data.collections[TARGET_COLLECTION])
-        if SOURCE_COLLECTION in bpy.data.collections:
-            clear_collection(bpy.data.collections[SOURCE_COLLECTION])
-
-        _target_array = None
+        clear_target(context)
 
         target_props = context.scene.nca_target_props
-        target_props.source_names = ""
-        target_props.voxel_count = 0
-        target_props.is_voxelized = False
+        target_props["source_object"] = None
 
         self.report({'INFO'}, "Cleared target voxels")
         return {'FINISHED'}

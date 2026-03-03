@@ -13,7 +13,6 @@ class NCAServer:
         self.host = host 
         self.port = port
         self._sock = None
-       
 
     def start(self):
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -63,6 +62,9 @@ class NCAServer:
             elif msg_type == "resume":
                 self.trainer.resume()
                 send_msg(client, build_ack_msg("Resumed"))
+
+            elif msg_type == "ping":
+                send_msg(client, {"type": "pong"})
 
             else:
                 send_msg(client, build_error_msg(f"Unknown message type: {msg_type}"))

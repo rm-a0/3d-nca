@@ -46,17 +46,14 @@ class NCAClient:
     def send_init(self, config: dict, target: np.ndarray) -> None:
         send_msg(self._sock, build_init_msg(config, target))
 
-    def send_stop(self):
+    def send_stop(self) -> None:
         send_msg(self._sock, build_stop_msg())
 
-    def send_pause(self):
+    def send_pause(self) -> None:
         send_msg(self._sock, build_pause_msg())
 
-    def send_resume(self):
+    def send_resume(self) -> None:
         send_msg(self._sock, build_resume_msg())
-
-    def send_ping(self):
-        send_msg(self._sock, {"type": "ping"})
 
     def start_listener(
         self, 
@@ -98,6 +95,4 @@ class NCAClient:
             elif msg_type == "error" and on_error:
                 on_error(msg.get("message", "Unknown error"))
             elif msg_type == "ack":
-                pass
-            elif msg_type == "pong":
                 pass

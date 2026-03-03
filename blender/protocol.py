@@ -12,6 +12,7 @@ import numpy as np
 from typing import Any, Dict, Optional, Tuple
 
 HEADER_SIZE = 4
+MAX_MSG_SIZE = 50 * 1024 * 1024  # 50 MB cap
 
 def tensor_to_b64(tensor: np.ndarray) -> str:
     """Encode a NumPy array as a base64 string (float32)."""
@@ -40,6 +41,8 @@ def recv_msg(sock: socket.socket) -> Optional[Dict[str, Any]]:
     if header is None:
         return None
     length = struct.unpack(">I", header)[0]
+    if length > MAX_MSG_SIZE:
+        raise ValueError(f"Message too large: {length} bytes (max {MAX_MSG_SIZE})")
     payload = _recv_exact(sock, length)
     if payload is None:
         return None
