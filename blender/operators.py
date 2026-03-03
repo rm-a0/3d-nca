@@ -238,7 +238,8 @@ class NCA_OT_StartTraining(bpy.types.Operator):
         config = setup_configs(context)
         target = get_target_array(context)
 
-        _client = NCAClient(host="127.0.0.1", port=5555)
+        conn = context.scene.nca_connection_props
+        _client = NCAClient(host=conn.host, port=conn.port)
         try:
             _client.connect()
         except Exception as e:

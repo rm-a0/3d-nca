@@ -160,7 +160,7 @@ class NCA_PG_ScheduleEvent(bpy.types.PropertyGroup):
     epoch: bpy.props.IntProperty(
         name="Epoch",
         description="Epoch when the event fires (-1 = NOW, executes immediately)",
-        default=1,
+        default=-1,
         min=-1,
     ) # type: ignore
     event_type: bpy.props.EnumProperty(
@@ -172,7 +172,7 @@ class NCA_PG_ScheduleEvent(bpy.types.PropertyGroup):
     value: bpy.props.FloatProperty(
         name="Value",
         description="New value for the parameter",
-        default=0.001,
+        default=0,
         precision=6,
     ) # type: ignore
 
@@ -186,6 +186,20 @@ class NCA_PG_ScheduleProperties(bpy.types.PropertyGroup):
         default=0,
     ) # type: ignore
 
+class NCA_PG_ConnectionProperties(bpy.types.PropertyGroup):
+    host: bpy.props.StringProperty(
+        name="Host",
+        description="NCA server hostname or IP (use the ngrok host when tunnelling)",
+        default="127.0.0.1",
+    )  # type: ignore
+    port: bpy.props.IntProperty(
+        name="Port",
+        description="NCA server port",
+        default=5555,
+        min=1,
+        max=65535,
+    )  # type: ignore
+
 classes = (
     NCA_PG_CellProperties,
     NCA_PG_PerceptionProperties,
@@ -195,6 +209,7 @@ classes = (
     NCA_PG_TargetProperties,
     NCA_PG_ScheduleEvent,
     NCA_PG_ScheduleProperties,
+    NCA_PG_ConnectionProperties,
 )
 
 def register():
@@ -208,6 +223,7 @@ def register():
     bpy.types.Scene.nca_training_props = bpy.props.PointerProperty(type=NCA_PG_TrainingProperties)
     bpy.types.Scene.nca_target_props = bpy.props.PointerProperty(type=NCA_PG_TargetProperties)
     bpy.types.Scene.nca_schedule_props = bpy.props.PointerProperty(type=NCA_PG_ScheduleProperties)
+    bpy.types.Scene.nca_connection_props = bpy.props.PointerProperty(type=NCA_PG_ConnectionProperties)
 
 def unregister():
     for cls in reversed(classes):
@@ -220,3 +236,4 @@ def unregister():
     del bpy.types.Scene.nca_training_props
     del bpy.types.Scene.nca_target_props
     del bpy.types.Scene.nca_schedule_props
+    del bpy.types.Scene.nca_connection_props

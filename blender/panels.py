@@ -10,6 +10,30 @@ class NCA_PT_BasePanel(bpy.types.Panel):
         layout.use_property_split = True
         layout.use_property_decorate = False
 
+class NCA_PT_ConnectionPanel(NCA_PT_BasePanel):
+    bl_label = "Connection"
+    bl_idname = "NCA_PT_connection_panel"
+    bl_parent_id = "NCA_PT_main_panel"
+    bl_options = {'DEFAULT_CLOSED'}
+    bl_order = -1
+
+    def draw(self, context):
+        from .operators import is_training_active
+        super().draw(context)
+
+        layout = self.layout
+        layout.enabled = not is_training_active()
+        conn = context.scene.nca_connection_props
+
+        layout.prop(conn, "host", text="Host")
+        layout.prop(conn, "port", text="Port")
+
+        layout.separator()
+        layout.label(
+            text="Paste the ngrok host/port here when training remotely.",
+            icon='INFO',
+        )
+
 class NCA_PT_MainPanel(NCA_PT_BasePanel):
     bl_label = "3D NCA Settings"
     bl_idname = "NCA_PT_main_panel"
@@ -210,6 +234,7 @@ class NCA_PT_SchedulePanel(NCA_PT_BasePanel):
 
 classes = (
     NCA_PT_MainPanel,
+    NCA_PT_ConnectionPanel,
     NCA_PT_ControlPanel,
     NCA_PT_TargetPanel,
     NCA_PT_CellSettings,
