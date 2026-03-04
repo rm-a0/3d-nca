@@ -152,8 +152,8 @@ topology and neighborhood structure can lead to differences in stability, inform
 
 The preceding sections introduced classical cellular automata, continuous extensions, and neural CA models. 
 This section focuses on the principal theoretical components that form the foundation of a three-dimensional 
-neural cellular automaton. The aim is to clarify the general concepts that govern these systems without 
-delving into implementation-specific details or experimental results.
+neural cellular automaton. The objective is to clarify the general concepts that govern these systems without 
+addressing into implementation-specific details or experimental results.
 
 \subsection{State Representation}
 
@@ -228,8 +228,8 @@ naturally to volumetric grids, although the emergent dynamics may differ from th
 
 The neural CA is defined on a finite three-dimensional lattice, with boundary conditions chosen according to the 
 experiment~\cite{Mordvintsev2020}. Key considerations include the lattice dimensions, initialization, and boundary treatment.
-Periodic or zero-value padding at the edges is often used to reduce boundary artefacts, though specific lattice sizes and boundary 
-choices vary across implementations~\cite{Niklasson2021}.
+Sudhakaran et al.~\cite{Sudhakaran2021} observe that specific boundary handling methods, such as periodic or zero-value padding, vary 
+across implementations alongside the selection of lattice dimensions.
 
 Three-dimensional grids scale cubically with lattice size, creating computational challenges. Research on large-scale 
 volumetric simulations often employs data structures that reduce memory usage and accelerate neighbourhood access, 
@@ -255,9 +255,9 @@ in both two- and three-dimensional systems~\cite{Rossi2021,Sudhakaran2021,Aadity
 %=========================================================================
 \chapter{Related Work}
 
-This chapter reviews prior work most directly related to neural cellular automata and their extensions.
-The focus is on implementations, training regimes, evaluation strategies, and attempts to extend these systems beyond two dimensions.
-Each section concludes by identifying limitations or open questions that motivate the three-dimensional framework developed in this thesis.
+This chapter reviews prior research and work most directly related to neural cellular automata and their extensions.
+The focus is on implementations, training regimes, evaluation strategies, and efforrts to extend these systems beyond two dimensions.
+Each section concludes by identifying limitations or open questions that motivate the development of the three-dimensional framework presented in this work.
 
 Some of the concepts discussed in this chapter were already introduced in Chapter~\ref{chap:theoretical-foundations}. There, they were 
 presented to establish the formal and conceptual background required for the definition of three-dimensional neural cellular automata. 
@@ -392,7 +392,8 @@ work and forms a central motivation for the experiments conducted here.
 
 An important step toward practical three-dimensional Neural Cellular Automata systems was presented by Sudhakaran et al.~\cite{Sudhakaran2021}. 
 In contrast to purely synthetic voxel experiments, their work explored 3D NCA within an interactive environment, namely the sandbox game \emph{Minecraft}. 
-This setting enabled the authors to evaluate volumetric growth processes under real-time constraints and user interaction.
+This setting enabled the authors to evaluate volumetric growth processes of structures and functional machines under real-time 
+constraints and user interaction.
 
 The proposed model extends the 2D growing NCA paradigm introduced by Mordvintsev et al. to a three-dimensional voxel grid. 
 Each voxel stores a state vector consisting of visible channels and multiple hidden channels. Perception is implemented using local 
@@ -419,35 +420,99 @@ These aspects should not be interpreted as shortcomings, but rather as design de
 
 \subsection{Relation to the Present Thesis}
 
-The work of Sudhakaran et al.~\cite{Sudhakaran2021} serves as a direct methodological inspiration for the present thesis. In particular, the extension 
-of growing neural cellular automata from two-dimensional image grids to fully volumetric $3 \times 3 \times 3$ perception neighborhoods informs 
-the architectural design adopted here.
+The work of Sudhakaran et al.~\cite{Sudhakaran2021} provides a direct methodological basis for extending
+neural cellular automata from planar image grids to volumetric $3 \times 3 \times 3$ perception
+neighbourhoods. In particular, the preservation of strict locality, parameter sharing across voxels,
+and gradient-based optimisation of update dynamics form the conceptual foundation adopted in this thesis.
 
-The present thesis builds upon this foundation by transferring the 3D NCA framework into a Blender-based environment. Unlike a sandbox game engine, 
-Blender provides a fully open-source, professionally oriented 3D creation platform with direct access to mesh data structures, volumetric representations, 
-programmable shaders, and scripting interfaces. This transition significantly expands experimental flexibility: voxel resolutions are not constrained 
-by game-specific mechanics, rendering is fully customizable, and intermediate cellular states can be inspected, logged, and modified programmatically.
+The present work extends this line of research by embedding the three-dimensional neural cellular
+automaton within the Blender environment. Unlike game-based sandbox platforms, Blender provides
+direct programmatic access to volumetric grids, mesh representations, rendering pipelines, and
+Python-based scripting interfaces. This enables precise control over lattice resolution, boundary
+conditions, logging, and intermediate-state inspection.
 
-Consequently, the Blender integration is not merely an implementation change, but an extension of the experimental framework. It enables systematic evaluation, 
-reproducibility, integration with procedural modeling pipelines, and future exploration of hybrid approaches combining neural cellular automata with 
-established 3D content generation workflows. In this sense, the present thesis generalizes the interactive 3D NCA concept toward a more open and research-oriented 
-volumetric modeling environment.
+The transition to a general-purpose 3D framework expands the experimental
+flexibility of volumetric neural cellular automata. It facilitates systematic evaluation,
+integration with procedural modelling workflows, and reproducible experimentation
+under controlled conditions. The focus of this thesis is therefore not merely on demonstrating
+3D feasibility, but on establishing a research-oriented framework for controlled investigation
+of stability, persistence, and regeneration in volumetric neural cellular automata.
 
-\section{Other Open-Source Implementations of 3D Neural Cellular Automata}
+\section{Open-Source and Applied Three-Dimensional Neural Cellular Automata}
 
-The following section provides a technical overview of existing open-source projects and frameworks for three-dimensional Neural Cellular Automata. 
-While the software developed in this thesis represents an original contribution, the architectural patterns and volumetric management strategies 
-were informed by an evaluative overview of these existing repositories.
+In addition to the seminal work of Mordvintsev et al.~\cite{Mordvintsev2020} and its
+interactive extension by Sudhakaran et al.~\cite{Sudhakaran2021}, several open-source
+and applied research projects have explored three-dimensional or task-specific
+neural cellular automata variants. This section reviews selected implementations
+that are methodologically relevant to the present thesis.
 
-\subsection{M3D-NCA and Medical Segmentation (Kalkhof et al.)}
+The focus is placed on architectural design, training objectives, volumetric
+representation strategies, and evaluation methodology.
 
-\subsection{Variational NCA and Procedural Trees (ETHZ)}
+\subsection{Standard 3D Reconstruction Baseline}
 
-\subsection{WebGPU Rendering and Interactive 3D NCA (Monash Deep Neuron)}
+A prominent baseline for volumetric reconstruction is provided by the repository
+of Aadityaza~\cite{Jha2024}, which implements a direct extension of the 
+Growing NCA paradigm into three-dimensional Euclidean space. This implementation 
+utilizes a Jupyter Notebook environment and PyTorch to reconstruct voxel-based 
+shapes from a single initial seed. 
 
-\subsection{Voxel-Based Morphogenesis (Rossi and Orsini)}
+Methodologically, this project is relevant as it provides a clean verification 
+of 3D perception operators, specifically the expansion of Sobel-type filters into 
+tri-axial gradient kernels ($x, y, z$). For the present thesis, this codebase 
+served as an initial structural overview, validating that the 1D-convolution 
+approach used in 2D NCA for processing cell states can be effectively applied 
+to flattened volumetric tensors without losing the underlying spatial locality.
 
-\subsection{Standard 3D Reconstruction Baseline (Aadityaza)}
+\subsection{Voxel-Based Morphogenetic Experiments}
+
+Rossi and collaborators~\cite{Rossi2021} explored voxel-based neural cellular
+automata for three-dimensional morphogenesis. Their implementation extends
+the two-dimensional growing NCA paradigm to volumetric grids using
+$3 \times 3 \times 3$ perception filters and hidden channel representations.
+
+The system is trained to approximate predefined 3D voxel targets from
+simple initial seeds. Architectural components closely follow the original
+2D formulation: fixed perception filters, residual state updates,
+shared parameters, and gradient-based optimisation.
+
+The experiments demonstrate that volumetric growth is achievable under
+strict locality constraints. However, systematic evaluation of
+long-term persistence, quantitative regeneration capacity,
+or scaling behaviour under increasing lattice resolution
+remains limited.
+
+These works provide proof-of-concept validation for 3D morphogenetic
+extension but leave open questions regarding stability and
+robustness in larger volumetric domains.
+
+\section{Chapter Conclusion}
+
+This chapter presented the research works that form the direct
+methodological foundation of the present thesis. The original
+formulation of Growing Neural Cellular Automata established the
+architectural principles of local perception, shared neural update
+rules, residual dynamics, and gradient-based optimisation.
+Subsequent three-dimensional extensions demonstrated that these
+principles can be transferred to volumetric voxel grids and
+interactive environments.
+
+Together, these contributions provide the conceptual and technical
+basis for the development of a three-dimensional neural cellular
+automaton framework. They motivate the integration of volumetric
+perception operators, shared update networks, and structured
+training regimes within a controlled 3D setting.
+
+The framework developed in this thesis is designed to be
+task-agnostic, modular, and extensible. Rather than being tailored
+to a single reconstruction or morphogenesis objective, it provides a
+general experimental environment for students or researchers in which different training
+strategies, architectural configurations, and evaluation procedures
+can be systematically implemented and compared.
+
+Building on the foundations outlined in this chapter, the following
+chapter introduces the architecture and implementation of the
+interactive three-dimensional framework developed in this work.
 
 \chapter{Architectural Design}
 TODO
