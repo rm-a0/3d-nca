@@ -515,7 +515,47 @@ chapter introduces the architecture and implementation of the
 interactive three-dimensional framework developed in this work.
 
 \chapter{Architectural Design}
-TODO
+
+The following chapters present the design of the 3D NCA framework and its overall architecture. 
+They introduce the key components that form the framework and describe how these components interact 
+with each other. The aim of this section is to provide a clear conceptual overview of the system and 
+explain the roles of its individual parts within the overall structure. To maintain focus on the 
+architectural design, implementation-specific details like libraries and frameworks chosen are intentionally 
+omitted at this stage. These details are discussed separately in later sections 
+dedicated to the implementation of the framework.
+
+\section{Design Goals and Requirements}
+
+The purpose of the framework is to provide an environment for experimenting with neural cellular automata 
+operating on three-dimensional voxel grids. In order to support experimentation and future extensions, the 
+architecture must provide a clear structure and well-defined interactions between its components.
+
+The primary design goal of the framework is to enable simulation and training of 3D neural cellular automata 
+while maintaining a modular and extensible architecture. The system should allow individual components, such 
+as the simulation grid, update mechanism, and training pipeline, to be developed and modified independently. 
+This approach simplifies experimentation with different models and update rules.
+
+Another important design objective was to keep the core functionality of the framework independent from 
+visualization tools and external applications. The framework was therefore designed as a standalone module 
+that provides the fundamental functionality required for initializing, adjusting and training neural cellular automata. 
+Additional systems can build on top of this module while reusing the core computational components.
+
+During the development process, practical constraints related to visualization and execution environments 
+influenced the architectural design. In particular, combining interactive visualization with computationally 
+intensive training within a single environment proved difficult. These limitations motivated a separation 
+between the components responsible for computation and those responsible for visualization and user 
+interaction.
+
+As a result, the system evolved towards an architecture where the core framework provides the underlying 
+simulation and training functionality, while additional components utilize this functionality to provide 
+visualization and interaction capabilities. This approach preserves the independence of the framework while 
+allowing it to be integrated into different workflows and environments.
+
+\section{System Overview}
+
+\section{Core Components of the Framework}
+
+
 
 \chapter{Implementation}
 TODO
