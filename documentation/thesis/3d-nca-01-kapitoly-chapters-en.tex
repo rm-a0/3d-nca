@@ -20,21 +20,20 @@ TODO
 
 \section{Prerequisites}
 
-This thesis assumes familiarity with fundamental concepts in modern deep learning, in particular convolutional 
-neural networks (CNNs), gradient-based optimisation, and automatic differentiation as implemented in frameworks 
-such as PyTorch~\cite{PaszkePyTorch, PyTorchDocs}.  
-Comprehensive introductions to these topics are provided in Goodfellow et al.~\cite{GoodfellowDeepLearning} and in 
-the official PyTorch documentation~\cite{PyTorchDocs}.  
+This work assumes familiarity with convolutional neural networks, gradient-based optimisation, 
+and automatic differentiation as implemented in frameworks such as PyTorch~\cite{PaszkePyTorch, PyTorchDocs}. 
+Goodfellow et al.~\cite{GoodfellowDeepLearning} and the official PyTorch documentation~\cite{PyTorchDocs} 
+provide comprehensive introductions to these topics.
 
-The remainder of the thesis is self-contained with respect to cellular automata (CA) and their neural extensions.
+The remainder of this chapter is self-contained with respect to cellular automata and their neural extensions.
 
 \section{Cellular Automata}
 
-Cellular automata (CA) are discrete dynamical systems composed of a regular grid of cells, each of which occupies 
-one state from a finite set. The grid evolves in parallel over discrete time steps according 
-to a local update rule that depends solely on the states of neighbouring cells~\cite{MarinescuComplexSystems}.  
+Cellular automata (CA) are discrete dynamical systems composed of a regular grid of cells, each occupying 
+one state from a finite set. All cells update in parallel at each discrete time step according to a local 
+rule that depends only on the states of neighbouring cells~\cite{MarinescuComplexSystems}.
 
-Formally, a cellular automaton is defined by:
+A cellular automaton is defined by:
 \begin{itemize}
     \item a \textbf{lattice} of cells, typically arranged in one, two, or three dimensions,
     \item a \textbf{finite state set} $\mathcal{S}$,
@@ -42,477 +41,604 @@ Formally, a cellular automaton is defined by:
     \item an \textbf{update rule} $f : \mathcal{S}^{|\mathcal{N}|} \rightarrow \mathcal{S}$ that determines the next state~\cite{IlachinskiCellular}.
 \end{itemize}
 
-The foundational work of Ulam and von Neumann in the 1940s established CA as a model for self-replication~\cite{VonNeumann1966}.  
-Later, Wolfram proposed a widely used behavioural classification of CA into four qualitative classes~\cite{Wolfram1983, Wolfram2002}. 
-Class 1 systems quickly converge to a uniform state. Class 2 systems evolve into static or periodically oscillating patterns. 
-Class 3 systems exhibit chaotic and seemingly unpredictable behaviour. Class 4 systems demonstrate complex dynamics characterised 
-by long-lived structures capable of interaction and computation.
+Ulam and von Neumann developed the first formal CA models in the 1940s as a theoretical framework for 
+self-replicating machines~\cite{VonNeumann1966}. Von Neumann's original construction used a two-dimensional 
+lattice with 29 distinct cell states and demonstrated that a sufficiently complex local rule can produce 
+a system capable of constructing copies of itself. This result established that self-replication does not 
+require a centralised blueprint but it can emerge from purely local interactions on a discrete grid.
 
-These classes remain a reference point in subsequent work on both classical and neural CA.
+Wolfram later proposed a behavioural classification of CA into four qualitative classes based on their 
+long-term dynamics~\cite{Wolfram1983, Wolfram2002}. Class~1 systems converge to a uniform state regardless 
+of initial conditions. Class~2 systems settle into static or periodic patterns. Class~3 systems produce 
+chaotic, seemingly random output sensitive to initial conditions. Class~4 systems generate complex dynamics 
+with long-lived interacting structures capable of computation. This classification provides a useful 
+reference for characterising the dynamics of both classical and neural CA.
 
 \subsection{One-Dimensional Cellular Automata}
 
-The simplest non-trivial CA operate on a one-dimensional array of cells. In the elementary CA family, each cell observes 
-its own state and that of its two immediate neighbours (radius 1, neighbourhood size 3). With binary states, the update rule 
-has $2^{3} = 8$ possible neighbourhood configurations, yielding $2^{8} = 256$ distinct rules in Wolfram's enumeration scheme~\cite{Wolfram1983}.
+The simplest non-trivial CA operate on a one-dimensional array of cells. In the elementary CA family, 
+each cell reads its own state and its two immediate neighbours (radius~1, neighbourhood size~3). With 
+binary states, $2^{3} = 8$ neighbourhood configurations are possible, giving $2^{8} = 256$ distinct 
+rules in Wolfram's enumeration~\cite{Wolfram1983}.
 
-A rule number encodes the next-state lookup table in binary. Notable examples include Rule 90, which generates 
-the well-known Sierpiński triangle from a single active seed (Class 3), and Rule 30, whose chaotic evolution 
-has been used as a source of pseudorandomness. Rule 110 (Class 4) is the smallest known Turing-complete 1D CA, 
-supporting gliders and glider collisions that can perform universal computation~\cite{Cook2004}.
+Each rule number encodes a next-state lookup table in binary. For example, Rule~90 assigns the next state 
+of a cell based on the exclusive-or (XOR) of its two neighbours, producing the Sierpi\'{n}ski triangle 
+from a single active seed. This pattern is fractal and self-similar, placing Rule~90 in Wolfram's Class~3 
+(chaotic behaviour). Rule~30 also belongs to Class~3 and produces irregular, aperiodic evolution that has 
+been used as a source of pseudorandomness~\cite{Wolfram2002}.
+
+Rule~110 (Class~4) is the smallest known Turing-complete one-dimensional CA. Cook~\cite{Cook2004} proved 
+that it supports gliders and glider collisions that can simulate any Turing machine. This result was 
+significant because it showed that computational universality can arise from an extremely simple local rule 
+applied to a one-dimensional lattice.
+
+Despite their simplicity, elementary CA demonstrate all four classes of Wolfram's classification. They 
+provide a minimal setting for studying how local rules produce global behaviour, a question that extends 
+directly to the neural CA models discussed later in this chapter.
 
 \subsection{Two-Dimensional Cellular Automata}
 
-In 2D, the Moore neighbourhood (a $3 \times 3$ block) is the most common. Because the space of lookup tables is 
-large ($2^9$ input combinations), rules are often expressed using birth/survival notation.
+In two dimensions, the Moore neighbourhood ($3 \times 3$ block surrounding each cell) is the most common 
+choice. With binary states and a Moore neighbourhood, the update rule must handle $2^9 = 512$ possible 
+input configurations. Because the full lookup table is large, 2D rules are typically expressed using 
+birth/survival notation. A rule written as B$n$/S$m$ specifies that a dead cell becomes alive (is ``born'') 
+when it has exactly $n$ live neighbours, and a living cell survives when it has exactly $m$ live neighbours. 
+All other cells die or remain dead.
 
-Conway's Game of Life~\cite{Gardner1970} remains the most influential 2D CA, featuring a wide variety of emergent structures, 
-including still lifes (e.g. block, beehive), oscillators (e.g. blinker, toad), spaceships (e.g. glider, lightweight spaceship), 
-and more complex constructions such as glider guns and other computational structures.
+Conway's Game of Life~\cite{Gardner1970} uses the rule B3/S23: a dead cell becomes alive with exactly three 
+live neighbours, and a living cell survives with two or three live neighbours. Despite the simplicity of this 
+rule, Life produces a wide variety of emergent structures. Still lifes (such as the block and beehive) are 
+stable configurations that do not change between steps. Oscillators (such as the blinker and toad) cycle 
+through a fixed sequence of states. Spaceships (such as the glider and lightweight spaceship) translate 
+across the grid while cycling through their phases. More complex constructions include glider guns, which 
+periodically emit spaceships, and computational structures that perform logic operations.
 
-Life is Turing-complete~\cite{Berlekamp1982} and has influenced much of the later work on self-organising neural CA models.
+Berlekamp, Conway, and Guy~\cite{Berlekamp1982} showed that Life is Turing-complete: any computation that 
+can be expressed as a Turing machine can, in principle, be carried out within a sufficiently large Life grid. 
+This result highlights a key property of cellular automata --- complex, globally coordinated behaviour can 
+emerge from a homogeneous local rule. The same property later motivated the development of neural cellular 
+automata, where the local rule is learned rather than hand-designed.
 
 \subsection{Three-Dimensional Cellular Automata}
 
-In three dimensions, the Moore neighbourhood includes up to 26 adjacent cells (face-, edge-, and corner-adjacent) in a 3$\times$3$\times$3 cube.  
-With binary states, this creates $2^{27} \approx 134$ million possible neighbourhood configurations, so practical 3D CA typically use 
-totalistic or outer-totalistic rules that depend only on the sum of live neighbours (not their exact positions)~\cite{Wolfram2002}.
+In three dimensions, the Moore neighbourhood covers 26 adjacent cells (6 face-adjacent, 12 edge-adjacent, 
+and 8 corner-adjacent) in a $3\times3\times3$ cube surrounding the central cell. Binary states with a full 
+Moore neighbourhood produce $2^{27} \approx 134$~million neighbourhood configurations, making exhaustive 
+rule enumeration impractical. For this reason, practical 3D~CA use totalistic or outer-totalistic rules 
+that depend only on the count of live neighbours rather than their exact positions~\cite{Wolfram2002}.
 
-Notable examples include von Neumann's 29-state self-replicating automaton~\cite{VonNeumann1966}, 
-excitable-media rules such as Brian's Brain extended to 3D~\cite{DeKinderen1998}, 
-and three-dimensional Game of Life variants capable of producing branching and crystal-like growth patterns.
+Several notable 3D~CA have been studied. Von Neumann's 29-state self-replicating automaton~\cite{VonNeumann1966}, 
+originally formulated in 2D, has been extended to three dimensions, where the additional spatial freedom 
+allows more compact replicating structures. Excitable-media rules such as Brian's Brain have also been 
+generalised to 3D lattices, producing travelling wavefronts and spiral structures in three-dimensional 
+space~\cite{DeKinderen1998}. Three-dimensional Game of Life variants using totalistic birth/survival rules 
+generate branching and crystal-like growth patterns that have no direct 2D analogue.
 
-Advances in computing hardware in the 2000s facilitated larger-scale 3D CA studies~\cite{Tobias2009}.  
-These volumetric models later aligned naturally with neural CA research.
+Hardware advances in the 2000s made large-scale 3D~CA simulations practical on consumer 
+hardware~\cite{Tobias2009}. GPU-accelerated implementations can now run volumetric CA with grid sizes 
+exceeding $128^3$ cells in real time. These volumetric models provided a natural setting for the 
+neural CA extensions discussed later in this chapter, as the underlying lattice structure and 
+local-update paradigm transfer directly from classical to neural formulations.
 
 \subsection{Differentiability and Continuous Cellular Automata}
 
-Although this thesis uses a discrete 3D lattice, the update rule is fully differentiable, enabling gradient-based optimisation~\cite{Bena2025}.  
-This connects neural CA to continuous cellular automata, where states are real-valued and update rules are smooth rather than discrete.
+Classical CA use discrete states and discrete update rules. However, several extensions have shown that 
+the core CA principles (spatial lattice, local interactions, and parallel updates) also work with 
+continuous states and smooth transition functions. These continuous CA are directly relevant to neural CA, 
+which operate on real-valued state vectors and use differentiable update rules trained by gradient descent.
 
-\textbf{SmoothLife}~\cite{Rafler2011} generalises the Game of Life to continuous space and time using continuous averaging kernels and 
-smooth transition functions, producing gliders and complex wave-like structures on a continuous field.
+An early theoretical connection was established by Turing~\cite{Turing1952}, whose reaction-diffusion model 
+of morphogenesis describes how spatial patterns can arise from the interaction of locally diffusing chemical 
+substances. Although Turing's model uses partial differential equations rather than a discrete lattice, the 
+underlying principle - local interactions producing global spatial structure - is the same principle that 
+governs cellular automata. This connection between reaction-diffusion systems and CA has motivated much of 
+the subsequent work on continuous and neural CA.
 
-\textbf{Lenia}~\cite{Chan2019} further extends this idea using parameterised convolution kernels and growth functions.  
-Its exploration of parameter space led to hundreds of stable, self-organising patterns resembling an artificial ecology.
+\textbf{SmoothLife}~\cite{Rafler2011} generalises Conway's Game of Life to continuous space and time. It 
+replaces the discrete neighbour count with continuous averaging kernels and the binary birth/survival rule 
+with smooth sigmoid transition functions. The result is a system that runs on a continuous 2D field and 
+produces gliders, oscillators, and wave-like structures that closely resemble their discrete counterparts 
+but evolve smoothly in time. SmoothLife demonstrates that the characteristic behaviours of Life do not depend 
+on discretisation, but rather arise from the structure of local interactions.
 
-These systems demonstrate that complex self-organisation does not depend on discrete state transitions. Instead, strictly local, differentiable 
-interactions are sufficient to generate stable and adaptive spatial structures. Neural cellular automata leverage this property while introducing 
-optimisation through gradient descent, allowing update rules to be learned for specific structural objectives rather than discovered through manual 
-parameter exploration.
+\textbf{Lenia}~\cite{Chan2019} extends this approach further by parameterising both the convolution kernel 
+(which defines the neighbourhood shape and weighting) and the growth function (which determines how the 
+local average maps to a state change). Systematic exploration of Lenia's parameter space has produced 
+hundreds of stable, self-organising patterns that resemble biological microorganisms such as orbiting 
+particles, pulsating organisms, and multi-species ecologies. Lenia shows that a rich space of 
+emergent behaviours can be accessed by varying the parameters of a continuous local update rule.
+
+Both SmoothLife and Lenia demonstrate that complex self-organisation does not require discrete state 
+transitions. Local, differentiable interactions are sufficient to produce stable spatial structures. Neural 
+cellular automata build on this observation. Instead of manually exploring the parameter space as in Lenia, 
+neural CA use gradient-based optimisation to find update rules that produce a specific target pattern. The 
+differentiability of the update rule is what makes this optimisation possible.
 
 \section{Neural Cellular Automata}
 
-Neural Cellular Automata (NCA) were introduced by Mordvintsev et al.~\cite{Mordvintsev2020} as a differentiable 
-generalisation of classical cellular automata. In their formulation, the discrete lookup-table update rule of traditional 
-CA is replaced by a small neural network whose parameters are shared across all cells. While the spatial lattice remains 
-discrete, the state of each cell becomes a real-valued vector, enabling gradient-based optimisation through time.
+Mordvintsev et al.~\cite{Mordvintsev2020} introduced Neural Cellular Automata (NCA) as a differentiable 
+generalisation of classical CA. The discrete lookup-table rule is replaced by a small neural network whose 
+parameters are shared across all cells. The spatial lattice stays discrete, but each cell's state becomes 
+a real-valued vector, and the update rule is trained end-to-end by gradient descent.
 
-Let the lattice be denoted by $\Omega \subset \mathbb{Z}^d$, where $d$ represents the spatial dimension. 
-Each cell $x \in \Omega$ maintains a state vector
+Let the lattice be $\Omega \subset \mathbb{Z}^d$, where $d$ is the spatial dimension. Each cell 
+$x \in \Omega$ holds a state vector
 \[
 \mathbf{s}_t(x) \in \mathbb{R}^{C},
 \]
-where $C$ is the number of channels. 
+where $C$ is the number of channels. The full grid state at time $t$ is a tensor over all cell states.
 
-The global configuration at time $t$ can therefore be viewed as a tensor containing the states of all cells.
+The update process has two stages~\cite{Mordvintsev2020}. First, a fixed perception operator extracts 
+local neighbourhood information through convolutional filters. The filters are applied to the full 
+multi-channel grid and produce a perception vector at each cell location. Second, a shared neural network 
+maps this perception vector to a state increment $\Delta \mathbf{s}$ that is added to the current state:
+\[
+\mathbf{s}_{t+1}(x) = \mathbf{s}_t(x) + \Delta \mathbf{s}(x).
+\]
 
-Following Mordvintsev et al.~\cite{Mordvintsev2020}, the update process consists of two steps. 
-First, a fixed perception operator extracts local neighbourhood information using convolutional filters. 
-Second, a shared neural network processes this local representation and produces a state increment that is added to the current state.
+This residual update formulation keeps the defining CA property - strict locality - while replacing 
+the hand-crafted transition function with a learnable model. Because the update rule is differentiable 
+with respect to its parameters, the automaton can be unrolled over multiple time steps and trained by 
+gradient descent to minimise a loss defined on the resulting configuration.
 
-This formulation preserves the defining property of cellular automata - strict locality - while replacing the hand-crafted transition 
-function with a learnable parametric model. Because the update rule is differentiable with respect to its parameters, the automaton can be 
-trained by unrolling its dynamics over multiple steps and applying gradient descent to minimise a loss defined on the resulting configuration.
-
-Neural cellular automata can therefore be understood as spatially distributed dynamical systems whose behaviour is shaped by optimisation rather 
-than by manually specified rules.
+The key conceptual shift compared to classical and continuous CA is that the update rule is not designed 
+or discovered by exploration, but optimised for a specific objective. The system learns to grow a target 
+pattern from a seed, maintain it over time, or regenerate it after damage depending on the training 
+regime. This makes neural CA a form of learned self-organisation: the local rule is shaped by optimisation, 
+but the global behaviour emerges from distributed local interactions, just as in classical CA.
 
 \section{Extension from Two to Three Dimensions}
 
-The original neural cellular automaton proposed by Mordvintsev et al.~\cite{Mordvintsev2020} operates on a two-dimensional grid. 
-Extending this framework to three-dimensional voxel lattices is conceptually straightforward but introduces several 
-practical and dynamical considerations.
+The original NCA of Mordvintsev et al.~\cite{Mordvintsev2020} operates on a 2D grid. Extending it to 
+three-dimensional voxel lattices is conceptually straightforward but introduces several practical 
+differences that affect both the architecture and the training procedure.
 
-In two dimensions, perception is typically performed using $3 \times 3$ convolutional filters applied to a Moore neighbourhood. 
-In three dimensions, this naturally generalises to $3 \times 3 \times 3$ volumetric filters, increasing the neighbourhood size 
-from nine to twenty-seven cells. As demonstrated in prior 3D extensions~\cite{Sudhakaran2021,Rossi2021,Aadityaza2024}, Sobel-type 
-gradient filters and other perception operators can be extended along the $x$, $y$, and $z$ axes without altering the overall update formulation.
+In 2D, perception uses $3 \times 3$ filters over a nine-cell Moore neighbourhood. In 3D, the same 
+filters generalise to $3 \times 3 \times 3$ volumes covering twenty-seven cells. Prior 3D 
+extensions~\cite{Sudhakaran2021,Rossi2021,Aadityaza2024} have shown that Sobel-type gradient filters 
+and other perception operators transfer directly to $x$, $y$, and $z$ axes without changing the 
+overall update formulation.
 
-However, volumetric grids introduce important differences. The number of cells grows cubically with lattice resolution, which substantially increases 
-memory requirements and computational cost. Moreover, since updates remain strictly local, information must propagate only through repeated applications of 
-the update rule. In larger three-dimensional grids, maintaining a coherent global structure therefore requires stable dynamics over a longer period of time.
+However, volumetric grids introduce two important differences. First, cell count grows cubically with 
+resolution. A $32^3$ grid contains 32\,768 cells; a $64^3$ grid contains 262\,144. This cubic scaling 
+increases both memory consumption and computational cost per step, particularly during training when 
+gradients must be stored for backpropagation through multiple steps.
 
-These considerations suggest that behaviours observed in two-dimensional neural cellular automata - particularly persistence and regeneration - may 
-not manifest identically in volumetric domains. While similar mechanisms can, in principle, be extended to three dimensions, the change in spatial 
-topology and neighborhood structure can lead to differences in stability, information propagation, and emergent dynamics.
+Second, information still propagates only through local interactions, one step at a time. In a $32^3$ 
+grid, a signal originating at one corner must traverse roughly 55 steps (the grid diagonal in Manhattan 
+distance through the $3 \times 3 \times 3$ neighbourhood) to reach the opposite corner. In larger grids, 
+this propagation distance grows further. Maintaining coherent global structure therefore requires stable 
+dynamics over longer unrolling horizons than in comparable 2D systems.
+
+As a consequence, behaviours such as persistence and regeneration may 
+behave differently in volumetric domains. The change in neighbourhood structure (27 neighbours instead of 
+9), spatial topology, and information propagation distance can all affect the stability and character of 
+the emergent dynamics.
 
 \section{Core Components of a 3D Neural Cellular Automaton}
 \label{sec:core-components}
 
-The preceding sections introduced classical cellular automata, continuous extensions, and neural CA models. 
-This section focuses on the principal theoretical components that form the foundation of a three-dimensional 
-neural cellular automaton. The objective is to clarify the general concepts that govern these systems without 
-addressing into implementation-specific details or experimental results.
+This section describes the principal components of a three-dimensional neural cellular automaton at the 
+conceptual level. The goal is to establish the general design principles that underlie these systems before 
+addressing the specific architecture and implementation in later chapters.
 
 \subsection{State Representation}
 
-In neural cellular automata, each voxel maintains a vector of real-valued channels. This notion originates 
-from the two-dimensional model of Mordvintsev et al.~\cite{Mordvintsev2020}, where multi-channel states 
-support both visible pattern information and internal memory.
-
-Channels can generally be divided into two categories:
-\begin{itemize}
-    \item \textbf{Visible channels}, representing quantities directly compared to the target pattern, such as 
-    colour, occupancy, or density;
-    \item \textbf{Hidden channels}, providing additional internal memory and facilitating information 
-    propagation between neighbouring cells.
-\end{itemize}
-
-If each cell contains $C$ channels, its state can be represented as
+Each voxel in a 3D neural CA maintains a vector of $C$ real-valued channels:
 \[
     \mathbf{s} \in \mathbb{R}^{C}.
 \]
 
-Many neural CA models also include a continuous \emph{alive} channel, which acts as a gating mechanism 
-modulating whether updates are applied to a cell. This concept appears in the original NCA formulation 
-\cite{Mordvintsev2020} and has conceptual parallels in continuous CA such as SmoothLife~\cite{Rafler2011} 
-and Lenia~\cite{Chan2019}, where real-valued states enable smooth evolution and gradient-based optimisation.
+The channels divide into two functional groups. \textbf{Visible channels} represent quantities 
+compared directly to a target pattern, such as colour components (RGB), occupancy, or material 
+properties. \textbf{Hidden channels} provide internal memory that is not directly supervised but 
+carries information between neighbouring cells across time steps~\cite{Mordvintsev2020}.
+
+The separation between visible and hidden channels is a design choice inherited from the 2D NCA 
+formulation. Visible channels define the observable output of the system, while hidden channels 
+give each cell additional representational capacity to encode information about its local context, 
+history, or role within the emerging structure. Because updates are strictly local, a cell cannot 
+directly observe distant parts of the grid. Hidden channels allow cells to accumulate and relay 
+information over multiple steps, enabling the kind of long-range coordination needed to produce 
+coherent global patterns from local rules.
+
+Most NCA models also designate one channel as a continuous \emph{alive} signal. This channel 
+determines whether a cell is considered active and whether its updates are applied. The alive 
+mechanism appears in the original NCA~\cite{Mordvintsev2020} and has parallels in continuous CA 
+such as SmoothLife~\cite{Rafler2011} and Lenia~\cite{Chan2019}, where real-valued fields govern 
+the activation and deactivation of spatial regions.
 
 \subsection{Perception Mechanism}
 
-Despite employing continuous state vectors, neural CA retain the defining property of locality: each cell 
-updates based solely on information from its immediate neighbourhood~\cite{IlachinskiCellular, Wolfram2002}. 
-In neural CA, locality is realised by applying a fixed set of convolutional filters (e.g., $3 \times 3$ in 2D or 
-$3 \times 3 \times 3$ in 3D) to extract spatial features~\cite{Mordvintsev2020, Sudhakaran2021}.
+Neural CA preserve the locality constraint that defines classical CA: each cell updates based only 
+on its immediate neighbourhood~\cite{IlachinskiCellular, Wolfram2002}. In a 3D neural CA, locality 
+is realised by applying a fixed set of convolutional filters with kernel size $3 \times 3 \times 3$ 
+to the multi-channel state grid. Each filter reads the 27-cell neighbourhood of every voxel and 
+produces a scalar output per channel~\cite{Mordvintsev2020, Sudhakaran2021}.
 
-Typical filter types include:
+Common filter types include:
 \begin{itemize}
-    \item \textbf{Identity filters}, capturing a cell's own state;
-    \item \textbf{Neighbour aggregation filters}, such as sums or averages of adjacent voxels;
-    \item \textbf{Gradient filters}, including Sobel-type kernels extended to 3D, approximating directional differences 
-    and providing a local analogue of biological gradient sensing~\cite{Mordvintsev2020, Sudhakaran2021}.
+    \item \textbf{Identity filters}, which return the cell's own state unchanged. These provide the 
+    update rule with information about what the cell currently contains.
+    \item \textbf{Neighbour aggregation filters}, which compute a sum or average of adjacent voxels. 
+    These capture the local density and composition of the neighbourhood.
+    \item \textbf{Gradient filters}, such as Sobel-type kernels extended to the $x$, $y$, and $z$ axes. 
+    These approximate directional differences and provide a local analogue of gradient sensing 
+    in biological morphogenesis~\cite{Mordvintsev2020, Sudhakaran2021, Turing1952}.
 \end{itemize}
 
-The outputs of all applied filters are concatenated into a single perception vector for each cell, which is then 
-passed to the update function. Using fixed, non-learnable filters stabilises training and maintains conceptual 
-continuity between neural and classical cellular automata~\cite{Mordvintsev2020, Chan2019}.
+The outputs of all filters applied across all channels are concatenated into a single perception vector 
+per cell. If the state has $C$ channels and $G$ filter groups are used, the perception vector has 
+dimensionality $G \cdot C$. This vector is then passed to the update function as input.
+
+The filters are fixed and non-learnable. This is a deliberate design choice: using fixed filters 
+constrains the form of spatial information available to the update rule, which stabilises training 
+and reduces the number of parameters that must be optimised. The approach follows the convention 
+established by Mordvintsev et al.~\cite{Mordvintsev2020} and adopted in subsequent 
+work~\cite{Sudhakaran2021, Rossi2021, Aadityaza2024}.
 
 \subsection{Update Rule}
 
-The update rule is a shared, parametric function that governs how each cell's state evolves over time. Following 
-the formulation of Mordvintsev et al.~\cite{Mordvintsev2020}, the rule operates on the perceived neighbourhood 
-features and produces a state increment added to the current state:
+The update rule is a shared parametric function that governs how each cell's state evolves over time. 
+It takes the perception vector as input and produces a state increment $\Delta \mathbf{s}$ added to 
+the current state:
 \[
 \mathbf{s}_{t+1} = \mathbf{s}_t + \Delta \mathbf{s}.
 \]
 
-This approach preserves the parallel, local nature of classical cellular automata while allowing the transition 
-function to be learned through gradient-based optimisation. The update function is typically implemented as a 
-lightweight neural network applied independently to each cell, such as a small multilayer perceptron or a sequence 
-of $1 \times 1$ (or $1 \times 1 \times 1$ in 3D) convolutions~\cite{Mordvintsev2020}. These designs ensure that 
-updates depend only on locally perceived information while keeping the parameter count sufficiently low to maintain 
-stable training.
+This residual formulation encourages incremental modifications rather than abrupt state changes, 
+contributing to dynamical stability over long simulation horizons~\cite{Mordvintsev2020}.
 
-Two mechanisms commonly appear in neural CA formulations. Alive gating regulates updates based on the continuous 
-alive channel, providing a soft analogue of classical alive/dead states and improving long-term stability~\cite{Mordvintsev2020}. 
-Stochastic update masking applies updates probabilistically, preventing rigid synchronisation and encouraging 
-robustness~\cite{Mordvintsev2020}.
+The update function is typically implemented as a small multilayer perceptron (MLP) or a sequence of 
+$1 \times 1 \times 1$ convolutions applied independently at each cell. Point-wise application ensures 
+that the update depends only on the locally perceived information, not on any global state. The 
+parameter count is kept deliberately low following the original 2D model, approximately 8\,000 trainable 
+parameters~\cite{Mordvintsev2020}. This small scale underlines that the complexity of the resulting 
+structures arises from iterative local interaction, not from network capacity.
 
-These components collectively support behaviours such as growth, pattern persistence, and regeneration, phenomena 
-also observed in continuous morphogenetic systems such as Lenia~\cite{Chan2019}. Early three-dimensional neural CA 
-models~\cite{Rossi2021,Sudhakaran2021,Aadityaza2024} demonstrate that the underlying update-rule principles generalise 
-naturally to volumetric grids, although the emergent dynamics may differ from their 2D counterparts.
+Two stabilisation mechanisms appear in most NCA formulations:
+\begin{itemize}
+    \item \textbf{Alive gating} conditions updates on the alive channel. If a cell and all of its 
+    neighbours have alive values below a threshold, the cell's update is set to zero. This prevents 
+    empty regions from spontaneously generating structure and provides a soft boundary between active 
+    and inactive areas of the grid~\cite{Mordvintsev2020}.
+    \item \textbf{Stochastic update masking} applies updates to a random subset of cells at each step 
+    rather than to all cells simultaneously. This breaks temporal synchronisation artefacts and 
+    encourages robustness to asynchronous perturbations~\cite{Mordvintsev2020}.
+\end{itemize}
+
+Both mechanisms improve long-term stability and regenerative capacity. They become increasingly 
+important as systems scale to larger grids or higher dimensions, where dynamical instabilities 
+can accumulate over more cells and longer simulation horizons.
 
 \subsection{Grid Management}
 
-The neural CA is defined on a finite three-dimensional lattice, with boundary conditions chosen according to the 
-experiment~\cite{Mordvintsev2020}. Key considerations include the lattice dimensions, initialization, and boundary treatment.
-Sudhakaran et al.~\cite{Sudhakaran2021} observe that specific boundary handling methods, such as periodic or zero-value padding, vary 
-across implementations alongside the selection of lattice dimensions.
+The neural CA runs on a finite three-dimensional lattice with fixed dimensions. Boundary conditions 
+(periodic, zero-padded, or reflective) are chosen per experiment and affect the dynamics near the 
+grid edges~\cite{Mordvintsev2020}. Sudhakaran et al.~\cite{Sudhakaran2021} note that the choice of 
+boundary handling varies across implementations and can influence the shapes that the automaton produces.
 
-Three-dimensional grids scale cubically with lattice size, creating computational challenges. Research on large-scale 
-volumetric simulations often employs data structures that reduce memory usage and accelerate neighbourhood access, 
-such as Sparse Voxel Octrees~\cite{Laine2010} or the OpenVDB framework~\cite{Museth2013}. These approaches show 
-how using locality-preserving representations can make simulations more scalable and offer guidance for extending neural 
-CA to larger or more flexible volumetric setups.
+The primary challenge of 3D grids is their cubic memory scaling. A grid of size $N^3$ with $C$ channels 
+per cell and 32-bit floating-point precision requires $N^3 \times C \times 4$ bytes of storage per state. 
+For a $32^3$ grid with 20 channels, this is approximately 2.5~MB per state. During training, multiple 
+states are held simultaneously (for batching and pool-based sampling), and gradient storage can multiply 
+memory requirements further.
+
+Research on large-scale volumetric simulations addresses this through specialised data structures. 
+Sparse Voxel Octrees~\cite{Laine2010} exploit the observation that most voxels in a large grid are 
+empty, storing only occupied regions in a hierarchical tree. OpenVDB~\cite{Museth2013} provides a 
+similar approach with dynamic topology, allowing efficient insertion and deletion of voxels during 
+simulation. While the framework developed in this work uses dense grids at moderate resolution, these 
+sparse representations offer a path toward scaling neural CA to larger volumetric domains in future work.
+
+Initialisation is another practical consideration. Most neural CA start from a \emph{seed} - a single 
+active cell or small cluster placed at the centre of an otherwise empty grid. The alive channel of the 
+seed cell is set to a positive value, and the system must grow the target structure from this minimal 
+starting point through repeated application of the local update rule.
 
 \subsection{Training and Optimisation}
 
-Because neural CA are differentiable, their parameters can be optimised using gradient-based methods to minimise a 
-loss between the generated pattern and a target configuration~\cite{Mordvintsev2020}. Training generally involves 
-unrolling the CA dynamics over multiple steps and applying backpropagation through time.
+Because the update rule is differentiable, the parameters of a neural CA can be optimised by gradient 
+descent. The standard training procedure unrolls the automaton for $T$ steps starting from a seed 
+state, computes a loss between the resulting configuration and a target, and backpropagates through 
+the full unrolled computation graph~\cite{Mordvintsev2020}.
 
-Typical loss functions include mean squared error (MSE) for continuous targets and intersection-over-union or other 
-domain-specific metrics for structural objectives~\cite{Mordvintsev2020, Niklasson2021}. The choice of training regime—such 
-as growth, persistence, or regeneration—affects the emergent behaviour and stability of the model. Optimisation often 
-employs the Adam algorithm with learning rates around 0.001, sometimes supplemented by early stopping, data pooling, 
-or logging frameworks~\cite{Sudhakaran2021}.
+The most common loss function is mean squared error (MSE) between the predicted and target visible 
+channels. For structural objectives, intersection-over-union or other task-specific 
+metrics may be used~\cite{Niklasson2021}. The optimiser is typically Adam or one of its 
+variants, with learning rates in the range of $10^{-4}$ to $10^{-2}$~\cite{Sudhakaran2021}.
 
-These training strategies enable the discovery of update rules capable of producing robust self-organising structures 
-in both two- and three-dimensional systems~\cite{Rossi2021,Sudhakaran2021,Aadityaza2024}.
+Several training strategies have been developed to encourage specific behaviours:
+\begin{itemize}
+    \item \textbf{Pool-based sampling} maintains a pool of persistent states at various stages of growth. 
+    Each training iteration samples a batch from the pool, runs the automaton forward, computes the loss, 
+    and writes the updated states back. This exposes the model to states at different developmental stages 
+    rather than always starting from a fresh seed~\cite{Mordvintsev2020}.
+    \item \textbf{Curriculum learning} gradually increases the number of unrolled steps during training. 
+    Early iterations use few steps to learn coarse shape, while later iterations use many steps to refine 
+    details and test long-term stability.
+    \item \textbf{Training regime selection} determines which aspects of the dynamics are explicitly 
+    optimised. These regimes (growth, persistence, regeneration) are discussed in detail in 
+    the Related Work chapter.
+\end{itemize}
+
+Backpropagation through many unrolled steps requires storing intermediate activations for the entire 
+sequence, which can exhaust GPU memory. Gradient checkpointing~\cite{PaszkePyTorch} addresses this by 
+discarding intermediate activations during the forward pass and recomputing them during the backward 
+pass, trading approximately twice the computation for substantially reduced memory usage.
 
 %=========================================================================
 \chapter{Related Work}
 
-This chapter reviews prior research and work most directly related to neural cellular automata and their extensions.
-The focus is on implementations, training regimes, evaluation strategies, and efforrts to extend these systems beyond two dimensions.
-Each section concludes by identifying limitations or open questions that motivate the development of the three-dimensional framework presented in this work.
+This chapter reviews the research most directly related to neural cellular automata and their 
+three-dimensional extensions. The focus is on architectures, training procedures, and experimental 
+results. Each section identifies limitations or open questions that motivate the framework developed 
+in this work.
 
-Some of the concepts discussed in this chapter were already introduced in Chapter~\ref{chap:theoretical-foundations}. There, they were 
-presented to establish the formal and conceptual background required for the definition of three-dimensional neural cellular automata. 
-In contrast, the present chapter considers the same works from the perspective of prior research contributions, experimental results, and 
-architectural design choices that serve as a direct basis for the approach developed in this thesis. 
+Several of the works discussed here were already introduced in Chapter~\ref{chap:theoretical-foundations} 
+to establish formal background. Here, the focus shifts to their concrete design decisions, findings, and the 
+specific choices that inform the approach taken in this work.
 
 \section{Growing Neural Cellular Automata}
-The development of neural cellular automata draws on a lineage of contributions spanning continuous self-organising systems, reaction-diffusion 
-models of morphogenesis, and modern deep learning techniques for differentiable simulation. This section focuses on the seminal work of 
-Mordvintsev, Randazzo, Niklasson, and Levin (2020)~\cite{Mordvintsev2020}, which introduced the core paradigm of Growing Neural Cellular Automata and 
-serves as the primary methodological foundation for the present thesis.
 
-In their 2020 contribution, Mordvintsev et al. replaced the traditional discrete lookup-table transition rules of classical cellular automata 
-with a small, shared neural network whose parameters are optimised end-to-end via gradient descent. The resulting model preserves the strict spatial 
-locality of classical CA while enabling task-driven optimisation of the update dynamics, allowing the system to grow and persistently maintain 
-predefined target patterns starting from simple initial conditions (often a single live cell or small seed).
+Mordvintsev, Randazzo, Niklasson, and Levin~\cite{Mordvintsev2020} introduced the Growing Neural 
+Cellular Automata paradigm that serves as the methodological foundation for this work. They replaced 
+the discrete lookup-table rules of classical CA with a small shared neural network trained end-to-end 
+by gradient descent. The model preserves strict spatial locality while learning to grow and maintain 
+target patterns from simple initial conditions - typically a single live cell.
 
-Unlike earlier continuous or parameterised CA systems, which were often explored through manual parameter tuning or dynamical systems analysis, neural 
-cellular automata emphasise supervised optimisation of update dynamics. Instead of searching for interesting rule sets, the transition function itself is 
-trained to produce a predefined target pattern. This shift—from exploratory rule discovery to differentiable, task-driven optimisation—forms the methodological 
-basis for the three-dimensional extension developed in this thesis.
+Unlike earlier continuous CA such as Lenia~\cite{Chan2019}, which rely on manual parameter exploration 
+to discover interesting behaviours, neural CA use supervised optimisation. The transition function is 
+trained to produce a specific target pattern. This shift from rule discovery to task-driven optimisation 
+defines the approach extended to three dimensions in this work.
 
-While the core principles of neural cellular automata were introduced in Chapter~\ref{chap:theoretical-foundations}, the focus here is on the 
-concrete design and empirical properties of the 2020 implementation. In particular, the architectural structure, stochastic update 
-mechanism, and training procedure are analysed, as they define the core design principles underlying the three-dimensional extension developed in this thesis.
+Chapter~\ref{chap:theoretical-foundations} covered the general NCA principles. The focus here is on the 
+concrete design and empirical properties of the 2020 implementation: its architecture, stabilisation 
+mechanisms, training procedure, and experimental results.
 
 \subsection{State Representation}
 
-Each cell in the original 2D model maintains a real-valued state vector of 16 channels. Four channels encode visible RGBA colour 
-values compared directly against a target image. The remaining twelve channels serve as hidden internal memory.
+Each cell in the 2D model holds a 16-channel real-valued state vector. Four channels encode RGBA colour 
+values compared against a target image. The remaining twelve channels serve as hidden memory.
 
-The inclusion of hidden channels enables each cell to store and propagate information across time steps, effectively functioning as a distributed 
-memory system embedded in the spatial lattice. Because updates are strictly local, long-range coordination must emerge from iterative short-range 
-interactions. The hidden channels provide the representational capacity necessary for this coordination.
+The hidden channels function as a distributed memory system embedded in the lattice. Because updates are 
+strictly local, long-range coordination must emerge through repeated short-range interactions. A cell 
+cannot observe the state of a distant cell directly, it can only receive information that has been 
+relayed through intermediate cells over multiple steps. The hidden channels provide the representational 
+capacity for this relay process.
 
-This architectural decision is central to the stability and regenerative behaviour observed in later experiments and directly informs the channel 
-configurations adopted in subsequent work.
+This design is central to the stability and regenerative behaviour observed in later experiments. 
+Reducing the number of hidden channels degrades pattern quality and stability, while increasing it 
+beyond a certain point yields diminishing returns~\cite{Mordvintsev2020}. The balance between having 
+enough memory for coordination and keeping the state compact enough for efficient training directly 
+informs the channel configurations used in subsequent 3D extensions.
 
 \subsection{Perception Mechanism}
 
-Perception in the 2D neural CA is implemented through a fixed set of non-learnable convolutional filters applied to the full multi-channel grid. 
-The standard configuration includes:
+Perception uses a fixed set of non-learnable convolutional filters applied to the full multi-channel grid:
 
 \begin{itemize}
-    \item An identity filter,
-    \item Sobel filters approximating spatial derivatives in the {x} and {y} directions
-    \item A Laplacian filter capturing local curvature-like information.
+    \item An identity filter, returning each cell's own state,
+    \item Sobel filters approximating spatial derivatives in the $x$ and $y$ directions,
+    \item A Laplacian filter capturing local curvature.
 \end{itemize}
 
-Applied across all 16 channels, these filters produce a 48-dimensional perception vector at each spatial location. A small multilayer 
-perceptron operating independently at each cell transforms this perception vector into a state increment.
+Applied across all 16 channels, these three filter types produce a $3 \times 16 = 48$-dimensional 
+perception vector at each spatial location. The Sobel filters detect directional gradients in the 
+neighbourhood, for example where a pattern transitions from occupied to empty, while the Laplacian 
+identifies edges and boundaries by measuring how much a cell's state differs from its neighbours' average.
 
-The use of fixed perception filters serves two purposes. First, it enforces locality and translation invariance. Second, it stabilises 
-optimisation by constraining the form of spatial information available to the update rule. This design choice becomes particularly 
-relevant in volumetric extensions, where filter dimensionality and neighbourhood size increase substantially.
+A small MLP operating independently at each cell transforms this perception vector into a state increment. 
+The perception step does not introduce any learnable parameters; all learning occurs in the MLP.
+
+Fixed perception filters are used to ensure locality and translation invariance by design, while also stabilising 
+optimisation by limiting the spatial information available to the update rule. This choice becomes particularly 
+important in volumetric extensions, where the neighbourhood expands from 9 to 27 cells and the perception 
+vector grows correspondingly in dimensionality.
 
 \subsection{Update Rule and Parameter Sharing}
 
-The update rule is implemented as a lightweight neural network shared across all cells. The output is a state 
+The update rule is a lightweight neural network shared across all cells. It produces a state 
 increment added residually to the current state:
-
 \[
 \mathbf{s}_{t+1} = \mathbf{s}_t + \Delta \mathbf{s}.
 \]
 
-Residual updates contribute to dynamical stability by encouraging incremental modifications rather than abrupt state transitions. 
-Because the same parameters are applied at every spatial location, the learned rule defines a homogeneous 
-dynamical system over the entire grid.
+Residual updates encourage incremental modifications rather than abrupt transitions, contributing 
+to dynamical stability. Because the same parameters apply at every spatial location, the learned 
+rule defines a homogeneous dynamical system over the entire grid. No cell has a special role by 
+construction, this means that any differentiation in cell behaviour must emerge from the spatial 
+context encoded in the perception vector.
 
-The complete architecture contains approximately 8000 trainable parameters, a scale small enough to emphasise that the 
-complexity of the resulting structures arises from iterative local interaction rather than network size.
+The full architecture has approximately 8\,000 trainable parameters. This small scale is deliberate: 
+it shows that the complexity of the resulting structures comes from iterative local interaction, not 
+from model capacity. By contrast, a standard convolutional neural network for image generation may 
+have millions of parameters. The NCA achieves comparable visual complexity through temporal depth 
+(running many update steps) rather than through network width.
 
 \subsubsection{Stabilisation Mechanisms}
 
-Two mechanisms play a critical role in the robustness of the learned dynamics.
+Two mechanisms are critical for robust long-term dynamics:
 
 \begin{itemize}
-    \item \textbf{Alive gating} conditions state updates on whether a designated alpha channel exceeds a threshold. 
-    This introduces a soft analogue of classical alive/dead states and prevents inactive regions from destabilising active structures.
-    \item \textbf{Stochastic update masking} applies updates to a randomly selected subset of cells at each time step. This prevents 
-    rigid synchronisation artefacts and encourages robustness to asynchronous perturbations.
+    \item \textbf{Alive gating} conditions state updates on whether the designated alpha channel 
+    exceeds a threshold in the local neighbourhood. This creates a soft alive/dead boundary and 
+    prevents inactive regions from destabilising active structures. Without alive gating, empty 
+    regions can spontaneously develop non-zero states due to numerical noise, leading to spurious 
+    growth outside the intended pattern.
+    \item \textbf{Stochastic update masking} applies updates to a random subset of cells at each 
+    step. At each time step, each cell independently decides (with some probability, e.g., 0.5) 
+    whether to apply its computed update or skip it. This breaks synchronisation artefacts - patterns 
+    that form only because all cells update in lockstep - and produces dynamics that are robust to 
+    asynchronous perturbations.
 \end{itemize}
 
-These mechanisms collectively enhance long-term stability and regenerative capacity, properties that become increasingly significant when 
-extending the model to larger or higher-dimensional grids.
-
+Both mechanisms improve long-term stability and regenerative capacity. Horvath and Levin~\cite{Horvath2021} 
+later demonstrated that stochastic masking also encourages the emergence of distinct cell types within the 
+same NCA, as cells must develop local strategies that work regardless of which neighbours updated in the 
+current step.
 
 \subsection{Training Regimes}
 
-Mordvintsev et al.~\cite{Mordvintsev2020} introduced three principal training regimes: growing, persistent, and regenerating. Each of these 
-regimes was designed to shape different aspects of the emergent dynamics. These regimes serve as the direct methodological foundation for the 
-training strategies explored in the three-dimensional extension developed in this thesis. Rather than relying solely on exploratory parameter 
-search as in earlier continuous CA systems, neural cellular automata exploit gradient-based optimisation to discover update rules 
-tailored to specific behavioural objectives, with the choice of regime determining the balance between initial pattern formation, 
-long-term stability, and robustness to perturbation.
+Mordvintsev et al.~\cite{Mordvintsev2020} introduced three training regimes: growing, persistent, 
+and regenerating. Each regime targets a different aspect of the learned dynamics. The choice of regime 
+determines the balance between initial pattern formation, long-term stability, and robustness to damage. 
+These regimes define the training methodology adopted and extended in this work.
 
 \subsubsection{Growing Regime}
 
-In the growing regime, the model is trained to produce a target image from a single active seed. The loss is computed after a fixed number 
-of update steps. The model learns to expand outward and approximate the target pattern.
+The model is trained to produce a target image from a single active seed. Loss is computed after 
+a fixed number of update steps $T$, and the model learns to expand outward and approximate the 
+target pattern within that horizon.
 
-Once the target is reached, no additional constraint is imposed. As a result, long-term stability is not guaranteed. Patterns may drift, 
-decay, or diverge if simulation continues beyond the training horizon.
+No constraint is imposed beyond step $T$. Patterns may drift, decay, or diverge if simulation 
+continues past the trained step count. In practice, growing-only models commonly exhibit instability 
+within 100-200 steps beyond their training horizon~\cite{Mordvintsev2020}.
 
 \subsubsection{Persistent Regime}
 
-The persistent regime extends training beyond initial convergence. The loss is evaluated at multiple time steps 
-after the target is reached, encouraging the system to maintain the pattern over extended simulations.
+The persistent regime evaluates loss at multiple time steps beyond initial convergence. Rather than 
+stopping at step $T$, training continues to evaluate the model at steps $T$, $T + \delta$, $T + 2\delta$, 
+and so on, penalising any drift away from the target.
 
-This regime induces greater dynamical stability. Interestingly, persistent models exhibit limited regenerative behaviour even 
-without explicit damage training, suggesting that stability mechanisms learned for persistence partially generalise to perturbation recovery.
+This produces more stable dynamics. Mordvintsev et al. observed that persistent models also exhibit 
+limited regenerative behaviour even without explicit damage training, suggesting that the stability 
+mechanisms learned for persistence partially generalise to perturbation recovery.
+
+Randazzo et al.~\cite{Randazzo2021} later extended this idea by training NCA with persistent memory, 
+showing that models trained for stability over very long horizons develop increasingly robust internal 
+representations in their hidden channels.
 
 \subsubsection{Regenerating Regime}
 
-In the regenerating regime, random damage is introduced during training by zeroing out contiguous regions of the grid. The model must 
-reconstruct the target pattern from the damaged configuration.
+During training, random damage is applied by zeroing out contiguous rectangular regions of the grid. 
+The model must reconstruct the target from the damaged configuration.
 
-This explicit training objective leads to robust regenerative dynamics. Regenerating models can recover from substantial 
-perturbations and maintain structural integrity over long simulation horizons.
+This explicit objective produces the most robust dynamics. Regenerating models recover from substantial 
+perturbations and maintain structural integrity over long simulation horizons. The regenerative capacity 
+is qualitatively reminiscent of biological organisms that can regrow damaged tissue from partial 
+structure~\cite{Mordvintsev2020}.
 
-\subsection{Relevance to the Present Thesis}
+\subsection{Relevance to This Work}
 
-The present thesis adopts the architectural principles, training regimes, and optimisation strategy introduced by Mordvintsev 
-et al.~\cite{Mordvintsev2020} as its baseline. The central contribution lies in extending this framework to three-dimensional voxel 
-lattices and systematically examining how architectural adaptation and training strategy interact with volumetric spatial structure.
-
-In particular, the transition from 2D to 3D increases neighbourhood size, computational cost, and information propagation requirements. 
-Whether the stability and regenerative behaviours observed in planar domains persist under these conditions is not addressed in the original 
-work and forms a central motivation for the experiments conducted here.
+This work adopts the architecture, training regimes, and optimisation strategy of Mordvintsev 
+et al.~\cite{Mordvintsev2020} as its baseline and extends the framework to three-dimensional voxel 
+lattices. The transition from 2D to 3D increases neighbourhood size from 9 to 27 cells, increases 
+computational cost cubically, and extends the information propagation distance required for global 
+coordination. Whether the stability and regenerative behaviours observed in planar domains carry over 
+to volumetric grids is a central question motivating the experiments in this work.
 
 \section{Three-Dimensional Neural Cellular Automata in Interactive Environments}
 
-An important step toward practical three-dimensional Neural Cellular Automata systems was presented by Sudhakaran et al.~\cite{Sudhakaran2021}. 
-In contrast to purely synthetic voxel experiments, their work explored 3D NCA within an interactive environment, namely the sandbox game \emph{Minecraft}. 
-This setting enabled the authors to evaluate volumetric growth processes of structures and functional machines under real-time 
+Sudhakaran et al.~\cite{Sudhakaran2021} extended NCA to three dimensions within the sandbox game 
+\emph{Minecraft}, evaluating volumetric growth of structures and functional machines under real-time 
 constraints and user interaction.
 
-The proposed model extends the 2D growing NCA paradigm introduced by Mordvintsev et al. to a three-dimensional voxel grid. 
-Each voxel stores a state vector consisting of visible channels and multiple hidden channels. Perception is implemented using local 
-$3 \times 3 \times 3$ neighborhoods, including identity features and spatial gradients, which are processed by a small neural network applied 
-identically at every voxel. The system is trained via gradient-based optimization to grow a predefined 3D target structure from a single seeded cell.
+Their model extends the 2D growing NCA paradigm to a 3D voxel grid. Each voxel stores a state 
+vector with visible and hidden channels. Perception uses local $3 \times 3 \times 3$ neighbourhoods 
+with identity and gradient features, processed by a small neural network applied identically at every 
+voxel. The system is trained by gradient descent to grow a target structure from a single seed.
 
-A key contribution of the work lies in demonstrating that neural cellular automata can successfully generate coherent volumetric structures in a 
-dynamic, interactive 3D environment. The learned rules remain local and homogeneous across space, preserving the cellular automaton paradigm while 
-enabling complex global structure formation. The experiments show that the model is capable of converging toward target voxel configurations and can 
-recover from certain types of perturbations, illustrating partial regenerative behavior.
+The authors demonstrated that neural CA can produce coherent volumetric structures in a dynamic, 
+interactive environment. The learned rules stay local and homogeneous, preserving the CA paradigm while 
+enabling complex global structure formation. Their experiments showed convergence toward target voxel 
+configurations and partial regenerative behaviour under perturbation - when parts of a Minecraft 
+structure were manually destroyed, the NCA could partially rebuild the damaged region.
+
+A notable contribution of this work is its evaluation in a constrained real-time environment. The 
+Minecraft platform imposes fixed block types, a specific rendering pipeline, and interaction mechanisms 
+that differ from the unconstrained continuous-valued grids used in purely computational experiments. 
+Despite these constraints, the NCA paradigm produced recognisable structures, demonstrating that the 
+approach is not limited to idealised simulation environments.
 
 \subsection{Experimental Scope and Constraints}
 
-While the work establishes the feasibility of 3D NCA in an applied environment, the experimental scope is primarily focused on 
-proof-of-concept demonstrations. The evaluation concentrates on successful growth toward predefined voxel targets and qualitative assessment 
-of structural coherence. Quantitative metrics for long-term stability, regeneration under systematic damage, or comparative benchmarking 
-against alternative 3D generative approaches are limited.
+The evaluation focuses on proof-of-concept demonstrations: successful growth toward predefined targets 
+and qualitative assessment of structural coherence. Quantitative metrics for long-term stability, 
+systematic regeneration under controlled damage patterns, or comparison with other 3D generative 
+methods are limited.
 
-Furthermore, the \emph{Minecraft} environment naturally imposes constraints on voxel representation, rendering pipeline, and interaction mechanisms. 
-Although this provides a valuable real-time testbed, it also bounds the range of geometric complexity, material expressiveness, and experimental 
-instrumentation available to the researchers.
+The \emph{Minecraft} environment also constrains the experimental setup. Voxel states are mapped to 
+a discrete set of block types, the rendering pipeline is fixed, and interaction occurs through the 
+game's built-in tools. While this provides a real-time testbed accessible to a broad audience, it 
+limits geometric complexity, material expressiveness, and the precision of experimental measurements 
+available for systematic investigation.
 
-These aspects should not be interpreted as shortcomings, but rather as design decisions aligned with the goal of demonstrating interactive feasibility.
+\subsection{Relation to This Work}
 
-\subsection{Relation to the Present Thesis}
+Sudhakaran et al.~\cite{Sudhakaran2021} provide the methodological basis for extending neural CA 
+from planar grids to volumetric $3 \times 3 \times 3$ perception neighbourhoods. The preservation 
+of strict locality, parameter sharing, and gradient-based optimisation forms the conceptual foundation 
+adopted here.
 
-The work of Sudhakaran et al.~\cite{Sudhakaran2021} provides a direct methodological basis for extending
-neural cellular automata from planar image grids to volumetric $3 \times 3 \times 3$ perception
-neighbourhoods. In particular, the preservation of strict locality, parameter sharing across voxels,
-and gradient-based optimisation of update dynamics form the conceptual foundation adopted in this thesis.
+The framework developed in this work embeds the 3D neural CA within Blender instead of a game engine. 
+Blender provides programmatic access to volumetric grids, mesh representations, rendering pipelines, 
+and Python scripting through its built-in API. This gives precise control over lattice resolution, 
+boundary conditions, material properties, and intermediate-state inspection.
 
-The present work extends this line of research by embedding the three-dimensional neural cellular
-automaton within the Blender environment. Unlike game-based sandbox platforms, Blender provides
-direct programmatic access to volumetric grids, mesh representations, rendering pipelines, and
-Python-based scripting interfaces. This enables precise control over lattice resolution, boundary
-conditions, logging, and intermediate-state inspection.
-
-The transition to a general-purpose 3D framework expands the experimental
-flexibility of volumetric neural cellular automata. It facilitates systematic evaluation,
-integration with procedural modelling workflows, and reproducible experimentation
-under controlled conditions. The focus of this thesis is therefore not merely on demonstrating
-3D feasibility, but on establishing a research-oriented framework for controlled investigation
-of stability, persistence, and regeneration in volumetric neural cellular automata.
+The goal is not only to demonstrate 3D feasibility, but to provide a research-oriented framework 
+for controlled investigation of stability, persistence, and regeneration in volumetric neural CA. 
+Where the Minecraft work showed that 3D NCA can produce visually convincing results in a game 
+environment, this work aims to provide the tools for systematic experimentation and analysis.
 
 \section{Open-Source and Applied Three-Dimensional Neural Cellular Automata}
 
-In addition to the seminal work of Mordvintsev et al.~\cite{Mordvintsev2020} and its
-interactive extension by Sudhakaran et al.~\cite{Sudhakaran2021}, several open-source
-and applied research projects have explored three-dimensional or task-specific
-neural cellular automata variants. This section reviews selected implementations
-that are methodologically relevant to the present thesis.
-
-The focus is placed on architectural design, training objectives, volumetric
-representation strategies, and evaluation methodology.
+Beyond the seminal work of Mordvintsev et al.~\cite{Mordvintsev2020} and the interactive extension 
+by Sudhakaran et al.~\cite{Sudhakaran2021}, several open-source projects have explored 
+three-dimensional neural CA. This section reviews implementations whose design decisions are 
+directly relevant to the framework developed in this work.
 
 \subsection{Standard 3D Reconstruction Baseline}
 
-A prominent baseline for volumetric reconstruction is provided by the repository
-of Aadityaza~\cite{Jha2024}, which implements a direct extension of the 
-Growing NCA paradigm into three-dimensional Euclidean space. This implementation 
-utilizes a Jupyter Notebook environment and PyTorch to reconstruct voxel-based 
-shapes from a single initial seed. 
+The repository of Aadityaza~\cite{Aadityaza2024} implements a direct extension of the Growing NCA 
+paradigm to three-dimensional space. It uses a Jupyter Notebook environment and PyTorch to 
+reconstruct voxel shapes from a single seed.
 
-Methodologically, this project is relevant as it provides a clean verification 
-of 3D perception operators, specifically the expansion of Sobel-type filters into 
-tri-axial gradient kernels ($x, y, z$). For the present thesis, this codebase 
-served as an initial structural overview, validating that the 1D-convolution 
-approach used in 2D NCA for processing cell states can be effectively applied 
-to flattened volumetric tensors without losing the underlying spatial locality.
+This project provides a clean verification of 3D perception operators, specifically the expansion 
+of Sobel-type filters into tri-axial gradient kernels for the $x$, $y$, and $z$ axes. The 
+implementation confirms that the convolution-based perception approach used in 2D NCA applies 
+directly to volumetric tensors without losing spatial locality. For this work, the project served 
+as an early reference point for validating the feasibility of the 3D extension.
+
+The implementation is focused on single-target reconstruction and does not include a training server, 
+interactive visualisation, or modular architecture for experimenting with different configurations. 
+These are gaps that the framework developed in this work addresses.
 
 \subsection{Voxel-Based Morphogenetic Experiments}
 
-Rossi and collaborators~\cite{Rossi2021} explored voxel-based neural cellular
-automata for three-dimensional morphogenesis. Their implementation extends
-the two-dimensional growing NCA paradigm to volumetric grids using
+Rossi and collaborators~\cite{Rossi2021} explored voxel-based neural CA for three-dimensional 
+morphogenesis. Their implementation extends the 2D growing NCA to volumetric grids with 
 $3 \times 3 \times 3$ perception filters and hidden channel representations.
 
-The system is trained to approximate predefined 3D voxel targets from
-simple initial seeds. Architectural components closely follow the original
-2D formulation: fixed perception filters, residual state updates,
-shared parameters, and gradient-based optimisation.
+The system trains to approximate 3D voxel targets from simple seeds. Its architecture follows 
+the 2D formulation closely: fixed perception filters, residual updates, shared parameters, and 
+gradient-based optimisation. The experiments confirm that volumetric growth works under strict 
+locality constraints. However, the evaluation is limited to demonstrating successful growth toward 
+targets. Systematic analysis of long-term persistence, regeneration capacity, or scaling behaviour 
+under increasing resolution is not provided.
 
-The experiments demonstrate that volumetric growth is achievable under
-strict locality constraints. However, systematic evaluation of
-long-term persistence, quantitative regeneration capacity,
-or scaling behaviour under increasing lattice resolution
-remains limited.
-
-These works provide proof-of-concept validation for 3D morphogenetic
-extension but leave open questions regarding stability and
-robustness in larger volumetric domains.
+Both open-source projects provide proof-of-concept validation for 3D morphogenetic NCA but leave 
+open questions about stability and robustness in larger volumetric domains. They also lack the 
+integration with a 3D modelling environment that would allow researchers to interactively visualise 
+and manipulate the NCA during training.
 
 \section{Chapter Conclusion}
 
-This chapter presented the research works that form the direct
-methodological foundation of the present thesis. The original
-formulation of Growing Neural Cellular Automata established the
-architectural principles of local perception, shared neural update
-rules, residual dynamics, and gradient-based optimisation.
-Subsequent three-dimensional extensions demonstrated that these
-principles can be transferred to volumetric voxel grids and
-interactive environments.
+The works reviewed in this chapter established the architectural principles such as local perception, 
+shared neural update rules, residual dynamics, and gradient-based optimisation, that form the 
+methodological basis for this work. The original 2D Growing NCA demonstrated that a small neural 
+network with fewer than 10\,000 parameters can learn to grow, maintain, and regenerate complex 
+patterns through purely local interactions. Subsequent three-dimensional extensions confirmed that 
+these principles transfer to volumetric grids and interactive environments, though systematic 
+evaluation in 3D remains limited.
 
-Together, these contributions provide the conceptual and technical
-basis for the development of a three-dimensional neural cellular
-automaton framework. They motivate the integration of volumetric
-perception operators, shared update networks, and structured
-training regimes within a controlled 3D setting.
-
-The framework developed in this thesis is designed to be
-task-agnostic, modular, and extensible. Rather than being tailored
-to a single reconstruction or morphogenesis objective, it provides a
-general experimental environment for students or researchers in which different training
-strategies, architectural configurations, and evaluation procedures
-can be systematically implemented and compared.
-
-Building on the foundations outlined in this chapter, the following
-chapter introduces the architecture and implementation of the
-interactive three-dimensional framework developed in this work.
+The framework developed in this work builds on these foundations. It integrates volumetric 
+perception, shared update networks, and structured training regimes within a controlled 3D 
+setting. Unlike prior implementations, it is designed to be modular and extensible, providing a 
+general experimental environment where different architectures, training strategies, and evaluation 
+procedures can be compared systematically. The integration with Blender provides interactive 
+visualisation and mesh-based target specification, addressing the tooling limitations identified 
+in existing open-source 3D NCA projects.
 
 \chapter{Architectural Design}
 
@@ -552,10 +678,10 @@ visualization and interaction capabilities. This approach preserves the independ
 allowing it to be integrated into different workflows and environments.
 
 \section{System Overview}
+TOOD
 
 \section{Core Components of the Framework}
-
-
+TODO
 
 \chapter{Implementation}
 TODO
