@@ -391,13 +391,33 @@ class NCA_OT_SendSchedule(bpy.types.Operator):
 
     def execute(self, context):
         sched = context.scene.nca_schedule_props
+        cell_props = context.scene.nca_cell_props
+        grid_props = context.scene.nca_grid_props
+
         events = []
         for ev in sched.events:
-            events.append({
+            entry = {
                 "epoch": ev.epoch,
                 "event_type": ev.event_type,
                 "value": ev.value,
-            })
+            }
+
+            if ev.event_type == 'TARGET_CHANGE':
+                if ev.target_object is None:
+                    self.report({'ERROR'}, "A TARGET_CHANGE event has no mesh assigned")
+                    return {'CANCELLED'}
+                grid_size = tuple(int(x) for x in grid_props.grid_size)
+                grid_offset = int(grid_props.grid_offset)
+                target_array, _, _ = mesh_to_voxel_array(
+                    ev.target_object, grid_size,
+                    cell_props.visible_channels, offset=grid_offset,
+                )
+                from .protocol import tensor_to_b64
+                entry["target"]       = tensor_to_b64(target_array)
+                entry["target_shape"] = list(target_array.shape)
+
+            events.append(entry)
+
         try:
             _client.send_schedule(events)
             self.report({'INFO'}, f"Sent schedule with {len(events)} event(s)")

@@ -153,6 +153,7 @@ SCHEDULE_EVENT_TYPES = [
     ('ALPHA_WEIGHT',    "Alpha Weight",    "Change the alpha/occupancy loss weight"),
     ('COLOR_WEIGHT',    "Color Weight",    "Change the color loss weight"),
     ('OVERFLOW_WEIGHT', "Overflow Weight", "Change the overflow loss weight"),
+    ('TARGET_CHANGE',   "Target Change",   "Swap the training target to a different mesh"),
 ]
 
 class NCA_PG_ScheduleEvent(bpy.types.PropertyGroup):
@@ -174,6 +175,12 @@ class NCA_PG_ScheduleEvent(bpy.types.PropertyGroup):
         description="New value for the parameter",
         default=0,
         precision=6,
+    ) # type: ignore
+    target_object: bpy.props.PointerProperty(
+        name="Target Mesh",
+        description="Mesh to voxelize as the new training target",
+        type=bpy.types.Object,
+        poll=_is_source_mesh_candidate,
     ) # type: ignore
 
 class NCA_PG_ScheduleProperties(bpy.types.PropertyGroup):

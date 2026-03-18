@@ -191,7 +191,10 @@ class NCA_UL_ScheduleEventList(bpy.types.UIList):
             else:
                 row.prop(item, "epoch", text="", emboss=False)
             row.prop(item, "event_type", text="", emboss=False)
-            row.prop(item, "value", text="", emboss=False)
+            if item.event_type == 'TARGET_CHANGE':
+                row.prop(item, "target_object", text="", emboss=False)
+            else:
+                row.prop(item, "value", text="", emboss=False)
         elif self.layout_type == 'GRID':
             layout.alignment = 'CENTER'
             layout.label(text="", icon='EVENT_S')
@@ -226,7 +229,10 @@ class NCA_PT_SchedulePanel(NCA_PT_BasePanel):
             box = layout.box()
             box.prop(ev, "epoch")
             box.prop(ev, "event_type")
-            box.prop(ev, "value")
+            if ev.event_type == 'TARGET_CHANGE':
+                box.prop(ev, "target_object")
+            else:
+                box.prop(ev, "value")
 
         row = layout.row()
         row.enabled = is_training_active()

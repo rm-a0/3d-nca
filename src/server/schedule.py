@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, Optional
+import numpy as np
 
 if TYPE_CHECKING:
     from .trainer import NCATrainer
@@ -17,6 +18,7 @@ class EventType(str, Enum):
     ALPHA_WEIGHT    = "ALPHA_WEIGHT"
     COLOR_WEIGHT    = "COLOR_WEIGHT"
     OVERFLOW_WEIGHT = "OVERFLOW_WEIGHT"
+    TARGET_CHANGE   = "TARGET_CHANGE"
 
 
 @dataclass
@@ -25,20 +27,31 @@ class Event:
     epoch: int
     event_type: EventType
     value: float
+    target: Optional[np.ndarray] = field(default=None, repr=False)
 
     def to_dict(self) -> dict:
-        return {
+        from .protocol import tensor_to_b64
+        d = {
             "epoch": self.epoch,
             "event_type": self.event_type.value,
             "value": self.value,
         }
+        if self.event_type == EventType.TARGET_CHANGE and self.target is not None:
+            d["target"] = tensor_to_b64(self.target)
+            d["target_shape"] = list(self.target.shape)
+        return d
 
     @classmethod
     def from_dict(cls, data: dict) -> "Event":
+        from .protocol import b64_to_tensor
+        target = None
+        if data.get("event_type") == EventType.TARGET_CHANGE and "target" in data:
+            target = b64_to_tensor(data["target"], data["target_shape"])
         return cls(
             epoch=int(data["epoch"]),
             event_type=EventType(data["event_type"]),
             value=float(data["value"]),
+            target=target,
         )
 
 class Schedule:
@@ -104,6 +117,12 @@ def _apply_event(event: Event, trainer: "NCATrainer") -> None:
     elif t == EventType.OVERFLOW_WEIGHT:
         trainer._overflow_weight = v
         print(f"[Schedule] Epoch {event.epoch}: overflow_weight -> {v}")
+
+    elif t == EventType.TARGET_CHANGE:
+        import torch
+        target_chw = np.transpose(event.target, (3, 0, 1, 2)).astype(np.float32)
+        trainer.target = torch.from_numpy(target_chw).unsqueeze(0).to(trainer._device)
+        print(f"[Schedule] Epoch {event.epoch}: target_change")
 
     else:
         print(f"[Schedule] Unknown event type: {t}")
