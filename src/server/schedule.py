@@ -121,7 +121,8 @@ def _apply_event(event: Event, trainer: "NCATrainer") -> None:
     elif t == EventType.TARGET_CHANGE:
         import torch
         target_chw = np.transpose(event.target, (3, 0, 1, 2)).astype(np.float32)
-        trainer.target = torch.from_numpy(target_chw).unsqueeze(0).to(trainer._device)
+        t_tensor = torch.from_numpy(target_chw).unsqueeze(0)
+        trainer.set_target(t_tensor)
         print(f"[Schedule] Epoch {event.epoch}: target_change")
 
     else:

@@ -9,7 +9,7 @@ from .protocol import (
 )
 
 class NCAServer:
-    def __init__(self, host='127.0.0.1', port=5555):
+    def __init__(self, host='0.0.0.0', port=5555):
         self.trainer = NCATrainer()
         self.host = host 
         self.port = port
