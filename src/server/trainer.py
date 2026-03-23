@@ -29,7 +29,7 @@ DEFAULT_COLOR_WEIGHT    = 1.0   # color loss only where target is alive
 DEFAULT_OVERFLOW_WEIGHT = 2.0   # penalise alive cells outside target
 
 class NCATrainer:
-    def __init__(self, run_id: str = "002", checkpoint_interval: int = 500):
+    def __init__(self, run_id: str = "000", checkpoint_interval: int = 500):
         self.model = None
         self.optimizer = None
         self.target = None
