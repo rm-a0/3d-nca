@@ -29,7 +29,7 @@ DEFAULT_COLOR_WEIGHT    = 1.0   # color loss only where target is alive
 DEFAULT_OVERFLOW_WEIGHT = 2.0   # penalise alive cells outside target
 
 class NCATrainer:
-    def __init__(self, run_id: str = "001", checkpoint_interval: int = 500):
+    def __init__(self, run_id: str = "002", checkpoint_interval: int = 500):
         self.model = None
         self.optimizer = None
         self.target = None
@@ -275,7 +275,7 @@ class NCATrainer:
         }
     
     def _send_state(self):
-        """Send full NCA state + training progress to the client."""
+        """Send visible NCA channels + training progress to the client."""
         if self._send_fn is None or self.state is None:
             return
         try:
@@ -284,6 +284,8 @@ class NCATrainer:
             else:
                 arr = self.state
             arr = arr.astype(np.float32)
+            vis = int(self._cell_cfg.visible_channels)
+            arr = arr[:, -vis:, ...] if arr.ndim == 5 else arr[-vis:, ...]
             self._send_fn(build_state_msg(arr, self.current_epoch, self.latest_loss))
         except Exception as e:
             self._stop_event.set()

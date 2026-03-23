@@ -44,6 +44,7 @@ outputs/
 *.log
 *.tmp
 *.bak
+runs/
 
 # Large binaries / caches
 *.cache/
