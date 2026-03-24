@@ -1,4 +1,8 @@
 from .core import (
+    # High-level wrapper (recommended)
+    NCAModel,
+    NCAConfig,
+    # Low-level components (for advanced use)
     Grid3D,
     GridConfig,
     CellState,
@@ -10,6 +14,10 @@ from .core import (
 )
 
 __all__ = [
+    # High-level wrapper
+    "NCAModel",
+    "NCAConfig",
+    # Low-level components
     "Grid3D",
     "GridConfig",
     "CellState",

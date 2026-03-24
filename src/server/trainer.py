@@ -29,7 +29,15 @@ DEFAULT_COLOR_WEIGHT    = 1.0   # color loss only where target is alive
 DEFAULT_OVERFLOW_WEIGHT = 2.0   # penalise alive cells outside target
 
 class NCATrainer:
-    def __init__(self, run_id: str = "000", checkpoint_interval: int = 500):
+    def __init__(self, run_id: str = "000", checkpoint_interval: int = 500, verbose: bool = True):
+        """
+        Initialize the NCA trainer.
+        
+        Args:
+            run_id: Unique identifier for this training run (for checkpoint/logging directory)
+            checkpoint_interval: Save model checkpoint every N epochs (0 to disable)
+            verbose: Enable console logging output (default: True)
+        """
         self.model = None
         self.optimizer = None
         self.target = None
@@ -38,6 +46,7 @@ class NCATrainer:
         self.current_epoch = 0
         self.total_epochs = 0
         self.latest_loss = 0.0
+        self.verbose = verbose
 
         # Mutable loss weights (can be changed by the schedule mid-training)
         self._alpha_weight: float    = DEFAULT_ALPHA_WEIGHT
@@ -108,24 +117,28 @@ class NCATrainer:
 
     def pause(self):
         self._pause_event.clear()
-        print("Training paused")
+        if self.verbose:
+            print("Training paused")
 
     def resume(self):
         self._pause_event.set()
-        print("Training resumed")
+        if self.verbose:
+            print("Training resumed")
 
     def update_schedule(self, events_data: List[dict]) -> None:
         """Replace the current schedule."""
         events = [Event.from_dict(d) for d in events_data]
         self._schedule.replace(events)
-        print(f"Schedule updated: {len(self._schedule.events)} pending event(s)")
+        if self.verbose:
+            print(f"Schedule updated: {len(self._schedule.events)} pending event(s)")
 
     def stop(self):
         self._stop_event.set()
         self._pause_event.set()
         if self._train_thread is not None:
             self._train_thread.join()
-        print("Training stopped")
+        if self.verbose:
+            print("Training stopped")
 
     @property
     def is_running(self):
@@ -144,7 +157,8 @@ class NCATrainer:
         self.logger.log_event(
             self.current_epoch, "TARGET_SWAP", {"shape": list(self.target.shape)}
         )
-        print(f"[Trainer] Target swapped at epoch {self.current_epoch}")
+        if self.verbose:
+            print(f"[Trainer] Target swapped at epoch {self.current_epoch}")
     
     def _training_loop(self):
         for epoch in range(1, self.total_epochs + 1):
@@ -167,10 +181,12 @@ class NCATrainer:
             )
             self._schedule.check_and_execute(epoch, self)
             self._send_state()
-            print(f"Epoch {epoch}/{self.total_epochs} - Loss: {step_result['loss_total']:.4f}")
+            if self.verbose:
+                print(f"Epoch {epoch}/{self.total_epochs} - Loss: {step_result['loss_total']:.4f}")
             time.sleep(0.1)  # throttle to avoid flooding the socket
 
-        print("Training completed")
+        if self.verbose:
+            print("Training completed")
 
     def _get_step_range(self) -> tuple[int, int]:
         """Return (min_steps, max_steps) for the current epoch via curriculum."""
@@ -289,4 +305,5 @@ class NCATrainer:
             self._send_fn(build_state_msg(arr, self.current_epoch, self.latest_loss))
         except Exception as e:
             self._stop_event.set()
-            print(f"Error sending state: {e}")
+            if self.verbose:
+                print(f"Error sending state: {e}")
