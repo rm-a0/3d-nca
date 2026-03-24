@@ -29,7 +29,7 @@ DEFAULT_COLOR_WEIGHT    = 1.0   # color loss only where target is alive
 DEFAULT_OVERFLOW_WEIGHT = 2.0   # penalise alive cells outside target
 
 class NCATrainer:
-    def __init__(self):
+    def __init__(self, run_id: str = "000", checkpoint_interval: int = 500):
         self.model = None
         self.optimizer = None
         self.target = None
@@ -52,6 +52,9 @@ class NCATrainer:
         self._stop_event = threading.Event()
         self._pause_event = threading.Event()
         self._pause_event.set()
+
+        from .logger import NCALogger
+        self.logger = NCALogger(run_id=run_id, checkpoint_interval=checkpoint_interval)
 
     def init(self, config: dict, target: np.ndarray, send_fn: SendFn):
         self._cell_cfg = CellConfig(**config["cell"])
@@ -91,6 +94,9 @@ class NCATrainer:
         self._batch_size = config["training"].get("batch_size", DEFAULT_BATCH_SIZE)
         self.latest_loss = 0.0
         self._send_fn = send_fn
+        self.logger._send_fn = send_fn
+        self.logger.log_meta(config)
+        self.lr_min = 1e-5  # store so reset_lr can reference it later if needed
 
         self._stop_event.clear()
         self._pause_event.set()
@@ -131,6 +137,14 @@ class NCATrainer:
     
     def get_current_state(self):
         return self.state
+
+    def set_target(self, target: torch.Tensor) -> None:
+        """Hot-swap the training target. Safe to call between epochs."""
+        self.target = target.to(self._device)
+        self.logger.log_event(
+            self.current_epoch, "TARGET_SWAP", {"shape": list(self.target.shape)}
+        )
+        print(f"[Trainer] Target swapped at epoch {self.current_epoch}")
     
     def _training_loop(self):
         for epoch in range(1, self.total_epochs + 1):
@@ -138,12 +152,22 @@ class NCATrainer:
             if self._stop_event.is_set():
                 break
 
-            loss = self._step()
+            step_result = self._step()
             self.current_epoch = epoch
-            self.latest_loss = loss
+            self.latest_loss = step_result["loss_total"]
+            is_final = (epoch == self.total_epochs)
+            self.logger.log_epoch(
+                epoch=epoch,
+                loss_alpha=step_result["loss_alpha"],
+                loss_color=step_result["loss_color"],
+                loss_overflow=step_result["loss_overflow"],
+                loss_total=step_result["loss_total"],
+                best_pool_state=step_result["best_np"],
+                is_final=is_final,
+            )
             self._schedule.check_and_execute(epoch, self)
             self._send_state()
-            print(f"Epoch {epoch}/{self.total_epochs} - Loss: {loss:.4f}")
+            print(f"Epoch {epoch}/{self.total_epochs} - Loss: {step_result['loss_total']:.4f}")
             time.sleep(0.1)  # throttle to avoid flooding the socket
 
         print("Training completed")
@@ -183,6 +207,7 @@ class NCATrainer:
                 for i in range(batch_size)
             ]
             worst = int(np.argmax(per_sample_loss))
+            best_idx = int(np.argmin(per_sample_loss))
             batch[worst:worst+1] = self.model.seed_center(1, device)
 
         self.optimizer.zero_grad()
@@ -232,13 +257,25 @@ class NCATrainer:
             for j, idx in enumerate(indices):
                 self._pool[idx] = state[j:j+1].detach()
 
+        best_np = (
+            state[best_idx]
+            .detach().cpu().numpy()
+            .transpose(1, 2, 3, 0)
+        )
+
         # Store the first sample for visualization
         self.state = state[0:1].detach()
 
-        return loss.item()
+        return {
+            "loss_total":    loss.item(),
+            "loss_alpha":    loss_alpha.item(),
+            "loss_color":    loss_color.item(),
+            "loss_overflow": loss_overflow.item(),
+            "best_np":       best_np,
+        }
     
     def _send_state(self):
-        """Send full NCA state + training progress to the client."""
+        """Send visible NCA channels + training progress to the client."""
         if self._send_fn is None or self.state is None:
             return
         try:
@@ -247,6 +284,8 @@ class NCATrainer:
             else:
                 arr = self.state
             arr = arr.astype(np.float32)
+            vis = int(self._cell_cfg.visible_channels)
+            arr = arr[:, -vis:, ...] if arr.ndim == 5 else arr[-vis:, ...]
             self._send_fn(build_state_msg(arr, self.current_epoch, self.latest_loss))
         except Exception as e:
             self._stop_event.set()

@@ -86,10 +86,10 @@ def parse_init_msg(msg: Dict[str, Any]) -> Tuple[dict, np.ndarray]:
 def build_state_msg(
     state: np.ndarray, epoch: int, loss: float = 0.0,
 ) -> Dict[str, Any]:
-    """Pack a state message with the current NCA state.
+    """Pack a state message with visible NCA channels.
 
     Args:
-        state: (B, C_total, D, H, W) or (C_total, D, H, W) float32.
+        state: (B, C_vis, D, H, W) or (C_vis, D, H, W) float32.
         epoch: current training epoch (1-based).
         loss:  latest training loss value.
     """
@@ -105,7 +105,7 @@ def parse_state_msg(msg: Dict[str, Any]) -> Tuple[np.ndarray, int, float]:
     """Unpack a state message.
 
     Returns:
-        state: numpy array with shape from the message (channels-first).
+        state: numpy array with shape from the message (channels-first, visible only).
         epoch: current training epoch.
         loss:  latest training loss.
     """
