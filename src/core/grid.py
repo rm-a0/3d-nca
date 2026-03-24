@@ -23,11 +23,12 @@ from .cell import CellState, CellConfig
 from .perception import Perception3D, PerceptionConfig
 from .update import UpdateConfig, UpdateRule
 
+
 @dataclass(frozen=True)
 class GridConfig:
     """Lattice dimensions."""
     size: Tuple[int, int, int] = (32, 32, 32)
-    padding_mode: str = "zeros"
+
 
 class Grid3D(torch.nn.Module):
     """
@@ -38,12 +39,12 @@ class Grid3D(torch.nn.Module):
     Damage robustness via alive-mask intersection (pre & post).
     """
     def __init__(
-        self, 
+        self,
         cell_cfg: CellConfig,
         perc_cfg: PerceptionConfig,
         upd_cfg: UpdateConfig,
-        grid_cfg: GridConfig, 
-    ): 
+        grid_cfg: GridConfig,
+    ):
         super().__init__()
         self.cfg = grid_cfg
         self.cell = CellState(cell_cfg)
@@ -56,9 +57,9 @@ class Grid3D(torch.nn.Module):
             self.cell.total_channels,
             *self.cfg.size,
             dtype=torch.float32,
-            device=device
+            device=device,
         )
-    
+
     def seed_center(self, batch_size: int, device: torch.device | str) -> Tensor:
         """
         Seed a single living cell at the lattice center.
@@ -73,7 +74,6 @@ class Grid3D(torch.nn.Module):
         state[:, -self.cell.cfg.visible_channels:, center[0]:center[0]+1,
                     center[1]:center[1]+1, center[2]:center[2]+1] = seed_vis
         return state
-
 
     def step(self, state: Tensor) -> Tensor:
         """
@@ -110,8 +110,6 @@ class Grid3D(torch.nn.Module):
         """
         Run `steps` iterations with clamping to [-1, 1] after each step.
 
-        Optimization using checkpointing suggested by Claude Opus 4.6:
-
         When `use_checkpointing` is True (default) each step is wrapped in
         `torch.utils.checkpoint.checkpoint` so that intermediate activations
         are recomputed during the backward pass instead of being stored.
@@ -120,9 +118,7 @@ class Grid3D(torch.nn.Module):
         """
         for _ in range(steps):
             if use_checkpointing and state.requires_grad:
-                state = checkpoint(
-                    self.step, state, use_reentrant=False
-                )
+                state = checkpoint(self.step, state, use_reentrant=False)
             else:
                 state = self.step(state)
             state = torch.clamp(state, -1.0, 1.0)
