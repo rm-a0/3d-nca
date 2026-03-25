@@ -88,5 +88,10 @@ class UpdateRule(nn.Module):
             fire = torch.rand_like(alive_mask.float()) < self.upd_cfg.fire_rate
             delta = delta * fire
 
+        if self.cell_cfg.task_channels > 0:
+            tc = self.cell_cfg.task_channels
+            vc = self.cell_cfg.visible_channels
+            delta[:, -(vc + tc):-vc, ...] = 0.0
+
         delta = torch.tanh(delta) * 0.1
         return delta

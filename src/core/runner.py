@@ -50,7 +50,7 @@ class NCARunner:
         self._pool: List[Tensor] = []
         self._lr_scheduler = None
 
-    def init(self, config: dict, target: np.ndarray) -> None:
+    def init(self, config: dict, target: np.ndarray | list[np.ndarray]) -> None:
         """Initialize runner with config and target.
         
         Args:
@@ -81,14 +81,25 @@ class NCARunner:
             eta_min=1e-5,
         )
 
-        target_chw = np.transpose(target, (3, 0, 1, 2)).astype(np.float32)  # (D,H,W,C) → (C,D,H,W)
-        self.target = torch.from_numpy(target_chw).unsqueeze(0).to(self._device)  # → (1,C,D,H,W)
+        self.targets = []
+        target_list = target if isinstance(target, list) else [target]
+        for t in target_list:
+            t_chw = np.transpose(t, (3, 0, 1, 2)).astype(np.float32)  # (D,H,W,C) -> (C,D,H,W)
+            self.targets.append(torch.from_numpy(t_chw).unsqueeze(0).to(self._device))  # (1,C,D,H,W)
+
+        self.target = self.targets[0] # Fallback to single target
+
+        num_tasks = len(self.targets)
         # Note: Target now has shape (B=1, C, D, H, W) for internal NCA computations
 
-        self._pool = [
-            self.model.seed_center(1, self._device)  # Returns (1, C, D, H, W) — batch-first internal format
-            for _ in range(POOL_SIZE)
-        ]
+        self_pool = []
+        self._pool_task_ids = []
+        for _ in range(POOL_SIZE):
+            tid = random.randint(0, max(0, num_tasks - 1))
+            t_tensor = torch.tensor([tid], device=self._device) if self._cell_cfg.task_channels > 0 else None
+            self._pool.append(self.model.seed_center(1, self._device, t_tensor))
+            self._pool_task_ids.append(tid)
+
         self.state = self._pool[0]
 
         self.current_epoch = 0
@@ -144,8 +155,12 @@ class NCARunner:
 
         indices = random.sample(range(len(self._pool)), batch_size)
         batch   = torch.cat([self._pool[i] for i in indices], dim=0)
+        batch_task_ids = [self._pool_task_ids[i] for i in indices]
 
         vis = cell_cfg.visible_channels
+
+        tgt_batch = torch.cat([self.targets[tid] for tid in batch_task_ids], dim=0)
+
         with torch.no_grad():
             per_sample_loss = [
                 F.mse_loss(batch[i:i+1, -vis:], self.target[:, -vis:]).item()
@@ -153,7 +168,11 @@ class NCARunner:
             ]
             worst    = int(np.argmax(per_sample_loss))
             best_idx = int(np.argmin(per_sample_loss))
-            batch[worst:worst+1] = self.model.seed_center(1, device)
+
+            new_tid = random.randint(0, len(self.targets) - 1)
+            t_tensor = torch.tensor([new_tid], device=device) if cell_cfg.task_channels > 0 else None
+            batch[worst:worst+1] = self.model.seed_center(1, device, t_tensor)
+            batch_task_ids[worst] = new_tid
 
         self.optimizer.zero_grad()
 
@@ -161,7 +180,7 @@ class NCARunner:
         state = self.model(state, steps=n_steps)
 
         pred_vis  = state[:, -vis:]
-        tgt_vis   = self.target[:, -vis:].expand_as(pred_vis)
+        tgt_vis   = tgt_batch[:, -vis:]
 
         pred_alpha = pred_vis[:, -1:]
         tgt_alpha  = tgt_vis[:, -1:]
@@ -195,6 +214,7 @@ class NCARunner:
         with torch.no_grad():
             for j, idx in enumerate(indices):
                 self._pool[idx] = state[j:j+1].detach()
+                self._pool_task_ids[idx] = batch_task_ids[j]
 
         best_np = (
             state[best_idx]

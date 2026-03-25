@@ -59,6 +59,7 @@ class NCAConfig:
             hidden_channels=self.hidden_channels,
             visible_channels=self.visible_channels,
             alive_threshold=self.alive_threshold,
+            task_channels=self.task_channels,
         )
         perc_cfg = PerceptionConfig(
             kernel_radius=self.perception_kernel_radius,

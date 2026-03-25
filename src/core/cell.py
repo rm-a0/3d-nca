@@ -24,11 +24,12 @@ class CellConfig:
     hidden_channels: int = 16
     visible_channels: int = 4
     alive_threshold: float = 0.1
+    task_channels: int = 0
 
     @property
     def total_channels(self) -> int:
         """Total number of channels (hidden + visible)."""
-        return self.hidden_channels + self.visible_channels
+        return self.hidden_channels + self.visible_channels + self.task_channels
 
 class CellState(torch.nn.Module):
     """
