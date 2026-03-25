@@ -56,15 +56,18 @@ class CellState(torch.nn.Module):
         """
         Compute alive mask for current state.
 
-        1. Extract alpha
-        2. 3x3x3 max-pool (max(alpha of cell + 26 neighbors))
-        3. Compare to alive_threshold
+        1. Extract alpha channel from state [B,1,X,Y,Z]
+        2. Apply 3x3x3 max-pool (max(alpha of cell + 26 neighbors))
+        3. Compare to alive_threshold to determine which cells may update
 
         Returns boolean mask [B,1,X,Y,Z].
         True where cell or any neighbor has alpha > threshold.
+        
+        Uses in-place update (.copy_) to preserve PyTorch buffer tracking
+        across device moves (e.g., .to('cuda')).
         """
         alpha = state[:, -1:, ...] # [B,1,X,Y,Z]
         pooled = F.max_pool3d(alpha, kernel_size=3, stride=1, padding=1)
         alive = pooled > self.cfg.alive_threshold
-        self.alive_mask = alive
+        self.alive_mask.copy_(alive)  # In-place update preserves buffer registration
         return alive

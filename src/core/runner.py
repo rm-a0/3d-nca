@@ -51,6 +51,14 @@ class NCARunner:
         self._lr_scheduler = None
 
     def init(self, config: dict, target: np.ndarray) -> None:
+        """Initialize runner with config and target.
+        
+        Args:
+            config: Configuration dict with keys for cell, perception, update, grid, training
+            target: Target voxel grid with shape (D, H, W, C) — channels-last external format.
+                   Internally converted to (B, C, D, H, W) batch-first for all computations.
+                   Transpose: (D,H,W,C) → (C,D,H,W) → unsqueeze → (1,C,D,H,W)
+        """
         self._cell_cfg = CellConfig(**config["cell"])
         perc_cfg = PerceptionConfig(**config["perception"])
         upd_cfg  = UpdateConfig(**config["update"])
@@ -73,11 +81,12 @@ class NCARunner:
             eta_min=1e-5,
         )
 
-        target_chw = np.transpose(target, (3, 0, 1, 2)).astype(np.float32)
-        self.target = torch.from_numpy(target_chw).unsqueeze(0).to(self._device)
+        target_chw = np.transpose(target, (3, 0, 1, 2)).astype(np.float32)  # (D,H,W,C) → (C,D,H,W)
+        self.target = torch.from_numpy(target_chw).unsqueeze(0).to(self._device)  # → (1,C,D,H,W)
+        # Note: Target now has shape (B=1, C, D, H, W) for internal NCA computations
 
         self._pool = [
-            self.model.seed_center(1, self._device)
+            self.model.seed_center(1, self._device)  # Returns (1, C, D, H, W) — batch-first internal format
             for _ in range(POOL_SIZE)
         ]
         self.state = self._pool[0]
@@ -88,11 +97,28 @@ class NCARunner:
         self.latest_loss   = 0.0
 
     def set_target(self, target: Tensor) -> None:
+        """Update training target.
+        
+        Args:
+            target: Target tensor with shape (B, C, D, H, W) in internal NCA format.
+                   Should be on the same device as the model.
+        """
         self.target = target.to(self._device)
         if self.verbose:
             print(f"[Runner] Target swapped at epoch {self.current_epoch}")
 
     def train(self, schedule: Optional[Schedule] = None) -> Generator[Dict[str, Any], None, None]:
+        """Training loop generator.
+        
+        All internal states maintain shape (B, C, D, H, W) — batch-first format required by PyTorch.
+        
+        Args:
+            schedule: Optional Schedule object for training events (target changes, LR updates, etc.).
+                     Thread-safe: main thread updates don't block background training loop.
+        
+        Yields:
+            Dict[epoch, loss_alpha, loss_color, loss_overflow, loss_total, best_np]
+        """
         for epoch in range(1, self.total_epochs + 1):
             metrics = self._step()
             self.current_epoch = epoch

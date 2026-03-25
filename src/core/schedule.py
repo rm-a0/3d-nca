@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import threading
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, List, Optional
@@ -32,7 +33,11 @@ class EventType(str, Enum):
 
 @dataclass
 class Event:
-    """A single scheduled parameter change."""
+    """A single scheduled parameter change.
+    
+    For TARGET_CHANGE events, target is in external (D,H,W,C) format.
+    Converted to internal (B,C,D,H,W) format when applied to runner.
+    """
     epoch: int
     event_type: EventType
     value: float
@@ -63,39 +68,68 @@ class Event:
 
 
 class Schedule:
-    """Ordered collection of one-shot training events."""
+    """Ordered collection of one-shot training events.
+    
+    Thread-safe: Uses locking to protect event list from concurrent modifications.
+    Supports safe updates from main thread while training loop reads from background thread.
+    """
     def __init__(self) -> None:
         self.events: List[Event] = []
+        self._lock = threading.Lock()
 
     def add_event(self, event: Event) -> None:
-        self.events.append(event)
+        """Add a single event. Thread-safe."""
+        with self._lock:
+            self.events.append(event)
 
     def remove_event(self, index: int) -> None:
-        if 0 <= index < len(self.events):
-            self.events.pop(index)
+        """Remove event at index. Thread-safe."""
+        with self._lock:
+            if 0 <= index < len(self.events):
+                self.events.pop(index)
 
     def replace(self, events: List[Event]) -> None:
-        self.events = list(events)
+        """Replace all events atomically. Thread-safe.
+        
+        Used when updating schedule from server/UI (main thread).
+        """
+        with self._lock:
+            self.events = list(events)
 
     def clear(self) -> None:
-        self.events.clear()
+        """Clear all events. Thread-safe."""
+        with self._lock:
+            self.events.clear()
 
     def check_and_execute(self, epoch: int, runner: "NCARunner") -> None:
-        remaining: List[Event] = []
-        for ev in self.events:
-            if ev.epoch == epoch or ev.epoch == NOW:
-                _apply_event(ev, runner)
-            else:
-                remaining.append(ev)
-        self.events = remaining
+        """Check for events at this epoch and execute them.
+        
+        Args:
+            epoch: Current epoch number
+            runner: NCARunner instance to apply events to
+        
+        Thread-safe: acquires internal lock while reading/modifying event list.
+        """
+        with self._lock:
+            remaining: List[Event] = []
+            for ev in self.events:
+                if ev.epoch == epoch or ev.epoch == NOW:
+                    _apply_event(ev, runner)
+                else:
+                    remaining.append(ev)
+            self.events = remaining
 
     def to_dict_list(self) -> List[dict]:
-        return [ev.to_dict() for ev in self.events]
+        """Serialize events to list of dicts. Thread-safe."""
+        with self._lock:
+            return [ev.to_dict() for ev in self.events]
 
     @classmethod
     def from_dict_list(cls, data: List[dict]) -> "Schedule":
+        """Deserialize schedule from list of dicts."""
         sched = cls()
-        sched.events = [Event.from_dict(d) for d in data]
+        with sched._lock:
+            sched.events = [Event.from_dict(d) for d in data]
         return sched
 
 
@@ -125,9 +159,10 @@ def _apply_event(event: Event, runner: "NCARunner") -> None:
         print(f"[Schedule] Epoch {event.epoch}: overflow_weight -> {v}")
 
     elif t == EventType.TARGET_CHANGE:
+        # Convert from external (D,H,W,C) to internal (B,C,D,H,W) format
         import torch
-        target_chw = np.transpose(event.target, (3, 0, 1, 2)).astype(np.float32)
-        t_tensor = torch.from_numpy(target_chw).unsqueeze(0)
+        target_chw = np.transpose(event.target, (3, 0, 1, 2)).astype(np.float32)  # (D,H,W,C) → (C,D,H,W)
+        t_tensor = torch.from_numpy(target_chw).unsqueeze(0)  # → (1,C,D,H,W)
         runner.set_target(t_tensor)
         print(f"[Schedule] Epoch {event.epoch}: target_change")
 
