@@ -50,6 +50,7 @@ class UpdateRule(nn.Module):
     ):
         super().__init__()
         self.upd_cfg = upd_cfg
+        self.cell_cfg = cell_cfg
 
         in_channels = cell_cfg.total_channels * perc_cfg.channel_groups
         hid = upd_cfg.hidden_dim

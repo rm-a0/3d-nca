@@ -43,6 +43,7 @@ class NCAConfig:
     hidden_channels: int = 16
     visible_channels: int = 4
     alive_threshold: float = 0.1
+    task_channels: int = 0
 
     # Perception (fixed 3x3x3 filters)
     perception_kernel_radius: int = 1
