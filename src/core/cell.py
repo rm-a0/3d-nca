@@ -41,11 +41,7 @@ class CellState(torch.nn.Module):
     def __init__(self, cfg: CellConfig):
         super().__init__()
         self.cfg = cfg
-        self.register_buffer(
-            "alive_mask", 
-            torch.zeros(1, 1, 1, 1, dtype=torch.bool),
-            persistent=False
-        )
+        self.alive_mask: Tensor | None = None
 
     @property
     def total_channels(self) -> int:
@@ -64,11 +60,10 @@ class CellState(torch.nn.Module):
         Returns boolean mask [B,1,X,Y,Z].
         True where cell or any neighbor has alpha > threshold.
         
-        Uses in-place update (.copy_) to preserve PyTorch buffer tracking
-        across device moves (e.g., .to('cuda')).
+        Stores result in self.alive_mask for inspection/logging.
         """
         alpha = state[:, -1:, ...] # [B,1,X,Y,Z]
         pooled = F.max_pool3d(alpha, kernel_size=3, stride=1, padding=1)
         alive = pooled > self.cfg.alive_threshold
-        self.alive_mask.copy_(alive)  # In-place update preserves buffer registration
+        self.alive_mask = alive
         return alive
