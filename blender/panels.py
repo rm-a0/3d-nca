@@ -87,6 +87,9 @@ class NCA_PT_TargetPanel(NCA_PT_BasePanel):
             if target_props.source_object:
                 box.label(text=f"Source: {target_props.source_object.name}")
             box.label(text=f"Voxels: {target_props.voxel_count}")
+            row = box.row()
+            row.enabled = active
+            row.operator("nca.export_target", text="Export Target")
         else:
             box = layout.box()
             box.label(text="No target voxelized", icon='ERROR')

@@ -1,6 +1,7 @@
 import bpy
 import numpy as np
 import threading
+import os
 from typing import List, Tuple
 
 from .client import NCAClient
@@ -30,6 +31,50 @@ VISIBLE_CHANNELS_MAP = {
     'RGBA': 4,
     'ALPHA_MATERIAL_ID': 2,
 }
+
+
+class NCA_OT_ExportTarget(bpy.types.Operator):
+    bl_idname = "nca.export_target"
+    bl_label = "Export Target"
+    bl_description = "Save the voxelized target array to disk (.npz) for use in external training (e.g. Colab)"
+
+    filepath: bpy.props.StringProperty(subtype="FILE_PATH")  # type: ignore
+
+    @classmethod
+    def poll(cls, context):
+        target_props = context.scene.nca_target_props
+        return target_props.is_voxelized and _target_array is not None
+
+    def invoke(self, context, event):
+        target_props = context.scene.nca_target_props
+        name = "nca_target"
+        if target_props.source_object is not None:
+            name = target_props.source_object.name
+        safe = bpy.path.clean_name(name)
+        if not safe:
+            safe = "nca_target"
+        self.filepath = bpy.path.abspath(f"//{safe}.npz")
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    def execute(self, context):
+        if _target_array is None:
+            self.report({'ERROR'}, "No voxelized target to export")
+            return {'CANCELLED'}
+
+        path = bpy.path.abspath(self.filepath)
+        if not path.lower().endswith(".npz"):
+            path += ".npz"
+
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+
+        # Store as (D,H,W,C) float32 to match the rest of the pipeline.
+        arr = _target_array.astype(np.float32, copy=False)
+        config = setup_configs(context)
+        np.savez_compressed(path, target=arr, config=config)
+
+        self.report({'INFO'}, f"Exported target to {path}")
+        return {'FINISHED'}
 
 def is_training_active() -> bool:
     """Return True when a training session is connected (running or paused).
@@ -434,6 +479,7 @@ classes = (
     NCA_OT_ResumeTraining,
     NCA_OT_VoxelizeTarget,
     NCA_OT_ClearTargetVoxels,
+    NCA_OT_ExportTarget,
     NCA_OT_AddScheduleEvent,
     NCA_OT_RemoveScheduleEvent,
     NCA_OT_SendSchedule,
