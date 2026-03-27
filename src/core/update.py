@@ -50,6 +50,7 @@ class UpdateRule(nn.Module):
     ):
         super().__init__()
         self.upd_cfg = upd_cfg
+        self.cell_cfg = cell_cfg
 
         in_channels = cell_cfg.total_channels * perc_cfg.channel_groups
         hid = upd_cfg.hidden_dim
@@ -87,6 +88,11 @@ class UpdateRule(nn.Module):
         if self.upd_cfg.stochastic_update:
             fire = torch.rand_like(alive_mask.float()) < self.upd_cfg.fire_rate
             delta = delta * fire
+
+        if self.cell_cfg.task_channels > 0:
+            tc = self.cell_cfg.task_channels
+            vc = self.cell_cfg.visible_channels
+            delta[:, -(vc + tc):-vc, ...] = 0.0
 
         delta = torch.tanh(delta) * 0.1
         return delta

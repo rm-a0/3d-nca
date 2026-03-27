@@ -43,6 +43,7 @@ class NCAConfig:
     hidden_channels: int = 16
     visible_channels: int = 4
     alive_threshold: float = 0.1
+    task_channels: int = 0
 
     # Perception (fixed 3x3x3 filters)
     perception_kernel_radius: int = 1
@@ -59,6 +60,7 @@ class NCAConfig:
             hidden_channels=self.hidden_channels,
             visible_channels=self.visible_channels,
             alive_threshold=self.alive_threshold,
+            task_channels=self.task_channels,
         )
         perc_cfg = PerceptionConfig(
             kernel_radius=self.perception_kernel_radius,

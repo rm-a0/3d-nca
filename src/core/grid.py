@@ -60,7 +60,7 @@ class Grid3D(torch.nn.Module):
             device=device,
         )
 
-    def seed_center(self, batch_size: int, device: torch.device | str) -> Tensor:
+    def seed_center(self, batch_size: int, device: torch.device | str, task_ids: Tensor | None = None) -> Tensor:
         """
         Seed a single living cell at the lattice center.
 
@@ -73,6 +73,14 @@ class Grid3D(torch.nn.Module):
         seed_vis[:, -1:, ...] = 1.0
         state[:, -self.cell.cfg.visible_channels:, center[0]:center[0]+1,
                     center[1]:center[1]+1, center[2]:center[2]+1] = seed_vis
+        
+        if self.cell.cfg.task_channels > 0 and task_ids is not None:
+            tc = self.cell.cfg.task_channels
+            one_hot = torch.nn.functional.one_hot(task_ids, num_classes=tc).to(device).float()
+            one_hot_grid = one_hot.view(batch_size, tc, 1, 1, 1).expand(-1, -1, *self.cfg.size)
+            vis = self.cell.cfg.visible_channels
+            state[:, -(vis+tc):-vis, ...] = one_hot_grid
+
         return state
 
     def step(self, state: Tensor) -> Tensor:
