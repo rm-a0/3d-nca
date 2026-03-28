@@ -1,3 +1,18 @@
+"""
+NCARunner - Training harness for 3D Neural Cellular Automata.
+
+Manages the complete training loop:
+  - Model initialization and device management
+  - Pool-based state management (diverse training samples)
+  - Loss computation (alpha, color, overflow weighted components)
+  - Curriculum learning (step count varies with epoch)
+  - Integration with Schedule for dynamic training events
+
+All internal states maintain (B, C, D, H, W) batch-first tensor format
+required by PyTorch. External I/O (targets, exports) uses (D, H, W, C)
+channels-last format.
+"""
+
 from __future__ import annotations
 
 import random
@@ -18,13 +33,13 @@ POOL_SIZE = 32
 DEFAULT_BATCH_SIZE = 4
 
 STEP_MIN_START = 8
-STEP_MIN_END   = 32
+STEP_MIN_END = 32
 STEP_MAX_START = 16
-STEP_MAX_END   = 64
+STEP_MAX_END = 64
 CURRICULUM_EPOCHS = 2000
 
-DEFAULT_ALPHA_WEIGHT    = 4.0
-DEFAULT_COLOR_WEIGHT    = 1.0
+DEFAULT_ALPHA_WEIGHT = 4.0
+DEFAULT_COLOR_WEIGHT = 1.0
 DEFAULT_OVERFLOW_WEIGHT = 2.0
 
 
@@ -40,10 +55,10 @@ class NCARunner:
         self.latest_loss: float = 0.0
         self.verbose = verbose
 
-        self._alpha_weight: float    = DEFAULT_ALPHA_WEIGHT
-        self._color_weight: float    = DEFAULT_COLOR_WEIGHT
+        self._alpha_weight: float = DEFAULT_ALPHA_WEIGHT
+        self._color_weight: float = DEFAULT_COLOR_WEIGHT
         self._overflow_weight: float = DEFAULT_OVERFLOW_WEIGHT
-        self._batch_size: int        = DEFAULT_BATCH_SIZE
+        self._batch_size: int = DEFAULT_BATCH_SIZE
 
         self._cell_cfg: Optional[CellConfig] = None
         self._device: Optional[str] = None
@@ -52,23 +67,27 @@ class NCARunner:
 
     def init(self, config: dict, target: np.ndarray | list[np.ndarray]) -> None:
         """Initialize runner with config and target.
-        
+
         Args:
             config: Configuration dict with keys for cell, perception, update, grid, training
-            target: Target voxel grid with shape (D, H, W, C) — channels-last external format.
-                   Internally converted to (B, C, D, H, W) batch-first for all computations.
-                   Transpose: (D,H,W,C) → (C,D,H,W) → unsqueeze → (1,C,D,H,W)
+            target: Target voxel grid with shape (D, H, W, C) in channels-last external format.
+                Internally converted to (B, C, D, H, W) batch-first for all computations.
+                Transpose: (D,H,W,C) -> (C,D,H,W) -> unsqueeze -> (1,C,D,H,W)
         """
+        # Reset pool state so repeated init() calls do not accumulate old samples.
+        self._pool = []
+        self._pool_task_ids = []
+
         self._cell_cfg = CellConfig(**config["cell"])
         perc_cfg = PerceptionConfig(**config["perception"])
-        upd_cfg  = UpdateConfig(**config["update"])
+        upd_cfg = UpdateConfig(**config["update"])
         grid_cfg = GridConfig(**config["grid"])
 
         self._device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        self.model = Grid3D(
-            self._cell_cfg, perc_cfg, upd_cfg, grid_cfg
-        ).to(self._device)
+        self.model = Grid3D(self._cell_cfg, perc_cfg, upd_cfg, grid_cfg).to(
+            self._device
+        )
 
         self.optimizer = torch.optim.AdamW(
             self.model.parameters(),
@@ -84,49 +103,57 @@ class NCARunner:
         self.targets = []
         target_list = target if isinstance(target, list) else [target]
         for t in target_list:
-            t_chw = np.transpose(t, (3, 0, 1, 2)).astype(np.float32)  # (D,H,W,C) -> (C,D,H,W)
-            self.targets.append(torch.from_numpy(t_chw).unsqueeze(0).to(self._device))  # (1,C,D,H,W)
+            t_chw = np.transpose(t, (3, 0, 1, 2)).astype(
+                np.float32
+            )  # (D,H,W,C) -> (C,D,H,W)
+            self.targets.append(
+                torch.from_numpy(t_chw).unsqueeze(0).to(self._device)
+            )  # (1,C,D,H,W)
 
-        self.target = self.targets[0] # Fallback to single target
+        self.target = self.targets[0]  # Fallback to single target
 
         num_tasks = len(self.targets)
         # Note: Target now has shape (B=1, C, D, H, W) for internal NCA computations
 
-        self_pool = []
-        self._pool_task_ids = []
         for _ in range(POOL_SIZE):
             tid = random.randint(0, max(0, num_tasks - 1))
-            t_tensor = torch.tensor([tid], device=self._device) if self._cell_cfg.task_channels > 0 else None
+            t_tensor = (
+                torch.tensor([tid], device=self._device)
+                if self._cell_cfg.task_channels > 0
+                else None
+            )
             self._pool.append(self.model.seed_center(1, self._device, t_tensor))
             self._pool_task_ids.append(tid)
 
         self.state = self._pool[0]
 
         self.current_epoch = 0
-        self.total_epochs  = config["training"]["num_epochs"]
-        self._batch_size   = config["training"].get("batch_size", DEFAULT_BATCH_SIZE)
-        self.latest_loss   = 0.0
+        self.total_epochs = config["training"]["num_epochs"]
+        self._batch_size = config["training"].get("batch_size", DEFAULT_BATCH_SIZE)
+        self.latest_loss = 0.0
 
     def set_target(self, target: Tensor) -> None:
         """Update training target.
-        
+
         Args:
             target: Target tensor with shape (B, C, D, H, W) in internal NCA format.
-                   Should be on the same device as the model.
+                Should be on the same device as the model.
         """
         self.target = target.to(self._device)
         if self.verbose:
             print(f"[Runner] Target swapped at epoch {self.current_epoch}")
 
-    def train(self, schedule: Optional[Schedule] = None) -> Generator[Dict[str, Any], None, None]:
+    def train(
+        self, schedule: Optional[Schedule] = None
+    ) -> Generator[Dict[str, Any], None, None]:
         """Training loop generator.
-        
-        All internal states maintain shape (B, C, D, H, W) — batch-first format required by PyTorch.
-        
+
+        All internal states maintain shape (B, C, D, H, W) - batch-first format required by PyTorch.
+
         Args:
             schedule: Optional Schedule object for training events (target changes, LR updates, etc.).
-                     Thread-safe: main thread updates don't block background training loop.
-        
+                Thread-safe: main thread updates don't block background training loop.
+
         Yields:
             Dict[epoch, loss_alpha, loss_color, loss_overflow, loss_total, best_np]
         """
@@ -137,24 +164,47 @@ class NCARunner:
             if schedule is not None:
                 schedule.check_and_execute(epoch, self)
             if self.verbose:
-                print(f"Epoch {epoch}/{self.total_epochs} - Loss: {metrics['loss_total']:.4f}")
+                print(
+                    f"Epoch {epoch}/{self.total_epochs} - Loss: {metrics['loss_total']:.4f}"
+                )
             yield metrics
 
     def _get_step_range(self) -> tuple[int, int]:
+        """Compute curriculum learning step range for current epoch.
+
+        Uses linear interpolation from STEP_MIN_START to STEP_MIN_END over
+        CURRICULUM_EPOCHS to gradually increase training difficulty.
+
+        Returns:
+            Tuple (min_steps, max_steps) for random.randint selection this epoch.
+        """
         t = min(self.current_epoch / max(CURRICULUM_EPOCHS, 1), 1.0)
         lo = int(STEP_MIN_START + t * (STEP_MIN_END - STEP_MIN_START))
         hi = int(STEP_MAX_START + t * (STEP_MAX_END - STEP_MAX_START))
         return max(lo, 4), max(hi, lo + 1)
 
     def _step(self) -> Dict[str, Any]:
-        device    = self._device
-        cell_cfg  = self._cell_cfg
+        """Execute one training epoch: sample batch, forward pass, loss, backward.
+
+        1. Select random batch from state pool
+        2. Replace worst loss sample with fresh seed (curriculum)
+        3. Forward NCA for random step count (curriculum)
+        4. Compute weighted component losses: alpha + color + overflow
+        5. Backward pass, gradient clipping, optimizer step
+        6. Update pool with new states
+
+        Returns:
+            Dict with keys: loss_total, loss_alpha, loss_color, loss_overflow, best_np.
+            best_np is the lowest-loss sample output in (D,H,W,C) external format.
+        """
+        device = self._device
+        cell_cfg = self._cell_cfg
         batch_size = min(len(self._pool), self._batch_size)
-        lo, hi    = self._get_step_range()
-        n_steps   = random.randint(lo, hi)
+        lo, hi = self._get_step_range()
+        n_steps = random.randint(lo, hi)
 
         indices = random.sample(range(len(self._pool)), batch_size)
-        batch   = torch.cat([self._pool[i] for i in indices], dim=0)
+        batch = torch.cat([self._pool[i] for i in indices], dim=0)
         batch_task_ids = [self._pool_task_ids[i] for i in indices]
 
         vis = cell_cfg.visible_channels
@@ -163,15 +213,22 @@ class NCARunner:
 
         with torch.no_grad():
             per_sample_loss = [
-                F.mse_loss(batch[i:i+1, -vis:], self.target[:, -vis:]).item()
+                F.mse_loss(
+                    batch[i : i + 1, -vis:],
+                    self.targets[batch_task_ids[i]][:, -vis:],
+                ).item()
                 for i in range(batch_size)
             ]
-            worst    = int(np.argmax(per_sample_loss))
+            worst = int(np.argmax(per_sample_loss))
             best_idx = int(np.argmin(per_sample_loss))
 
             new_tid = random.randint(0, len(self.targets) - 1)
-            t_tensor = torch.tensor([new_tid], device=device) if cell_cfg.task_channels > 0 else None
-            batch[worst:worst+1] = self.model.seed_center(1, device, t_tensor)
+            t_tensor = (
+                torch.tensor([new_tid], device=device)
+                if cell_cfg.task_channels > 0
+                else None
+            )
+            batch[worst : worst + 1] = self.model.seed_center(1, device, t_tensor)
             batch_task_ids[worst] = new_tid
 
         self.optimizer.zero_grad()
@@ -179,31 +236,31 @@ class NCARunner:
         state = batch
         state = self.model(state, steps=n_steps)
 
-        pred_vis  = state[:, -vis:]
-        tgt_vis   = tgt_batch[:, -vis:]
+        pred_vis = state[:, -vis:]
+        tgt_vis = tgt_batch[:, -vis:]
 
         pred_alpha = pred_vis[:, -1:]
-        tgt_alpha  = tgt_vis[:, -1:]
+        tgt_alpha = tgt_vis[:, -1:]
 
         loss_alpha = F.mse_loss(pred_alpha, tgt_alpha)
 
         tgt_mask = (tgt_alpha > cell_cfg.alive_threshold).float()
         if vis > 1:
             pred_color = pred_vis[:, :-1]
-            tgt_color  = tgt_vis[:, :-1]
+            tgt_color = tgt_vis[:, :-1]
             color_diff = (pred_color - tgt_color) ** 2 * tgt_mask
             loss_color = color_diff.sum() / tgt_mask.sum().clamp(min=1.0)
         else:
             loss_color = torch.tensor(0.0, device=device)
 
-        overflow_mask = (1.0 - tgt_mask)
-        overflow      = (pred_alpha * overflow_mask) ** 2
+        overflow_mask = 1.0 - tgt_mask
+        overflow = (pred_alpha * overflow_mask) ** 2
         loss_overflow = overflow.mean()
 
         loss = (
-            self._alpha_weight    * loss_alpha
-          + self._color_weight    * loss_color
-          + self._overflow_weight * loss_overflow
+            self._alpha_weight * loss_alpha
+            + self._color_weight * loss_color
+            + self._overflow_weight * loss_overflow
         )
 
         loss.backward()
@@ -213,21 +270,17 @@ class NCARunner:
 
         with torch.no_grad():
             for j, idx in enumerate(indices):
-                self._pool[idx] = state[j:j+1].detach()
+                self._pool[idx] = state[j : j + 1].detach()
                 self._pool_task_ids[idx] = batch_task_ids[j]
 
-        best_np = (
-            state[best_idx]
-            .detach().cpu().numpy()
-            .transpose(1, 2, 3, 0)
-        )
+        best_np = state[best_idx].detach().cpu().numpy().transpose(1, 2, 3, 0)
 
         self.state = state[0:1].detach()
 
         return {
-            "loss_total":    loss.item(),
-            "loss_alpha":    loss_alpha.item(),
-            "loss_color":    loss_color.item(),
+            "loss_total": loss.item(),
+            "loss_alpha": loss_alpha.item(),
+            "loss_color": loss_color.item(),
             "loss_overflow": loss_overflow.item(),
-            "best_np":       best_np,
+            "best_np": best_np,
         }

@@ -16,6 +16,7 @@ Example usage:
 This follows the standard ML/AI pattern where a single orchestrating class
 manages all the internal configurations and components.
 """
+
 from __future__ import annotations
 import dataclasses
 from dataclasses import dataclass
@@ -54,7 +55,9 @@ class NCAConfig:
     update_stochastic: bool = False
     update_fire_rate: float = 0.5
 
-    def to_configs(self) -> tuple[CellConfig, PerceptionConfig, UpdateConfig, GridConfig]:
+    def to_configs(
+        self,
+    ) -> tuple[CellConfig, PerceptionConfig, UpdateConfig, GridConfig]:
         """Convert to individual config objects needed by Grid3D."""
         cell_cfg = CellConfig(
             hidden_channels=self.hidden_channels,
@@ -148,18 +151,24 @@ class NCAModel(torch.nn.Module):
         """
         return self.grid(state, steps=steps, use_checkpointing=use_checkpointing)
 
-    def seed_center(self, batch_size: int, device: torch.device | str) -> Tensor:
+    def seed_center(
+        self,
+        batch_size: int,
+        device: torch.device | str,
+        task_ids: Optional[Tensor] = None,
+    ) -> Tensor:
         """
         Create seed state(s) with a living cell at the center.
 
         Args:
             batch_size: Number of seeds to generate
             device: Device to place tensors on (cuda/cpu)
+            task_ids: Optional task IDs for one-hot task channel initialization.
 
         Returns:
             Seed state(s) [batch_size, C, X, Y, Z] with alpha=1 at center
         """
-        return self.grid.seed_center(batch_size, device)
+        return self.grid.seed_center(batch_size, device, task_ids)
 
     def init_empty(self, batch_size: int, device: torch.device | str) -> Tensor:
         """
@@ -175,14 +184,19 @@ class NCAModel(torch.nn.Module):
         return self.grid.init_empty(batch_size, device)
 
     def save(self, path: str) -> None:
-        torch.save({
-            "version": _CHECKPOINT_VERSION,
-            "config": dataclasses.asdict(self.config),
-            "state_dict": self.state_dict(),
-        }, path)
+        torch.save(
+            {
+                "version": _CHECKPOINT_VERSION,
+                "config": dataclasses.asdict(self.config),
+                "state_dict": self.state_dict(),
+            },
+            path,
+        )
 
     @classmethod
-    def load(cls, path: str, device: Optional[str] = None, strict: bool = True) -> "NCAModel":
+    def load(
+        cls, path: str, device: Optional[str] = None, strict: bool = True
+    ) -> "NCAModel":
         ckpt = torch.load(path, map_location=device, weights_only=False)
         if ckpt.get("version", 0) > _CHECKPOINT_VERSION:
             raise ValueError(

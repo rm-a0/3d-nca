@@ -12,6 +12,7 @@ learned via a small MLP, and damage-robust using alive masking.
 Original implementation inspired by:
 https://github.com/SkyLionx/3d-cellular-automaton
 """
+
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Tuple
@@ -27,6 +28,7 @@ from .update import UpdateConfig, UpdateRule
 @dataclass(frozen=True)
 class GridConfig:
     """Lattice dimensions."""
+
     size: Tuple[int, int, int] = (32, 32, 32)
 
 
@@ -38,6 +40,7 @@ class Grid3D(torch.nn.Module):
       - UpdateRule: 1x1x1 MLP that predicts state delta
     Damage robustness via alive-mask intersection (pre & post).
     """
+
     def __init__(
         self,
         cell_cfg: CellConfig,
@@ -60,7 +63,12 @@ class Grid3D(torch.nn.Module):
             device=device,
         )
 
-    def seed_center(self, batch_size: int, device: torch.device | str, task_ids: Tensor | None = None) -> Tensor:
+    def seed_center(
+        self,
+        batch_size: int,
+        device: torch.device | str,
+        task_ids: Tensor | None = None,
+    ) -> Tensor:
         """
         Seed a single living cell at the lattice center.
 
@@ -69,17 +77,30 @@ class Grid3D(torch.nn.Module):
         """
         state = self.init_empty(batch_size, device)
         center = tuple(s // 2 for s in self.cfg.size)
-        seed_vis = torch.rand(batch_size, self.cell.cfg.visible_channels, 1, 1, 1, device=device)
+        seed_vis = torch.rand(
+            batch_size, self.cell.cfg.visible_channels, 1, 1, 1, device=device
+        )
         seed_vis[:, -1:, ...] = 1.0
-        state[:, -self.cell.cfg.visible_channels:, center[0]:center[0]+1,
-                    center[1]:center[1]+1, center[2]:center[2]+1] = seed_vis
-        
+        state[
+            :,
+            -self.cell.cfg.visible_channels :,
+            center[0] : center[0] + 1,
+            center[1] : center[1] + 1,
+            center[2] : center[2] + 1,
+        ] = seed_vis
+
         if self.cell.cfg.task_channels > 0 and task_ids is not None:
             tc = self.cell.cfg.task_channels
-            one_hot = torch.nn.functional.one_hot(task_ids, num_classes=tc).to(device).float()
-            one_hot_grid = one_hot.view(batch_size, tc, 1, 1, 1).expand(-1, -1, *self.cfg.size)
+            one_hot = (
+                torch.nn.functional.one_hot(task_ids, num_classes=tc).to(device).float()
+            )
+            one_hot_grid = (
+                one_hot.view(batch_size, tc, 1, 1, 1)
+                .expand(-1, -1, *self.cfg.size)
+                .contiguous()
+            )
             vis = self.cell.cfg.visible_channels
-            state[:, -(vis+tc):-vis, ...] = one_hot_grid
+            state[:, -(vis + tc) : -vis, ...] = one_hot_grid
 
         return state
 
@@ -115,13 +136,27 @@ class Grid3D(torch.nn.Module):
         steps: int = 1,
         use_checkpointing: bool = True,
     ) -> Tensor:
-        """
-        Run `steps` iterations with clamping to [-1, 1] after each step.
+        """Run NCA for specified iterations.
+
+        1. Apply alive mask (pre_life)
+        2. Compute perception (3x3x3 fixed filters)
+        3. MLP predicts state delta with optional stochastic fire
+        4. new_state = state + delta
+        5. Apply post_life mask (growth/death)
+        Repeat for each step. Uses gradient checkpointing to reduce memory.
+
+        Args:
+            state: Current state [B, C, X, Y, Z].
+            steps: Number of update iterations.
+            use_checkpointing: If True, use gradient checkpointing (reduces memory, costs compute).
+
+        Returns:
+            Updated state [B, C, X, Y, Z] after `steps` iterations.
 
         When `use_checkpointing` is True (default) each step is wrapped in
         `torch.utils.checkpoint.checkpoint` so that intermediate activations
         are recomputed during the backward pass instead of being stored.
-        This trades ~2x compute for O(1) memory w.r.t. step count — critical
+        This trades ~2x compute for O(1) memory w.r.t. step count - critical
         for long unrolls on low-VRAM GPUs.
         """
         for _ in range(steps):

@@ -13,13 +13,14 @@ Architecture
   1. 1x1x1 Conv -> hidden_dim
   2. GroupNorm + ReLU
   3. 1x1x1 Conv -> hidden_dim
-  4. tanh(·) x 0.1  (bounded update)
+    4. tanh(x) x 0.1  (bounded update)
   5. (optional) stochastic fire
   6. multiply by alive_mask
 
 Original implementation inspired by:
 https://github.com/SkyLionx/3d-cellular-automaton
 """
+
 from __future__ import annotations
 from dataclasses import dataclass
 
@@ -30,18 +31,22 @@ from torch import Tensor
 from .perception import Perception3D, PerceptionConfig
 from .cell import CellConfig, CellState
 
+
 @dataclass(frozen=True)
 class UpdateConfig:
     """Configuration for the update MLP."""
+
     hidden_dim: int = 128
     stochastic_update: bool = False
     fire_rate: float = 0.5
+
 
 class UpdateRule(nn.Module):
     """
     1x1x1 MLP with two hidden layers, GroupNorm, and bounded output.
     Deeper than the minimal NCA variant to handle complex spatial patterns.
     """
+
     def __init__(
         self,
         perc_cfg: PerceptionConfig,
@@ -77,7 +82,7 @@ class UpdateRule(nn.Module):
         """
         Predict bounded change `dx`.
 
-        Alive-masking is NOT applied here — Grid3D handles it via
+        Alive-masking is NOT applied here - Grid3D handles it via
         post-step alive masking so that dead neighbors of alive cells
         can receive nonzero updates and come to life (growth).
 
@@ -89,10 +94,10 @@ class UpdateRule(nn.Module):
             fire = torch.rand_like(alive_mask.float()) < self.upd_cfg.fire_rate
             delta = delta * fire
 
+        delta = torch.tanh(delta) * 0.1
+
         if self.cell_cfg.task_channels > 0:
             tc = self.cell_cfg.task_channels
             vc = self.cell_cfg.visible_channels
-            delta[:, -(vc + tc):-vc, ...] = 0.0
-
-        delta = torch.tanh(delta) * 0.1
+            delta[:, -(vc + tc) : -vc, ...] = 0.0
         return delta
