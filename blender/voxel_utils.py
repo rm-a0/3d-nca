@@ -1,9 +1,15 @@
-﻿"""
+"""
 Utilities for voxelizing meshes and displaying voxel arrays in Blender.
 
-Note: these functions were from the most part implemented by Claue Opus 4.6,
-with some adjustments by me.
+Voxelization: converts Blender mesh objects to (D,H,W,C) numpy arrays using
+raycast-based inside-outside tests. Preserves material IDs and colors.
+
+Display: renders (D,H,W,C) arrays as optimized merged-cube meshes in Blender
+using vectorized geometry construction and foreach_set bulk operations for speed.
+
+Note: voxelization core implemented with assistance from Claude Opus 4.6.
 """
+
 import bpy
 import numpy as np
 import colorsys
@@ -13,7 +19,14 @@ from typing import List, Optional, Tuple
 
 
 def get_or_create_collection(name: str) -> bpy.types.Collection:
-    """Return existing collection name or create one linked to the scene."""
+    """Get or create a named Blender collection linked to active scene.
+
+    Args:
+        name: Collection name.
+
+    Returns:
+        Existing or newly created Collection object.
+    """
     if name in bpy.data.collections:
         return bpy.data.collections[name]
     col = bpy.data.collections.new(name)
@@ -22,7 +35,11 @@ def get_or_create_collection(name: str) -> bpy.types.Collection:
 
 
 def clear_collection(collection: bpy.types.Collection) -> None:
-    """Remove every object (and its orphan mesh data) from collection."""
+    """Remove all objects from collection and delete orphaned mesh data.
+
+    Args:
+        collection: Collection to clear.
+    """
     for obj in list(collection.objects):
         data = obj.data
         bpy.data.objects.remove(obj, do_unlink=True)
@@ -33,10 +50,18 @@ def clear_collection(collection: bpy.types.Collection) -> None:
 def get_slot_offset(
     slot: int, grid_size: Tuple[int, int, int], cell_size: float
 ) -> float:
-    """Return X-axis offset for a layout slot.
+    """Compute X-axis offset for a layout slot.
 
-    Slot 0 = source mesh, Slot 1 = voxelized target, Slot 2 = NCA state.
-    Objects are placed side-by-side along the X axis with a gap.
+    Slot 0: source mesh, Slot 1: voxelized target, Slot 2: NCA state.
+    Objects are laid out side-by-side with calculated gap.
+
+    Args:
+        slot: Slot index (0, 1, or 2).
+        grid_size: Voxel grid dimensions (D, H, W).
+        cell_size: Size of each voxel.
+
+    Returns:
+        X-axis offset in world space.
     """
     extent = max(grid_size) * cell_size
     gap = extent * 0.3
@@ -49,7 +74,17 @@ def place_source_in_scene(
     cell_size: float,
     collection_name: str = "NCA_Source",
 ) -> None:
-    """Place linked duplicates of source meshes at slot 0, scaled to match voxel grid."""
+    """Place and scale source meshes to match voxel grid on display.
+
+    Creates linked duplicates of source meshes, grouped under an empty parent,
+    positioned at slot 0 and uniformly scaled to fit grid dimensions.
+
+    Args:
+        objs: List of source Mesh objects to place.
+        grid_size: Voxel grid dimensions (D, H, W).
+        cell_size: Size of each voxel.
+        collection_name: Collection to place scaled meshes in (default "NCA_Source").
+    """
     collection = get_or_create_collection(collection_name)
     clear_collection(collection)
 
@@ -61,11 +96,13 @@ def place_source_in_scene(
     slot_x = get_slot_offset(0, grid_size, cell_size)
 
     # Centre of the voxelised grid in this slot
-    grid_center = Vector((
-        slot_x + D * cell_size * 0.5,
-        H * cell_size * 0.5,
-        W * cell_size * 0.5,
-    ))
+    grid_center = Vector(
+        (
+            slot_x + D * cell_size * 0.5,
+            H * cell_size * 0.5,
+            W * cell_size * 0.5,
+        )
+    )
 
     # World-space bounding box of all source meshes
     all_corners = []
@@ -115,12 +152,20 @@ def mesh_to_voxel_array(
     visible_channels: str = "RGBA",
     offset: int = 1,
 ) -> Tuple[np.ndarray, np.ndarray, List]:
-    """Voxelize obj into (D,H,W,C), preserving aspect ratio.
+    """Voxelize mesh object to array with material color preservation.
 
-    The mesh is uniformly scaled so its longest axis spans
-    `grid_axis - 2*offset` voxels, then centred in the grid.
+    Uses ray-casting inside-outside test to determine voxel occupancy.
+    Mesh is uniformly scaled so longest axis spans (grid_axis - 2*offset) voxels,
+    then centered in grid. Extracts Principled BSDF base colors from materials.
 
-    Returns (voxel_data, material_index_map, materials_list).
+    Args:
+        obj: Mesh object to voxelize.
+        grid_size: Target voxel grid dimensions (D, H, W).
+        visible_channels: Output format: "ALPHA" (1 channel), "RGBA" (4 channels), or "ALPHA_MATERIAL_ID" (2 channels).
+        offset: Border offset in voxels (default 1).
+
+    Returns:
+        Tuple (voxel_data [D,H,W,C], material_index_map [D,H,W], materials list).
     """
     channel_map = {"ALPHA": 1, "RGBA": 4, "ALPHA_MATERIAL_ID": 2}
     n_ch = channel_map.get(visible_channels, 4)
@@ -163,9 +208,7 @@ def mesh_to_voxel_array(
                 tz = bb_min.z + (k - grid_origin[2] + 0.5) / scale
                 point = Vector((tx, ty, tz))
 
-                inside, _ray_face = _is_inside_mesh_with_face(
-                    bvh, point
-                )
+                inside, _ray_face = _is_inside_mesh_with_face(bvh, point)
                 if not inside:
                     continue
 
@@ -187,7 +230,14 @@ def mesh_to_voxel_array(
 
 
 def _get_material_base_color(mat) -> np.ndarray:
-    """Principled BSDF base colour of *mat*, or white."""
+    """Extract base color from Blender Principled BSDF material.
+
+    Args:
+        mat: Blender material or None.
+
+    Returns:
+        RGB color as [R,G,B] float32 array, or [1,1,1] if not found.
+    """
     if mat and mat.use_nodes:
         for node in mat.node_tree.nodes:
             if node.type == "BSDF_PRINCIPLED":
@@ -199,7 +249,18 @@ def _get_material_base_color(mat) -> np.ndarray:
 def _is_inside_mesh_with_face(
     bvh: BVHTree, point: Vector
 ) -> Tuple[bool, Optional[int]]:
-    """Ray-cast parity test. Returns (inside, first_hit_face_index)."""
+    """Determine if point is inside mesh using ray-casting parity test.
+
+    Casts ray from point upward (Z direction) and counts intersections.
+    Odd count = inside, even = outside (standard ray-casting test).
+
+    Args:
+        bvh: BVH tree from mesh.
+        point: Point to test.
+
+    Returns:
+        Tuple (is_inside, first_hit_face_index or None).
+    """
     direction = Vector((0, 0, 1))
     origin = point.copy()
     count = 0
@@ -234,10 +295,23 @@ def voxel_array_to_blender(
     material_map: Optional[np.ndarray] = None,
     materials: Optional[list] = None,
 ) -> Optional[bpy.types.Object]:
-    """Display a (D,H,W,C) voxel array as a merged-cube mesh.
+    """Create Blender mesh object from voxel array display data.
 
-    Uses numpy-vectorised geometry construction + foreach_set for
-    fast bulk data transfer (avoids per-voxel Python/bmesh loops).
+    Converts (D,H,W,C) voxel array to optimized merged-cube mesh using
+    vectorized numpy geometry construction. Caps voxel count at 50K to prevent
+    GPU crashes. Uses per-loop vertex colors for visualization.
+
+    Args:
+        voxel_data: Voxel array [D,H,W,C] with C>=1 (alpha at ...,-1]).
+        collection_name: Blender collection to place mesh in.
+        object_name: Name for created object (default "NCA_Voxels").
+        cell_size: Size of each voxel in Blender units (default 0.1).
+        alive_threshold: Alpha threshold for inclusion (default 0.02).
+        material_map: Optional Material IDs [D,H,W] to assign per-voxel materials.
+        materials: Optional list of Blender materials to assign to faces.
+
+    Returns:
+        Created Mesh object, or None if no voxels above threshold.
     """
     collection = get_or_create_collection(collection_name)
 
@@ -247,7 +321,7 @@ def voxel_array_to_blender(
         if data and data.users == 0 and isinstance(data, bpy.types.Mesh):
             bpy.data.meshes.remove(data)
 
-    MAX_VOXELS = 50_000  # safety cap — prevent GPU driver crashes
+    MAX_VOXELS = 50_000  # safety cap - prevent GPU driver crashes
 
     n_ch = voxel_data.shape[-1]
     alpha = voxel_data[..., 3] if n_ch >= 4 else voxel_data[..., 0]
@@ -265,20 +339,27 @@ def voxel_array_to_blender(
     N = len(occupied)
 
     use_source_mats = (
-        material_map is not None
-        and materials is not None
-        and len(materials) > 0
+        material_map is not None and materials is not None and len(materials) > 0
     )
     use_vcol = not use_source_mats and (n_ch >= 4 or n_ch == 2)
 
     s = cell_size * 0.5
 
-    # ---- numpy-vectorised geometry ----------------------------------
+    # --- Numpy-Vectorized Geometry ---
     # Template cube: 8 vertices relative to centre
-    cube_verts = np.array([
-        [-s, -s, -s], [+s, -s, -s], [+s, +s, -s], [-s, +s, -s],
-        [-s, -s, +s], [+s, -s, +s], [+s, +s, +s], [-s, +s, +s],
-    ], dtype=np.float32)
+    cube_verts = np.array(
+        [
+            [-s, -s, -s],
+            [+s, -s, -s],
+            [+s, +s, -s],
+            [-s, +s, -s],
+            [-s, -s, +s],
+            [+s, -s, +s],
+            [+s, +s, +s],
+            [-s, +s, +s],
+        ],
+        dtype=np.float32,
+    )
 
     # Template faces (6 quads, winding order gives outward normals)
     cube_faces = np.array(_FACE_DEFS, dtype=np.int32)
@@ -286,10 +367,12 @@ def voxel_array_to_blender(
     # Centres for every occupied voxel  (N, 3)
     centres = occupied.astype(np.float32) * cell_size
 
-    # Broadcast: (1,8,3) + (N,1,3) → (N,8,3) → (N*8, 3)
-    all_verts = (cube_verts[np.newaxis, :, :] + centres[:, np.newaxis, :]).reshape(-1, 3)
+    # Broadcast: (1,8,3) + (N,1,3) -> (N,8,3) -> (N*8, 3)
+    all_verts = (cube_verts[np.newaxis, :, :] + centres[:, np.newaxis, :]).reshape(
+        -1, 3
+    )
 
-    # Per-voxel vertex offset applied to face indices: (N,6,4) → (N*6, 4)
+    # Per-voxel vertex offset applied to face indices: (N,6,4) -> (N*6, 4)
     offsets = (np.arange(N, dtype=np.int32) * 8)[:, np.newaxis, np.newaxis]
     all_faces = (cube_faces[np.newaxis, :, :] + offsets).reshape(-1, 4)
 
@@ -307,12 +390,8 @@ def voxel_array_to_blender(
     mesh_data.loops.foreach_set("vertex_index", all_faces.ravel())
 
     mesh_data.polygons.add(n_faces)
-    mesh_data.polygons.foreach_set(
-        "loop_start", np.arange(n_faces, dtype=np.int32) * 4
-    )
-    mesh_data.polygons.foreach_set(
-        "loop_total", np.full(n_faces, 4, dtype=np.int32)
-    )
+    mesh_data.polygons.foreach_set("loop_start", np.arange(n_faces, dtype=np.int32) * 4)
+    mesh_data.polygons.foreach_set("loop_total", np.full(n_faces, 4, dtype=np.int32))
 
     # Material index per polygon (6 faces share the same material per voxel)
     if use_source_mats:
@@ -327,15 +406,15 @@ def voxel_array_to_blender(
     if use_vcol:
         color_attr = mesh_data.color_attributes.new("Col", 'FLOAT_COLOR', 'CORNER')
         if n_ch >= 4:
-            colors = voxel_data[
-                occupied[:, 0], occupied[:, 1], occupied[:, 2]
-            ].astype(np.float32)                          # (N, 4)
+            colors = voxel_data[occupied[:, 0], occupied[:, 1], occupied[:, 2]].astype(
+                np.float32
+            )  # (N, 4)
         elif n_ch == 2:
             mat_vals = voxel_data[occupied[:, 0], occupied[:, 1], occupied[:, 2], 1]
             colors = np.array(
                 [_matid_to_color(float(v)) for v in mat_vals], dtype=np.float32
-            )                                                # (N, 4)
-        # 6 faces × 4 corners = 24 identical colour entries per voxel
+            )  # (N, 4)
+        # 6 faces x 4 corners = 24 identical color entries per voxel
         loop_colors = np.repeat(colors, 24, axis=0).astype(np.float32)
         color_attr.data.foreach_set("color", loop_colors.ravel())
 
@@ -352,7 +431,14 @@ def voxel_array_to_blender(
 
 
 def _matid_to_color(mat_val: float) -> Tuple[float, float, float, float]:
-    """Map normalised mat-ID [0,1] to a distinct RGBA via HSV hue rotation."""
+    """Convert normalized material ID to distinct RGBA color via HSV.
+
+    Args:
+        mat_val: Normalized material value in [0,1].
+
+    Returns:
+        RGBA tuple (r, g, b, a) with a=1.0, colors via HSV hue rotation.
+    """
     r, g, b = colorsys.hsv_to_rgb(mat_val, 0.9, 0.9)
     return (r, g, b, 1.0)
 
@@ -360,7 +446,13 @@ def _matid_to_color(mat_val: float) -> Tuple[float, float, float, float]:
 def _assign_vertex_color_material(
     obj: bpy.types.Object, mat_name: str, attr_name: str
 ) -> None:
-    """Assign a Principled BSDF material reading colour attribute *attr_name*."""
+    """Create and assign material that reads color from geometry attribute.
+
+    Args:
+        obj: Mesh object to assign material to.
+        mat_name: Material name to create/reuse.
+        attr_name: Geometry attribute name for color (e.g., "Col").
+    """
     mat = bpy.data.materials.get(mat_name)
     if mat is None:
         mat = bpy.data.materials.new(mat_name)
@@ -387,10 +479,18 @@ def _assign_vertex_color_material(
 def server_state_to_voxel_array(
     raw: np.ndarray, visible_channels: int = 4
 ) -> np.ndarray:
-    """Convert (B,C_total,D,H,W) server tensor to (D,H,W,C_vis) for display.
+    """Convert server state tensor to display-ready voxel array.
 
-    Clamps visible channels to [0, 1] so alpha thresholding and
-    vertex colours behave correctly (NCA can output values in [-1, 1]).
+    Extracts visible channels from server tensor, transposes from internal
+    (B,C,D,H,W) format to external (D,H,W,C) format, and clamps to [0,1]
+    for correct rendering (NCA outputs may be in [-1,1] range).
+
+    Args:
+        raw: State tensor [B,C,D,H,W] from server or [C,D,H,W] (batch=1).
+        visible_channels: Number of visible channels to extract (default 4).
+
+    Returns:
+        Voxel array [D,H,W,visible_channels] clipped to [0,1].
     """
     if raw.ndim == 5:
         raw = raw[0]
