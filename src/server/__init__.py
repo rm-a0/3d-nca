@@ -1,3 +1,10 @@
+"""
+Server Package.
+
+Exports networking, protocol, logging, and trainer components used by the
+NCA TCP service layer.
+"""
+
 from .server import NCAServer
 from .trainer import NCATrainer
 from .protocol import (
