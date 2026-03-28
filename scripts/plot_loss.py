@@ -7,6 +7,8 @@ import pandas as pd
 
 
 def _phase_transitions(df: pd.DataFrame) -> pd.DataFrame:
+    if "phase" not in df.columns:
+        return pd.DataFrame(columns=["epoch", "phase"])
     phase_str = df["phase"].astype(str)
     changed = phase_str.ne(phase_str.shift(1))
     return df.loc[changed & df.index.to_series().ne(df.index[0]), ["epoch", "phase"]]
