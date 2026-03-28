@@ -1,3 +1,10 @@
+"""
+Visualization Package.
+
+Exports 2D slice and 3D volume visualization helpers for Matplotlib
+and PyVista render backends.
+"""
+
 from .slice_mpl import (
     show_slice_alpha_mpl,
     show_slice_color_comparison_mpl,
