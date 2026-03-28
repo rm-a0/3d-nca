@@ -180,6 +180,7 @@ class NCATrainer:
                     loss_color=metrics["loss_color"],
                     loss_overflow=metrics["loss_overflow"],
                     loss_total=metrics["loss_total"],
+                    phase=str(metrics.get("phase", "")),
                     model=runner.model,
                     is_final=is_final,
                 )

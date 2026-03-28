@@ -8,6 +8,7 @@ Supports pause/resume/stop control and dynamic schedule updates.
 
 import socket
 import threading
+import base64
 from typing import Callable, Dict, Optional
 
 import numpy as np
@@ -86,8 +87,12 @@ class NCAClient:
             phase_steps: Forward steps per task phase.
             broadcast_every: Broadcast interval (steps).
         """
+        with open(model_path, "rb") as f:
+            model_b64 = base64.b64encode(f.read()).decode("ascii")
+
         send_msg(
-            self._sock, build_run_model_msg(model_path, phase_steps, broadcast_every)
+            self._sock,
+            build_run_model_msg(model_b64, phase_steps, broadcast_every),
         )
 
     def send_stop(self) -> None:

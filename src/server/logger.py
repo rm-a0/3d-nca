@@ -91,6 +91,7 @@ class NCALogger:
         loss_color: float,
         loss_overflow: float,
         loss_total: float,
+        phase: str = "",
         model=None,
         is_final: bool = False,
     ) -> None:
@@ -103,6 +104,7 @@ class NCALogger:
                     round(loss_color, 6),
                     round(loss_overflow, 6),
                     round(loss_total, 6),
+                    phase,
                 ]
             )
 
@@ -177,5 +179,12 @@ class NCALogger:
         if not self._loss_path.exists():
             with self._loss_path.open("w", newline="", encoding="utf-8") as f:
                 csv.writer(f).writerow(
-                    ["epoch", "loss_alpha", "loss_color", "loss_overflow", "loss_total"]
+                    [
+                        "epoch",
+                        "loss_alpha",
+                        "loss_color",
+                        "loss_overflow",
+                        "loss_total",
+                        "phase",
+                    ]
                 )
