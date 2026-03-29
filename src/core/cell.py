@@ -31,7 +31,7 @@ class CellConfig:
 
     @property
     def total_channels(self) -> int:
-        """Total number of channels (hidden + visible)."""
+        """Total number of channels (hidden + visible + task)."""
         return self.hidden_channels + self.visible_channels + self.task_channels
 
 

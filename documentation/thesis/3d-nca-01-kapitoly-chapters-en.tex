@@ -678,7 +678,44 @@ visualization and interaction capabilities. This approach preserves the independ
 allowing it to be integrated into different workflows and environments.
 
 \section{System Overview}
-TOOD
+
+The framework is organised into three layers that collaborate to provide an 
+interactive environment for training and visualising three-dimensional neural 
+cellular automata. Figure~\ref{fig:system-overview} shows the high-level 
+structure and the communication paths between these layers.
+
+The innermost layer is the \textbf{core framework}. It contains the NCA model 
+and the training pipeline and has no dependency on any server or graphical 
+environment. It can be used directly from Python scripts or Jupyter notebooks, 
+as the accompanying experiment notebooks demonstrate.
+
+The second layer is the \textbf{server}, which exposes the core framework over 
+a TCP connection. A running server accepts a client connection, receives 
+training configuration and target data, delegates execution to the core 
+training pipeline, and streams state snapshots back to the client at a 
+configurable rate as training progresses.
+
+The third layer is the \textbf{Blender add-on}, which acts as the graphical 
+client. It connects to the server over TCP, provides a panel-based interface 
+for configuring and controlling training sessions, and renders incoming state 
+broadcasts as three-dimensional voxel meshes in the Blender viewport.
+
+This separation serves two purposes. Training can run on a remote GPU machine 
+while the user interacts with Blender on a local workstation, with a tunnelling 
+service bridging the two. At the same time, the core framework remains 
+independent of both the server and the graphical environment, so researchers 
+who do not need interactive visualisation or want to write their own training
+algorithms can import and use it directly in their own scripts or jupyter notebooks.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{obrazky-figures/fig-system-overview.png}
+    \caption{
+        High-level system architecture. Arrows indicate dependency direction.
+        The dashed TCP boundary marks the network separation between the
+        server and the Blender client.}
+    \label{fig:system-overview}
+\end{figure}
 
 \section{Core Components of the Framework}
 TODO
