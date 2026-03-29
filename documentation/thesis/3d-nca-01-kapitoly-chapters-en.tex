@@ -271,9 +271,9 @@ The outputs of all filters applied across all channels are concatenated into a s
 per cell. If the state has $C$ channels and $G$ filter groups are used, the perception vector has 
 dimensionality $G \cdot C$. This vector is then passed to the update function as input.
 
-The filters are fixed and non-learnable. This is a deliberate design choice: using fixed filters 
-constrains the form of spatial information available to the update rule, which stabilises training 
-and reduces the number of parameters that must be optimised. The approach follows the convention 
+The filters are fixed and non-learnable. Using fixed filters constrains the spatial information 
+available to the update rule, which stabilises training and reduces the number of parameters that must 
+be optimised. The approach follows the convention 
 established by Mordvintsev et al.~\cite{Mordvintsev2020} and adopted in subsequent 
 work~\cite{Sudhakaran2021, Rossi2021, Aadityaza2024}.
 
@@ -289,12 +289,12 @@ the current state:
 This residual formulation encourages incremental modifications rather than abrupt state changes, 
 contributing to dynamical stability over long simulation horizons~\cite{Mordvintsev2020}.
 
-The update function is typically implemented as a small multilayer perceptron (MLP) or a sequence of 
-$1 \times 1 \times 1$ convolutions applied independently at each cell. Point-wise application ensures 
-that the update depends only on the locally perceived information, not on any global state. The 
-parameter count is kept deliberately low following the original 2D model, approximately 8\,000 trainable 
-parameters~\cite{Mordvintsev2020}. This small scale underlines that the complexity of the resulting 
-structures arises from iterative local interaction, not from network capacity.
+The update function is typically implemented as a small multilayer perceptron (MLP) applied
+independently at each cell. This point-wise application ensures that the update depends only on the
+locally perceived information, not on any global state. The parameter count is kept deliberately low
+following the original 2D model, approximately 8\,000 trainable parameters~\cite{Mordvintsev2020}.
+This small scale underlines that the complexity of the resulting structures arises from iterative local
+interaction, not from network capacity.
 
 Two stabilisation mechanisms appear in most NCA formulations:
 \begin{itemize}
@@ -331,7 +331,7 @@ similar approach with dynamic topology, allowing efficient insertion and deletio
 simulation. While the framework developed in this work uses dense grids at moderate resolution, these 
 sparse representations offer a path toward scaling neural CA to larger volumetric domains in future work.
 
-Initialisation is another practical consideration. Most neural CA start from a \emph{seed} - a single 
+Initialisation is another practical consideration. Most neural CA start from a \emph{seed} -- a single
 active cell or small cluster placed at the centre of an otherwise empty grid. The alive channel of the 
 seed cell is set to a positive value, and the system must grow the target structure from this minimal 
 starting point through repeated application of the local update rule.
@@ -381,16 +381,16 @@ specific choices that inform the approach taken in this work.
 
 \section{Growing Neural Cellular Automata}
 
-Mordvintsev, Randazzo, Niklasson, and Levin~\cite{Mordvintsev2020} introduced the Growing Neural 
-Cellular Automata paradigm that serves as the methodological foundation for this work. They replaced 
-the discrete lookup-table rules of classical CA with a small shared neural network trained end-to-end 
-by gradient descent. The model preserves strict spatial locality while learning to grow and maintain 
-target patterns from simple initial conditions - typically a single live cell.
+Mordvintsev, Randazzo, Niklasson, and Levin~\cite{Mordvintsev2020} introduced the Growing Neural
+Cellular Automata paradigm that is the methodological basis for this work. They replaced the discrete
+lookup-table rules of classical CA with a small shared neural network trained end-to-end by gradient
+descent. The model preserves strict spatial locality while learning to grow and maintain target patterns
+from simple initial conditions -- typically a single live cell.
 
-Unlike earlier continuous CA such as Lenia~\cite{Chan2019}, which rely on manual parameter exploration 
-to discover interesting behaviours, neural CA use supervised optimisation. The transition function is 
-trained to produce a specific target pattern. This shift from rule discovery to task-driven optimisation 
-defines the approach extended to three dimensions in this work.
+Unlike earlier continuous CA such as Lenia~\cite{Chan2019}, which rely on manual parameter exploration
+to discover interesting behaviours, neural CA use supervised optimisation: the transition function is
+trained to produce a specific target pattern. This work extends that task-driven optimisation approach
+to three dimensions.
 
 Chapter~\ref{chap:theoretical-foundations} covered the general NCA principles. The focus here is on the 
 concrete design and empirical properties of the 2020 implementation: its architecture, stabilisation 
@@ -401,17 +401,17 @@ mechanisms, training procedure, and experimental results.
 Each cell in the 2D model holds a 16-channel real-valued state vector. Four channels encode RGBA colour 
 values compared against a target image. The remaining twelve channels serve as hidden memory.
 
-The hidden channels function as a distributed memory system embedded in the lattice. Because updates are 
+The hidden channels work as a distributed memory system embedded in the lattice. Because updates are
 strictly local, long-range coordination must emerge through repeated short-range interactions. A cell 
-cannot observe the state of a distant cell directly, it can only receive information that has been 
-relayed through intermediate cells over multiple steps. The hidden channels provide the representational 
-capacity for this relay process.
+cannot observe the state of a distant cell directly; it can only receive information that has been
+relayed through intermediate cells over multiple steps. The hidden channels provide the capacity for
+this relay process.
 
 This design is central to the stability and regenerative behaviour observed in later experiments. 
 Reducing the number of hidden channels degrades pattern quality and stability, while increasing it 
-beyond a certain point yields diminishing returns~\cite{Mordvintsev2020}. The balance between having 
-enough memory for coordination and keeping the state compact enough for efficient training directly 
-informs the channel configurations used in subsequent 3D extensions.
+beyond a certain point yields diminishing returns~\cite{Mordvintsev2020}. The balance between enough
+memory for coordination and a compact state for efficient training directly informs the channel
+configurations used in subsequent 3D extensions.
 
 \subsection{Perception Mechanism}
 
@@ -429,7 +429,7 @@ neighbourhood, for example where a pattern transitions from occupied to empty, w
 identifies edges and boundaries by measuring how much a cell's state differs from its neighbours' average.
 
 A small MLP operating independently at each cell transforms this perception vector into a state increment. 
-The perception step does not introduce any learnable parameters; all learning occurs in the MLP.
+The perception step introduces no learnable parameters; all learning occurs in the MLP.
 
 Fixed perception filters are used to ensure locality and translation invariance by design, while also stabilising 
 optimisation by limiting the spatial information available to the update rule. This choice becomes particularly 
@@ -469,7 +469,7 @@ Two mechanisms are critical for robust long-term dynamics:
     \item \textbf{Stochastic update masking} applies updates to a random subset of cells at each 
     step. At each time step, each cell independently decides (with some probability, e.g., 0.5) 
     whether to apply its computed update or skip it. This breaks synchronisation artefacts - patterns 
-    that form only because all cells update in lockstep - and produces dynamics that are robust to 
+    that form only because all cells update in lockstep -- and produces dynamics that are robust to 
     asynchronous perturbations.
 \end{itemize}
 
@@ -493,7 +493,7 @@ target pattern within that horizon.
 
 No constraint is imposed beyond step $T$. Patterns may drift, decay, or diverge if simulation 
 continues past the trained step count. In practice, growing-only models commonly exhibit instability 
-within 100-200 steps beyond their training horizon~\cite{Mordvintsev2020}.
+within 100--200 steps beyond their training horizon~\cite{Mordvintsev2020}.    
 
 \subsubsection{Persistent Regime}
 
@@ -539,16 +539,16 @@ vector with visible and hidden channels. Perception uses local $3 \times 3 \time
 with identity and gradient features, processed by a small neural network applied identically at every 
 voxel. The system is trained by gradient descent to grow a target structure from a single seed.
 
-The authors demonstrated that neural CA can produce coherent volumetric structures in a dynamic, 
+The authors showed that neural CA can produce coherent volumetric structures in a dynamic,
 interactive environment. The learned rules stay local and homogeneous, preserving the CA paradigm while 
 enabling complex global structure formation. Their experiments showed convergence toward target voxel 
-configurations and partial regenerative behaviour under perturbation - when parts of a Minecraft 
+configurations and partial regenerative behaviour under perturbation: when parts of a Minecraft
 structure were manually destroyed, the NCA could partially rebuild the damaged region.
 
-A notable contribution of this work is its evaluation in a constrained real-time environment. The 
+An interesting aspect of this work is its evaluation in a constrained real-time environment. The
 Minecraft platform imposes fixed block types, a specific rendering pipeline, and interaction mechanisms 
 that differ from the unconstrained continuous-valued grids used in purely computational experiments. 
-Despite these constraints, the NCA paradigm produced recognisable structures, demonstrating that the 
+Despite these constraints, the NCA paradigm produced recognisable structures, showing that the
 approach is not limited to idealised simulation environments.
 
 \subsection{Experimental Scope and Constraints}
@@ -566,10 +566,9 @@ available for systematic investigation.
 
 \subsection{Relation to This Work}
 
-Sudhakaran et al.~\cite{Sudhakaran2021} provide the methodological basis for extending neural CA 
-from planar grids to volumetric $3 \times 3 \times 3$ perception neighbourhoods. The preservation 
-of strict locality, parameter sharing, and gradient-based optimisation forms the conceptual foundation 
-adopted here.
+Sudhakaran et al.~\cite{Sudhakaran2021} provide the methodological basis for extending neural CA
+from planar grids to volumetric $3 \times 3 \times 3$ perception neighbourhoods. Strict locality,
+parameter sharing, and gradient-based optimisation form the conceptual foundation adopted here.
 
 The framework developed in this work embeds the 3D neural CA within Blender instead of a game engine. 
 Blender provides programmatic access to volumetric grids, mesh representations, rendering pipelines, 
@@ -583,7 +582,7 @@ environment, this work aims to provide the tools for systematic experimentation 
 
 \section{Open-Source and Applied Three-Dimensional Neural Cellular Automata}
 
-Beyond the seminal work of Mordvintsev et al.~\cite{Mordvintsev2020} and the interactive extension 
+Beyond the work of Mordvintsev et al.~\cite{Mordvintsev2020} and the interactive extension
 by Sudhakaran et al.~\cite{Sudhakaran2021}, several open-source projects have explored 
 three-dimensional neural CA. This section reviews implementations whose design decisions are 
 directly relevant to the framework developed in this work.
@@ -617,15 +616,15 @@ locality constraints. However, the evaluation is limited to demonstrating succes
 targets. Systematic analysis of long-term persistence, regeneration capacity, or scaling behaviour 
 under increasing resolution is not provided.
 
-Both open-source projects provide proof-of-concept validation for 3D morphogenetic NCA but leave 
-open questions about stability and robustness in larger volumetric domains. They also lack the 
-integration with a 3D modelling environment that would allow researchers to interactively visualise 
+Both open-source projects provide proof-of-concept validation for 3D morphogenetic NCA but leave
+open questions about stability and robustness in larger volumetric domains. They also lack integration
+with a 3D modelling environment that would allow researchers to interactively visualise
 and manipulate the NCA during training.
 
 \section{Chapter Conclusion}
 
-The works reviewed in this chapter established the architectural principles such as local perception, 
-shared neural update rules, residual dynamics, and gradient-based optimisation, that form the 
+The works reviewed in this chapter established the architectural principles -- local perception,
+shared neural update rules, residual dynamics, and gradient-based optimisation -- that form the
 methodological basis for this work. The original 2D Growing NCA demonstrated that a small neural 
 network with fewer than 10\,000 parameters can learn to grow, maintain, and regenerate complex 
 patterns through purely local interactions. Subsequent three-dimensional extensions confirmed that 
@@ -642,85 +641,324 @@ in existing open-source 3D NCA projects.
 
 \chapter{Architectural Design}
 
-The following chapters present the design of the 3D NCA framework and its overall architecture. 
-They introduce the key components that form the framework and describe how these components interact 
-with each other. The aim of this section is to provide a clear conceptual overview of the system and 
-explain the roles of its individual parts within the overall structure. To maintain focus on the 
-architectural design, implementation-specific details like libraries and frameworks chosen are intentionally 
-omitted at this stage. These details are discussed separately in later sections 
-dedicated to the implementation of the framework.
+This chapter presents the design of the 3D NCA framework and its overall architecture.
+It introduces the key components that form the framework and describes how these components interact
+with each other. The aim is to provide a clear conceptual overview of the system and explain the
+roles of its individual parts. To maintain focus on design, implementation-specific details such as
+the libraries and frameworks chosen are intentionally omitted here and discussed separately in the
+Implementation chapter.
 
 \section{Design Goals and Requirements}
 
-The purpose of the framework is to provide an environment for experimenting with neural cellular automata 
-operating on three-dimensional voxel grids. In order to support experimentation and future extensions, the 
-architecture must provide a clear structure and well-defined interactions between its components.
+The purpose of the framework is to provide an environment for experimenting with neural cellular automata
+operating on three-dimensional voxel grids. To support experimentation and future extensions, the
+architecture requires a clear structure and well-defined interactions between its components.
 
-The primary design goal of the framework is to enable simulation and training of 3D neural cellular automata 
-while maintaining a modular and extensible architecture. The system should allow individual components, such 
-as the simulation grid, update mechanism, and training pipeline, to be developed and modified independently. 
-This approach simplifies experimentation with different models and update rules.
+The primary design goal is to enable simulation and training of 3D neural cellular automata
+while maintaining a modular architecture. The system should allow individual components, such as the
+simulation grid, update mechanism, and training pipeline, to be developed and modified independently.
+This simplifies experimentation with different models and update rules.
 
-Another important design objective was to keep the core functionality of the framework independent from 
-visualization tools and external applications. The framework was therefore designed as a standalone module 
-that provides the fundamental functionality required for initializing, adjusting and training neural cellular automata. 
-Additional systems can build on top of this module while reusing the core computational components.
+A second objective was to keep the core functionality independent from visualisation tools and external
+applications. The framework is therefore designed as a standalone module that provides the core
+functionality required for initialising and training neural cellular automata.
+Other systems can build on this module and reuse its computational components.
 
-During the development process, practical constraints related to visualization and execution environments 
-influenced the architectural design. In particular, combining interactive visualization with computationally 
-intensive training within a single environment proved difficult. These limitations motivated a separation 
-between the components responsible for computation and those responsible for visualization and user 
-interaction.
+During development, practical constraints related to visualisation and execution environments
+influenced the design. Combining interactive visualisation with computationally intensive training
+within a single environment proved difficult. These limitations motivated a separation between
+computation and visualisation.
 
-As a result, the system evolved towards an architecture where the core framework provides the underlying 
-simulation and training functionality, while additional components utilize this functionality to provide 
-visualization and interaction capabilities. This approach preserves the independence of the framework while 
-allowing it to be integrated into different workflows and environments.
+As a result, the system evolved toward an architecture where the core framework provides the
+underlying simulation and training functionality, while additional components use this functionality
+to provide visualisation and interaction. This approach preserves the independence of the framework
+while allowing it to be integrated into different workflows.
 
 \section{System Overview}
 
-The framework is organised into three layers that collaborate to provide an 
-interactive environment for training and visualising three-dimensional neural 
-cellular automata. Figure~\ref{fig:system-overview} shows the high-level 
-structure and the communication paths between these layers.
+The framework is organised into three layers that work together to provide an
+interactive environment for training and visualising three-dimensional neural cellular automata.
+Figure~\ref{fig:system-overview} shows the high-level structure and the communication paths between
+these layers.
 
-The innermost layer is the \textbf{core framework}. It contains the NCA model 
-and the training pipeline and has no dependency on any server or graphical 
-environment. It can be used directly from Python scripts or Jupyter notebooks, 
-as the accompanying experiment notebooks demonstrate.
+The innermost layer is the \textbf{core framework}. It contains the NCA model and the training
+pipeline and has no dependency on any server or graphical environment. It can be used directly from
+Python scripts or Jupyter notebooks, as the accompanying experiment notebooks demonstrate.
 
-The second layer is the \textbf{server}, which exposes the core framework over 
-a TCP connection. A running server accepts a client connection, receives 
-training configuration and target data, delegates execution to the core 
-training pipeline, and streams state snapshots back to the client at a 
-configurable rate as training progresses.
+The second layer is the \textbf{server}, which exposes the core framework over a TCP connection.
+A running server accepts a client connection, receives training configuration and target data,
+delegates execution to the core training pipeline, and streams state snapshots after each epoch 
+back to the client as training progresses.
 
-The third layer is the \textbf{Blender add-on}, which acts as the graphical 
-client. It connects to the server over TCP, provides a panel-based interface 
-for configuring and controlling training sessions, and renders incoming state 
-broadcasts as three-dimensional voxel meshes in the Blender viewport.
+The third layer is the \textbf{Blender add-on}, which acts as graphical interface and a client. It connects to
+the server over TCP, provides a panel-based interface for configuation and control over training
+sessions, and renders incoming state broadcasts as three-dimensional voxel meshes in the Blender
+viewport.
 
-This separation serves two purposes. Training can run on a remote GPU machine 
-while the user interacts with Blender on a local workstation, with a tunnelling 
-service bridging the two. At the same time, the core framework remains 
-independent of both the server and the graphical environment, so researchers 
-who do not need interactive visualisation or want to write their own training
-algorithms can import and use it directly in their own scripts or jupyter notebooks.
+This separation serves two purposes. Training can run on a remote GPU machine or a Jupyter notebook while the user
+interacts with Blender on a local workstation, with a tunnelling service bridging the two. At the
+same time, the core framework remains independent of both the server and the graphical environment,
+so researchers who do not need interactive visualisation or want to use their own training algorithms can 
+import and use it directly in their own scripts or notebooks.
 
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=\textwidth]{obrazky-figures/fig-system-overview.png}
-    \caption{
-        High-level system architecture. Arrows indicate dependency direction.
-        The dashed TCP boundary marks the network separation between the
-        server and the Blender client.}
+    \caption{High-level system architecture. Arrows indicate dependency direction.
+             The dashed TCP boundary marks the network separation between the
+             server and the Blender client.}
     \label{fig:system-overview}
 \end{figure}
 
-\section{Core Components of the Framework}
+\section{Core NCA Model}
+\label{sec:arch-core-model}
+
+The core NCA model is composed of four components: \texttt{CellState}, \texttt{Perception3D},
+\texttt{UpdateRule}, and \texttt{Grid3D}. Each component has its own configuration and can be
+instantiated independently. \texttt{Grid3D} acts as the composition root, wiring the other three
+together and exposing a single-step forward pass. A higher-level wrapper, \texttt{NCAModel},
+bundles all configurations into one object and delegates to \texttt{Grid3D} internally, providing
+a simpler entry point for common use cases.
+
+Keeping configurations and components separate means that a researcher who wants
+to experiment with a custom update rule or a different perception kernel can
+replace just that component while leaving the rest of the pipeline unchanged.
+The experiment notebooks included with this work illustrate this directly:
+they use the model components without the runner or the server.
+
+\subsection{Cell}
+
+The cell component defines the structure of the per-voxel state vector and is responsible for
+computing the alive mask that gates cell updates. It is configured by specifying the number of
+hidden channels, the number of visible channels, and the alive threshold.
+
+The state vector of each voxel contains three groups of channels, as shown
+in Figure~\ref{fig:cell-state-vector}. Hidden channels carry internal memory
+that is not directly supervised and is not compared against the target during
+training. Visible channels represent the quantities compared against
+the target, such as RGBA colour values or a single occupancy channel. An
+optional third group, task channels, allows a single model to be trained
+on multiple targets simultaneously using a one-hot encoding to distinguish between them. 
+Task channels remain constant for the duration of a training phase, while
+hidden and visible channels evolve freely under the learned update rule.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{obrazky-figures/fig-cell-state-vector.png}
+    \caption{Per-voxel state vector layout. The vector contains hidden channels, optional task
+             channels encoded as a one-hot vector, and visible channels. The alpha channel, which
+             serves as the alive signal, is always the last visible channel.}
+    \label{fig:cell-state-vector}
+\end{figure}
+
+The alive mask controls which regions of the grid are active. It is computed by pooling the alive
+channel over the local neighbourhood of each voxel and comparing the result against the configured
+threshold. A cell is considered potentially
+alive if either it or at least one of its immediate neighbours carries a
+value above the threshold. This neighbourhood pooling has an important
+consequence for growth: a dead cell adjacent to an alive cell is included by
+the mask, which allows it to receive nonzero updates and transition to an
+active state over time~\cite{Mordvintsev2020}.
+
+\subsection{Perception}
+
+The perception component converts the current grid state into a per-cell representation by
+applying a fixed set of three-dimensional convolutional filters over the local neighbourhood.
+
+The filters are non-learnable; their weights are fixed at initialisation and
+do not change during training. Three filter groups are applied across all
+channels. The identity filter returns each cell's own current state
+unchanged, giving the update rule direct access to what the cell
+already contains. The neighbour sum filter aggregates the six face-adjacent
+neighbours, capturing the local occupancy and composition of the immediate
+neighbourhood. The Laplacian filter measures how much a cell's state differs
+from its neighbourhood average, encoding local spatial variation. Applying
+all three groups across all $C$ channels produces a perception vector at
+each cell location with dimensionality $3 \times C$.
+
+Keeping the filters fixed follows the original design of Mordvintsev et
+al.~\cite{Mordvintsev2020}. In practical terms, this means the perception
+stage has no trainable weights and cannot overfit on its own. Translation
+invariance is built in by construction through the filter layout, not learned
+implicitly from data. The only trainable part of this stage is therefore the
+update rule.
+
+\subsection{Update Rule}
+
+The update rule maps each cell's perception vector to a state increment.
+Its configuration controls the capacity of the underlying network and whether
+stochastic update masking is active.
+
+As in Mordvintsev et al.~\cite{Mordvintsev2020}, the increment is added
+residually instead of replacing the previous state:
+\[
+    \mathbf{s}_{t+1} = \mathbf{s}_t + \Delta \mathbf{s}.
+\]
+This tends to produce gradual local adjustments rather than abrupt jumps,
+which is important when the model is unrolled for many simulation steps.
+
+The same update network is applied independently at every cell. This preserves
+the locality constraint, because each increment depends only on local
+perception. It also keeps the dynamics spatially homogeneous: no cell has a
+privileged role by design. Any functional differences between cells must
+emerge from their local context in the grid.
+
+When stochastic masking is enabled, each step updates only a random subset of
+cells. This helps avoid lockstep synchronisation artefacts and generally leads
+to dynamics that better tolerate asynchronous perturbations. In practice, that
+robustness becomes especially relevant in long-horizon persistence and
+regeneration experiments~\cite{Mordvintsev2020}.
+
+\subsection{Grid and Model Composition}
+\label{sec:arch-grid}
+
+\texttt{Grid3D} composes the three components above into a module that
+executes one complete NCA update step. Figure~\ref{fig:nca-step-abstract}
+shows the data flow through a single step.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{obrazky-figures/fig-nca-step-abstract.png}
+    \caption{Data flow through a single NCA update step. The state passes through the fixed 3D
+             perception filters, is transformed by the shared update rule, and is then gated by
+             the alive masking mechanism before producing the updated state.}
+    \label{fig:nca-step-abstract}
+\end{figure}
+
+A single step proceeds as follows. The current state is passed to the
+perception component, which applies the fixed filters and produces a
+perception vector at every cell location. The update network produces a state
+increment, which is added residually to the current state. A post-step alive
+mask is then computed from the updated state, and any cell that falls below
+the alive threshold has its state zeroed out.
+
+At the architectural level, masking keeps activity close to the part of the
+structure that is developing and helps avoid random activation in empty
+regions. As a result, growth stays more controlled and the dynamics remain
+more stable over longer runs.
+
+\texttt{NCAModel} is a higher-level entry point that bundles all component
+configurations and delegates to \texttt{Grid3D} internally. It additionally
+handles model persistence: a saved checkpoint stores the configuration
+alongside the learned weights, making the checkpoint fully self-describing and
+loadable for inference without access to the original training setup.
+
+
+\section{Training Pipeline}
+\label{sec:arch-training}
+
+The training pipeline sits above the core NCA model and provides the
+infrastructure needed to optimise the model parameters toward a target voxel
+configuration. It consists of two components: a training runner, which
+implements the training loop, and a schedule manager, which handles dynamic
+parameter changes during training.
+
+\subsection{Runner}
+
+The runner implements pool-based training. Rather than restarting from a fresh
+seed on every iteration, it maintains a fixed-size pool of
+persistent states that represent the grid at various stages of development.
+At each iteration, a batch is sampled from the pool, evolved for a randomly
+chosen number of steps, evaluated against the target, and written back. The
+sample with the highest loss is replaced by a fresh seed,
+which maintains pool diversity and prevents the pool from converging to a
+single developmental stage~\cite{Mordvintsev2020}.
+
+The training objective has three weighted parts. Alpha loss compares the
+predicted and target alive channels. Colour loss compares RGB values only in
+areas where the target is present, so shape and colour are learned together.
+Overflow loss penalises activity outside the target, which helps limit
+unwanted growth. All three weights are configurable and can be changed at
+runtime through the schedule system.
+
+The number of forward steps applied per training iteration increases over
+the course of training according to a linear curriculum. Early iterations
+use short unrolls, which keep gradient paths manageable and allow the model
+to learn coarse shape quickly. Later iterations use longer unrolls, which
+test whether the learned rule maintains the target configuration over
+extended simulation horizons. Both the minimum and maximum step counts
+increase linearly over a fixed number of epochs and then stabilise at their
+final values.
+
+\subsection{Schedule}
+
+The schedule component manages a list of one-shot events that fire at specified
+training epochs. Supported event types include changes to the learning rate,
+batch size, and individual loss weights, as well as target changes that
+replace the voxel configuration the model is training toward mid-session.
+Events can be added, removed, or replaced in bulk at any point during
+training.
+
+The schedule is designed to be thread-safe, since the training loop and the
+server message handler may access it concurrently. Events can be configured to
+fire immediately on the next check rather than waiting for a specific epoch,
+which is useful when the user wants to apply a change without further delay
+during a live session.
+
+
+\section{Server and Networking}
+\label{sec:arch-server}
+
+The server layer exposes the training pipeline over a TCP connection. It
+consists of three main components: a connection manager, which handles
+clients and dispatches messages; a session runner, which executes training and
+inference; and a logger, which persists run metadata and artefacts to disk. A
+shared protocol module defines the message format used across the boundary
+between the server and the Blender client.
+
+\subsection{Connection Architecture}
+
+
+\section{Core Framework}
+
 TODO
 
-\chapter{Implementation}
+\section{NCA Model Components}
+
+TODO
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{obrazky-figures/fig-nca-step-detailed.png}
+    \caption{Detailed data flow through a single NCA update step, showing the full layer sequence
+             within the update MLP, the optional stochastic fire mask, and the bounded tanh output.}
+    \label{fig:nca-step-detailed}
+\end{figure}
+
+\section{Training Pipeline}
+
+TODO
+
+\section{Server}
+
+TODO
+
+\subsection{Protocol}
+
+TODO
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.75\textwidth]{obrazky-figures/fig-message-frame-format.png}
+    \caption{Wire message format. Each message consists of a four-byte big-endian unsigned integer
+             carrying the payload byte length, followed by the UTF-8 JSON payload.}
+    \label{fig:message-frame-format}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{obrazky-figures/fig-message-types.png}
+    \caption{Protocol message types and their JSON fields. Messages above the divider are sent by
+             the client; messages below are sent by the server.}
+    \label{fig:message-types}
+\end{figure}
+
+\subsection{Logging}
+
+TODO
+
+\section{Blender Add-on}
+
 TODO
 
 \chapter{Testing}
