@@ -804,10 +804,9 @@ privileged role by design. Any functional differences between cells must
 emerge from their local context in the grid.
 
 When stochastic masking is enabled, each step updates only a random subset of
-cells. This helps avoid lockstep synchronisation artefacts and generally leads
-to dynamics that better tolerate asynchronous perturbations. In practice, that
-robustness becomes especially relevant in long-horizon persistence and
-regeneration experiments~\cite{Mordvintsev2020}.
+cells. Stochastic masking avoids lockstep synchronisation artefacts and produces
+dynamics that tolerate asynchronous perturbations, which proves essential for
+long-horizon persistence and regeneration experiments~\cite{Mordvintsev2020}.
 
 \subsection{Grid and Model Composition}
 \label{sec:arch-grid}
@@ -856,13 +855,12 @@ parameter changes during training.
 \subsection{Runner}
 
 The runner implements pool-based training. Rather than restarting from a fresh
-seed on every iteration, it maintains a fixed-size pool of
-persistent states that represent the grid at various stages of development.
-At each iteration, a batch is sampled from the pool, evolved for a randomly
-chosen number of steps, evaluated against the target, and written back. The
-sample with the highest loss is replaced by a fresh seed,
-which maintains pool diversity and prevents the pool from converging to a
-single developmental stage~\cite{Mordvintsev2020}.
+seed on every iteration, we maintain a fixed-size pool of persistent states
+representing the grid at various stages of development. Each iteration: sample
+a batch from the pool, run it forward for a randomly chosen number of steps,
+evaluate against the target, and write updated states back. We replace the
+sample with highest loss with a fresh seed, maintaining pool diversity and
+preventing convergence to a single developmental stage~\cite{Mordvintsev2020}.
 
 The training objective has three weighted parts. Alpha loss compares the
 predicted and target alive channels. Colour loss compares RGB values only in
@@ -882,18 +880,13 @@ final values.
 
 \subsection{Schedule}
 
-The schedule component manages a list of one-shot events that fire at specified
-training epochs. Supported event types include changes to the learning rate,
-batch size, and individual loss weights, as well as target changes that
-replace the voxel configuration the model is training toward mid-session.
-Events can be added, removed, or replaced in bulk at any point during
-training.
-
-The schedule is designed to be thread-safe, since the training loop and the
-server message handler may access it concurrently. Events can be configured to
-fire immediately on the next check rather than waiting for a specific epoch,
-which is useful when the user wants to apply a change without further delay
-during a live session.
+The schedule component manages one-shot events that fire at specified training
+epochs. Supported events include learning rate changes, batch size adjustments,
+individual loss weight updates, and target replacements (changing the objective
+mid-session). Events are thread-safe: the training loop and server message
+handler access them via a lock. A special epoch value (NOW = -1) fires an event
+immediately rather than waiting, allowing users to adjust parameters during
+live training without restarting.
 
 
 \section{Server and Networking}
@@ -908,14 +901,11 @@ between the server and the Blender client.
 
 \subsection{Connection Architecture}
 
-The server binds to a configurable host and port and handles one client
-connection at a time. For each connection it enters a message dispatch loop:
-incoming protocol messages are routed to the appropriate session operation,
-and responses are sent back over the same socket. When the client disconnects,
-any active session is stopped and the server returns to waiting for the next
-connection.
-
-The communication design separates command handling from continuous state
+The server binds to a configurable host and port and accepts one client at a
+time. For each connection, it enters a message dispatch loop: route incoming
+messages to the appropriate session operation and send responses back. When the
+client disconnects or sends stop, we terminate any active session and return to
+listening. The design separates command handling from continuous state
 delivery. This separation follows the same general idea as RTSP/RTP systems,
 where session control and streamed data have different roles~\cite{RFC7826,RFC3550}.
 
@@ -957,23 +947,22 @@ stopped or until the configured number of forward steps is complete.
 
 \subsection{Protocol}
 
-Transport uses TCP, which provides an ordered and reliable byte stream but
+Transport uses TCP, which provides an ordered andnd able byte stream but
 does not preserve message boundaries~\cite{RFC9293}. For this reason, the
-protocol uses explicit application-level framing: each message consists of a fixed-size
-length prefix followed by a UTF-8 JSON payload. Binary artefacts (for example
+protocol uses explicith a fouraming: each message consists of a fixed-size
+length header followed by UTF-8 JSON
+payload payload. Binary artefacts (for example
 state snapshots and checkpoints) are carried as encoded byte strings inside
 the JSON object. This keeps a single self-describing message format while
 remaining readable during debugging.
 
-The protocol defines two directions of communication. The client sends
-control messages: \texttt{init} to start a training session,
-\texttt{run\_model} to start inference, \texttt{stop}, \texttt{pause},
-\texttt{resume}, and \texttt{update\_schedule} to modify a running session.
-The server sends \texttt{state} broadcasts carrying the current grid
-snapshot, \texttt{ack} confirmations for each control message, and
-\texttt{error} messages when a request cannot be fulfilled. The client
-drives all session transitions; the server takes no autonomous action other
-than streaming state snapshots at the configured rate.
+The protocol supports two communication directions. Clients send control
+messages: \texttt{init} (start training), \texttt{run\_model} (start inference),
+\texttt{stop}, \texttt{pause}, \texttt{resume}, and \texttt{update\_schedule}.
+Servers respond with \texttt{ack} confirmations or \texttt{error}. During training,
+the server streams \texttt{state} messages containing the current grid snapshot,
+epoch number, and loss value. The client drives all state transitions; the
+server only streams state and responds to requests.
 
 Although the message vocabulary is domain-specific, the interaction pattern
 follows established streaming-control designs: client-driven session
