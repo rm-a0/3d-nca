@@ -20,12 +20,12 @@ TODO
 
 \section{Prerequisites}
 
-This work assumes familiarity with convolutional neural networks, gradient-based optimisation, 
-and automatic differentiation as implemented in frameworks such as PyTorch~\cite{PaszkePyTorch, PyTorchDocs}. 
-Goodfellow et al.~\cite{GoodfellowDeepLearning} and the official PyTorch documentation~\cite{PyTorchDocs} 
-provide comprehensive introductions to these topics.
+This thesis assumes familiarity with convolutional neural networks, gradient-based optimisation, 
+and automatic differentiation. Goodfellow et al.~\cite{GoodfellowDeepLearning} and the official 
+PyTorch documentation~\cite{PyTorchDocs} cover these topics in depth.
 
-The remainder of this chapter is self-contained with respect to cellular automata and their neural extensions.
+Everything relating to cellular automata and their neural extensions is introduced from scratch in 
+the sections that follow.
 
 \section{Cellular Automata}
 
@@ -44,8 +44,7 @@ A cellular automaton is defined by:
 Ulam and von Neumann developed the first formal CA models in the 1940s as a theoretical framework for 
 self-replicating machines~\cite{VonNeumann1966}. Von Neumann's original construction used a two-dimensional 
 lattice with 29 distinct cell states and demonstrated that a sufficiently complex local rule can produce 
-a system capable of constructing copies of itself. This result established that self-replication does not 
-require a centralised blueprint but it can emerge from purely local interactions on a discrete grid.
+a system capable of constructing copies of itself without any centralised coordination.
 
 Wolfram later proposed a behavioural classification of CA into four qualitative classes based on their 
 long-term dynamics~\cite{Wolfram1983, Wolfram2002}. Class~1 systems converge to a uniform state regardless 
@@ -68,13 +67,12 @@ from a single active seed. This pattern is fractal and self-similar, placing Rul
 been used as a source of pseudorandomness~\cite{Wolfram2002}.
 
 Rule~110 (Class~4) is the smallest known Turing-complete one-dimensional CA. Cook~\cite{Cook2004} proved 
-that it supports gliders and glider collisions that can simulate any Turing machine. This result was 
-significant because it showed that computational universality can arise from an extremely simple local rule 
-applied to a one-dimensional lattice.
+that it supports gliders and glider collisions that can simulate any Turing machine, showing that 
+computational universality can arise from a simple local rule on a one-dimensional lattice.
 
-Despite their simplicity, elementary CA demonstrate all four classes of Wolfram's classification. They 
-provide a minimal setting for studying how local rules produce global behaviour, a question that extends 
-directly to the neural CA models discussed later in this chapter.
+Despite their simplicity, elementary CA exhibit all four classes of Wolfram's classification — a minimal 
+demonstration of how local rules can produce qualitatively different global behaviour. The same question 
+extends directly to the neural CA models discussed later in this chapter.
 
 \subsection{Two-Dimensional Cellular Automata}
 
@@ -95,8 +93,8 @@ periodically emit spaceships, and computational structures that perform logic op
 
 Berlekamp, Conway, and Guy~\cite{Berlekamp1982} showed that Life is Turing-complete: any computation that 
 can be expressed as a Turing machine can, in principle, be carried out within a sufficiently large Life grid. 
-This result highlights a key property of cellular automata --- complex, globally coordinated behaviour can 
-emerge from a homogeneous local rule. The same property later motivated the development of neural cellular 
+This highlights the defining property of cellular automata -- complex, globally coordinated behaviour 
+emerging from a homogeneous local rule. The same property later motivated the development of neural cellular 
 automata, where the local rule is learned rather than hand-designed.
 
 \subsection{Three-Dimensional Cellular Automata}
@@ -138,21 +136,20 @@ the subsequent work on continuous and neural CA.
 replaces the discrete neighbour count with continuous averaging kernels and the binary birth/survival rule 
 with smooth sigmoid transition functions. The result is a system that runs on a continuous 2D field and 
 produces gliders, oscillators, and wave-like structures that closely resemble their discrete counterparts 
-but evolve smoothly in time. SmoothLife demonstrates that the characteristic behaviours of Life do not depend 
-on discretisation, but rather arise from the structure of local interactions.
+but evolve smoothly in time. SmoothLife shows that the characteristic behaviours of Life do not depend 
+on discretisation, but arise from the structure of local interactions.
 
-\textbf{Lenia}~\cite{Chan2019} extends this approach further by parameterising both the convolution kernel 
+\textbf{Lenia}~\cite{Chan2019} extends this approach by parameterising both the convolution kernel 
 (which defines the neighbourhood shape and weighting) and the growth function (which determines how the 
 local average maps to a state change). Systematic exploration of Lenia's parameter space has produced 
 hundreds of stable, self-organising patterns that resemble biological microorganisms such as orbiting 
-particles, pulsating organisms, and multi-species ecologies. Lenia shows that a rich space of 
-emergent behaviours can be accessed by varying the parameters of a continuous local update rule.
+particles, pulsating organisms, and multi-species ecologies.
 
-Both SmoothLife and Lenia demonstrate that complex self-organisation does not require discrete state 
-transitions. Local, differentiable interactions are sufficient to produce stable spatial structures. Neural 
-cellular automata build on this observation. Instead of manually exploring the parameter space as in Lenia, 
+Together, SmoothLife and Lenia show that complex self-organisation does not require discrete state 
+transitions -- local, differentiable interactions are sufficient to produce stable spatial structures. Neural 
+cellular automata build on this observation: rather than manually exploring the parameter space as in Lenia, 
 neural CA use gradient-based optimisation to find update rules that produce a specific target pattern. The 
-differentiability of the update rule is what makes this optimisation possible.
+differentiability of the update rule is what makes this possible.
 
 \section{Neural Cellular Automata}
 
@@ -184,8 +181,8 @@ gradient descent to minimise a loss defined on the resulting configuration.
 The key conceptual shift compared to classical and continuous CA is that the update rule is not designed 
 or discovered by exploration, but optimised for a specific objective. The system learns to grow a target 
 pattern from a seed, maintain it over time, or regenerate it after damage depending on the training 
-regime. This makes neural CA a form of learned self-organisation: the local rule is shaped by optimisation, 
-but the global behaviour emerges from distributed local interactions, just as in classical CA.
+regime. The global behaviour still emerges from distributed local interactions, as in classical CA -- but 
+the local rule itself is shaped by optimisation.
 
 \section{Extension from Two to Three Dimensions}
 
@@ -585,7 +582,7 @@ environment, this work aims to provide the tools for systematic experimentation 
 Beyond the work of Mordvintsev et al.~\cite{Mordvintsev2020} and the interactive extension
 by Sudhakaran et al.~\cite{Sudhakaran2021}, several open-source projects have explored 
 three-dimensional neural CA. This section reviews implementations whose design decisions are 
-directly relevant to the framework developed in this work.
+directly relevant to the framework developed in this thesis.
 
 \subsection{Standard 3D Reconstruction Baseline}
 
@@ -723,7 +720,7 @@ a simpler entry point for common use cases.
 Keeping configurations and components separate means that a researcher who wants
 to experiment with a custom update rule or a different perception kernel can
 replace just that component while leaving the rest of the pipeline unchanged.
-The experiment notebooks included with this work illustrate this directly:
+The experiment notebooks included with this thesis illustrate this directly:
 they use the model components without the runner or the server.
 
 \subsection{Cell}
@@ -855,11 +852,11 @@ parameter changes during training.
 \subsection{Runner}
 
 The runner implements pool-based training. Rather than restarting from a fresh
-seed on every iteration, we maintain a fixed-size pool of persistent states
-representing the grid at various stages of development. Each iteration: sample
-a batch from the pool, run it forward for a randomly chosen number of steps,
-evaluate against the target, and write updated states back. We replace the
-sample with highest loss with a fresh seed, maintaining pool diversity and
+seed on every iteration, it maintains a fixed-size pool of persistent states
+representing the grid at various stages of development. Each training iteration
+samples a batch from the pool, runs it forward for a randomly chosen number of steps,
+evaluates the result against the target, and writes the updated states back. The
+sample with the highest loss is replaced with a fresh seed, maintaining pool diversity and
 preventing convergence to a single developmental stage~\cite{Mordvintsev2020}.
 
 The training objective has three weighted parts. Alpha loss compares the
@@ -904,9 +901,9 @@ between the server and the Blender client.
 The server binds to a configurable host and port and accepts one client at a
 time. For each connection, it enters a message dispatch loop: route incoming
 messages to the appropriate session operation and send responses back. When the
-client disconnects or sends stop, we terminate any active session and return to
+client disconnects or sends stop, any active session is terminated and the server returns to
 listening. The design separates command handling from continuous state
-delivery. This separation follows the same general idea as RTSP/RTP systems,
+delivery, following the same general idea as RTSP/RTP systems,
 where session control and streamed data have different roles~\cite{RFC7826,RFC3550}.
 
 The session runner executes training or inference independently of socket I/O.
@@ -947,14 +944,11 @@ stopped or until the configured number of forward steps is complete.
 
 \subsection{Protocol}
 
-Transport uses TCP, which provides an ordered andnd able byte stream but
-does not preserve message boundaries~\cite{RFC9293}. For this reason, the
-protocol uses explicith a fouraming: each message consists of a fixed-size
-length header followed by UTF-8 JSON
-payload payload. Binary artefacts (for example
-state snapshots and checkpoints) are carried as encoded byte strings inside
-the JSON object. This keeps a single self-describing message format while
-remaining readable during debugging.
+Transport uses TCP, which provides an ordered, reliable byte stream but does not preserve message 
+boundaries~\cite{RFC9293}. For this reason, the protocol uses explicit framing: each message consists 
+of a fixed-size length header followed by a UTF-8 JSON payload. Binary artefacts (for example 
+state snapshots and checkpoints) are carried as encoded byte strings inside the JSON object, keeping 
+a single self-describing message format that remains readable during debugging.
 
 The protocol supports two communication directions. Clients send control
 messages: \texttt{init} (start training), \texttt{run\_model} (start inference),
@@ -1045,18 +1039,211 @@ thread.
 
 \chapter{Implementation}
 
-While the previous chapter focused on architecture, this chapter focuses on
-implementation. It describes the libraries and frameworks used, outlines the
-main decisions in each component, and adds technical details omitted from the
-architectural overview.
+This chapter describes how the framework is implemented in code. It summarises
+the project structure, the main libraries, and the NCA model components shared
+by training scripts, the TCP server, and the Blender add-on.
+
+\lstdefinestyle{py}{
+    language=Python,
+    showspaces=false,
+    showtabs=false,
+    breaklines=true,
+    showstringspaces=false,
+    numbers=left,
+    frame=single,
+    basicstyle=\ttfamily\small,
+    captionpos=b
+}
 
 \section{Core Framework}
 
-TODO
+The implementation is organised into a small number of Python packages:
+\begin{itemize}
+    \item \texttt{src/core/}: NCA model, stepping logic, and training utilities,
+    \item \texttt{src/server/}: TCP server, protocol handling, and the training runner,
+    \item \texttt{src/io/}: import/export and conversion utilities for voxel targets,
+    \item \texttt{src/viz/}: offline visualisation backends,
+    \item \texttt{blender/}: Blender add-on for voxelisation, UI, and viewport rendering.
+\end{itemize}
+
+PyTorch is used for tensor operations, 3D convolutions, and automatic
+differentiation required for unrolling the automaton through time~\cite{PaszkePyTorch, PyTorchDocs}.
+NumPy is used at I/O boundaries and for serialisation-friendly data structures.
+
+The simulator stores the full grid state as a single float32 tensor \texttt{state} of
+shape \texttt{[B, C, D, H, W]}. This matches the input convention of
+\texttt{torch.nn.Conv3d} and avoids unnecessary transposes inside the perception and
+update steps. Listing~\ref{lst:state-layout} shows the two slices used most often.
+
+\begin{lstlisting}[style=py, caption={State tensor layout and common channel slices used across the framework.}, label={lst:state-layout}]
+# state: [B, C, D, H, W]
+# V: number of visible channels (e.g. 4 for RGBA)
+visible = state[:, -V:, ...]
+alpha   = state[:, -1:, ...]
+\end{lstlisting}
+
+Channel ordering follows the state vector layout shown in Figure~\ref{fig:cell-state-vector}.
+Hidden channels come first, optional task channels come next, and visible channels come last,
+with alpha stored in the final channel.
+
+Model hyperparameters are represented by small configuration dataclasses.
+Component-level parameters are stored in frozen dataclasses (\texttt{CellConfig},
+\texttt{PerceptionConfig}, \texttt{UpdateConfig}, \texttt{GridConfig}) so they can be passed
+around safely and serialised for logs. \texttt{NCAConfig} collects the most common parameters
+into a single object used by the high-level \texttt{NCAModel} wrapper.
+
+The interactive client-server setup exchanges configuration and voxel targets in
+serialisation-friendly formats. The concrete dictionary structure and the conversion between
+external voxel arrays and internal tensors are described in
+Sections~\ref{sec:impl-training} and~\ref{sec:impl-server}.
 
 \section{NCA Model Components}
 
-TODO
+The architectural roles of the NCA components are described in Section~\ref{sec:arch-core-model}.
+This section focuses on how that design maps to Python modules, configuration objects, and
+entry points.
+
+The NCA model follows the standard two-stage structure: a fixed perception operator
+extracts local features and a learned update rule predicts a per-voxel state increment.
+In code, the implementation is split into four modules:
+\begin{DESCRIPTION}
+    \item[\texttt{CellState}] channel layout and alive-mask computation,
+    \item[\texttt{Perception3D}] fixed depthwise \texttt{Conv3d} for local perception,
+    \item[\texttt{UpdateRule}] point-wise MLP implemented with $1\times1\times1$ convolutions,
+    \item[\texttt{Grid3D}] one-step update logic and multi-step unrolling.
+\end{DESCRIPTION}
+A thin wrapper \texttt{NCAModel} provides a single entry point and standardises checkpointing.
+
+Two construction styles are used in the codebase. The server and runner build \texttt{Grid3D}
+directly from component configs, while notebooks and scripts can use \texttt{NCAModel} with a
+single \texttt{NCAConfig}. Listing~\ref{lst:model-entrypoints} shows both patterns.
+
+\begin{lstlisting}[style=py, caption={Two entry points for constructing the NCA model: low-level \texttt{Grid3D} and the high-level \texttt{NCAModel} wrapper.}, label={lst:model-entrypoints}]
+# Low-level construction (server/runner)
+cell_cfg = CellConfig(hidden_channels=16, visible_channels=4, alive_threshold=0.1, task_channels=0)
+perc_cfg = PerceptionConfig(kernel_radius=1, channel_groups=3)
+upd_cfg  = UpdateConfig(hidden_dim=128, stochastic_update=False, fire_rate=0.5)
+grid_cfg = GridConfig(size=(32, 32, 32))
+grid = Grid3D(cell_cfg, perc_cfg, upd_cfg, grid_cfg)
+
+# High-level wrapper (scripts/notebooks)
+cfg = NCAConfig(grid_size=(32, 32, 32), hidden_channels=16, visible_channels=4, alive_threshold=0.1)
+model = NCAModel(config=cfg)
+\end{lstlisting}
+
+\subsection{CellState}
+
+The per-voxel state vector layout (hidden, optional task, visible) follows
+Figure~\ref{fig:cell-state-vector}. In code, the layout is specified by \texttt{CellConfig}
+and \texttt{CellState.update\_alive\_mask()} computes the boolean alive mask used to gate
+updates. A voxel is considered alive if the maximum alpha value in its
+$3\times3\times3$ neighbourhood exceeds \texttt{alive\_threshold}.
+Listing~\ref{lst:alive-mask} shows the core computation.
+
+\begin{lstlisting}[style=py, caption={Alive-mask computation from the alpha channel.}, label={lst:alive-mask}]
+alpha = state[:, -1:, ...]
+pooled = F.max_pool3d(alpha, kernel_size=3, stride=1, padding=1)
+alive = pooled > alive_threshold
+\end{lstlisting}
+
+\subsection{Perception3D}
+
+\texttt{Perception3D} implements the fixed perception stage as a depthwise \texttt{Conv3d}.
+With three filter groups per input channel, the perception tensor has \texttt{3C} channels.
+The kernels correspond to identity, face-neighbour aggregation, and a discrete Laplacian.
+Weights are initialised once and kept fixed during training.
+
+Listing~\ref{lst:perception-kernels} shows the kernel patterns in a compact, conceptual form.
+
+\begin{lstlisting}[style=py, caption={Perception kernels used for each input channel (conceptual form).}, label={lst:perception-kernels}]
+# identity
+K_id[1, 1, 1] = 1
+
+# 6-neighbour sum (face-adjacent voxels)
+for (dz, dy, dx) in [(1,0,0), (-1,0,0), (0,1,0), (0,-1,0), (0,0,1), (0,0,-1)]:
+    K_sum[1+dz, 1+dy, 1+dx] = 1
+
+# discrete Laplacian
+K_lap[1, 1, 1] = 6
+K_lap[K_sum == 1] = -1
+\end{lstlisting}
+
+\subsection{UpdateRule}
+
+\texttt{UpdateRule} maps perception features to a per-voxel increment \texttt{dx}. It is
+implemented as a point-wise MLP using $1\times1\times1$ convolutions, so spatial mixing
+is handled entirely by perception. The final layer is initialised to zero so the initial
+dynamics stay close to an identity update.
+
+The raw output is bounded as \texttt{tanh(dx) $\times$ 0.1} to keep individual updates
+small when the automaton is unrolled for many steps. An optional stochastic fire mask
+applies the update only to a random subset of voxels per step.
+
+Listing~\ref{lst:update-rule} shows the layer sequence used in the implementation.
+
+\begin{lstlisting}[style=py, caption={Update rule as a point-wise MLP implemented by $1\times1\times1$ convolutions.}, label={lst:update-rule}]
+mlp = nn.Sequential(
+    nn.Conv3d(3*C, H, 1),
+    nn.GroupNorm(4, H),
+    nn.ReLU(inplace=True),
+    nn.Conv3d(H, H, 1),
+    nn.GroupNorm(4, H),
+    nn.ReLU(inplace=True),
+    nn.Conv3d(H, C, 1),
+)
+dx = 0.1 * torch.tanh(mlp(perceived))
+\end{lstlisting}
+
+When task channels are present, the predicted increment for the task-channel 
+slice is forced to zero, keeping those channels constant.
+
+\subsection{Grid3D}
+
+\texttt{Grid3D} composes \texttt{CellState}, \texttt{Perception3D}, and \texttt{UpdateRule}
+into a complete simulator. A single step applies a residual update and then clears
+voxels that are not alive after the update. Listing~\ref{lst:grid-step} summarises the logic.
+
+\begin{lstlisting}[style=py, caption={Summary of a single NCA update step (pseudocode).}, label={lst:grid-step}]
+pre_life = cell.update_alive_mask(state)
+perceived = perception_op(state)
+dx = update_rule(perceived, pre_life, state)
+new_state = state + dx
+
+post_life = cell.update_alive_mask(new_state)
+new_state = new_state * post_life.float()
+\end{lstlisting}
+
+The multi-step \texttt{forward()} loop runs \texttt{step()} repeatedly and clamps the state
+to \texttt{[-1, 1]} after each update. For long training unrolls, steps can optionally use
+gradient checkpointing via \texttt{torch.utils.checkpoint.checkpoint(...)} to reduce memory
+usage at the cost of recomputation during backpropagation.
+
+The module also provides \texttt{seed\_center()}, which creates an initial state
+with a single active voxel placed at the lattice centre. Visible channels are
+initialised to random colour with alpha set to 1.0, while hidden channels
+start at zero.
+
+\subsection{NCAModel}
+
+\texttt{NCAModel} provides a single entry point for scripts and notebooks. It wraps
+\texttt{Grid3D} and keeps the user-facing configuration in one place.
+
+Checkpoints store a configuration snapshot alongside the learned \texttt{state\_dict}.
+Listing~\ref{lst:checkpoint} shows the structure used by \texttt{NCAModel.save()}.
+
+\begin{lstlisting}[style=py, caption={Checkpoint structure used by \texttt{NCAModel.save()}.}, label={lst:checkpoint}]
+torch.save(
+    {
+        "version": 1,
+        "config": dataclasses.asdict(model.config),
+        "state_dict": model.state_dict(),
+    },
+    path,
+)
+\end{lstlisting}
+
+Figure~\ref{fig:nca-step-detailed} shows the full layer sequence in the update
+MLP together with the stochastic fire mask and the bounded output.
 
 \begin{figure}[htbp]
     \centering
@@ -1067,16 +1254,171 @@ TODO
 \end{figure}
 
 \section{Training Pipeline}
+\label{sec:impl-training}
 
-TODO
+The conceptual structure of pool-based training, curriculum stepping, and schedule-driven
+parameter updates is described in Section~\ref{sec:arch-training}. This section focuses on the
+code-level composition and the data formats used at the training boundary.
+
+Training is implemented in \texttt{NCARunner} (\texttt{src/core/runner.py}). The runner owns the
+model instance (\texttt{Grid3D}), the optimiser, the current target tensor, and a pool of
+intermediate states used as training samples. The main entry point is the generator method
+\texttt{train()}, which yields per-epoch metrics and makes it easy for the server to stream
+progress without blocking on long GPU workloads.
+
+Runner initialisation accepts voxel targets in external channels-last format
+\texttt{[D, H, W, C]}, which is convenient for Blender and for protocol messages. Before training,
+the array is converted to a channels-first tensor \texttt{[B, C, D, H, W]}.
+Listing~\ref{lst:io-transpose} shows the conversion.
+
+\begin{lstlisting}[style=py, caption={Transposition at the training boundary between channels-last voxel arrays and channels-first tensors.}, label={lst:io-transpose}]
+# NumPy: [D, H, W, C] -> torch: [B, C, D, H, W]
+x = torch.from_numpy(np_array).permute(3, 0, 1, 2).unsqueeze(0).contiguous()
+\end{lstlisting}
+
+Two design choices shape the training loop:
+\begin{itemize}
+    \item \textbf{Pool-based training}: instead of always starting from a clean seed, training
+    samples are drawn from a pool of previously generated states. This exposes the model to
+    different partial solutions and stabilises long-horizon behaviour.
+    \item \textbf{Step-count curriculum}: each epoch unrolls the automaton for a random number
+    of steps. The allowed range is increased over time, so early training focuses on short,
+    stable dynamics and later training learns longer growth trajectories.
+\end{itemize}
+
+Visible channels are supervised directly against the target, while hidden channels remain
+unsupervised. The total loss is a weighted sum of three terms: an alpha/occupancy term,
+an RGB colour term (when colour channels are present), and an overflow penalty that discourages
+activity outside the intended volume.
+
+Listing~\ref{lst:runner-epoch} summarises one epoch at the level relevant for understanding
+the training behaviour.
+
+\begin{lstlisting}[style=py, caption={One training epoch in the pool-based runner (pseudocode).}, label={lst:runner-epoch}]
+batch = sample(pool, batch_size)
+steps = randint(step_min(epoch), step_max(epoch))
+
+pred = model(batch, steps=steps)
+loss = (
+    w_alpha * loss_alpha(pred, target)
+    + w_color * loss_color(pred, target)
+    + w_overflow * loss_overflow(pred)
+)
+
+loss.backward()
+optimizer.step()
+pool.update(batch, pred)
+\end{lstlisting}
+
+When multiple targets are used, the runner stores a list of target tensors and associates each
+pool sample with a target ID. If task channels are enabled, the corresponding one-hot slice is
+inserted into the state so that a single model can be trained on multiple morphing objectives.
+Schedule events (learning rate, batch size, loss weights, target changes) are applied through the
+thread-safe \texttt{Schedule} class.
 
 \section{Server}
+\label{sec:impl-server}
 
-TODO
+The server architecture and session lifecycle are described in Section~\ref{sec:arch-server},
+including the message sequence (Figure~\ref{fig:client-server-sequence}) and the protocol state
+machine (Figure~\ref{fig:protocol-fsm}). This section focuses on the code structure of the TCP
+server and the background training thread.
+
+Training sessions start with an \texttt{init} message that carries a configuration dictionary and
+the voxel target. Listing~\ref{lst:config-structure} shows the top-level structure used across the
+Blender client, server, and core runner.
+
+\begin{lstlisting}[style=py, caption={Top-level configuration structure exchanged between Blender and the training server.}, label={lst:config-structure}]
+config = {
+    "cell": { ... },
+    "perception": { ... },
+    "update": { ... },
+    "grid": { ... },
+    "training": { ... },
+}
+\end{lstlisting}
+
+On the server side, this dictionary is used to construct the configuration objects consumed by the
+core model and runner. Listing~\ref{lst:config-mapping} shows the mapping in a compact form.
+
+\begin{lstlisting}[style=py, caption={Mapping a configuration dictionary to the component configuration objects.}, label={lst:config-mapping}]
+cell_cfg = CellConfig(**config["cell"])
+perc_cfg = PerceptionConfig(**config["perception"])
+upd_cfg  = UpdateConfig(**config["update"])
+grid_cfg = GridConfig(**config["grid"])
+\end{lstlisting}
+
+The interactive training server is implemented in \texttt{src/server/}.
+\texttt{NCAServer} handles the TCP socket lifecycle and dispatches incoming messages.
+Expensive work (training and inference) is delegated to \texttt{NCATrainer}, which runs a
+background thread and exposes a small control API: \texttt{pause}, \texttt{resume}, \texttt{stop},
+and \texttt{update\_schedule}.
+
+During training, the trainer drives the \texttt{NCARunner.train()} generator and broadcasts
+state snapshots to the client with rate limiting, so viewport updates remain smooth even when
+the training loop produces updates faster than the network link can handle. During inference,
+the trainer loads a checkpoint from raw bytes and runs forward steps without checkpointing.
+
+Listing~\ref{lst:server-dispatch} shows the message dispatch loop in simplified form.
+
+\begin{lstlisting}[style=py, caption={Server-side message dispatch loop (simplified).}, label={lst:server-dispatch}]
+while True:
+    msg = recv_msg(sock)
+    t = msg.get("type")
+
+    if t == "init":
+        trainer.init(config, target, send_fn)
+    elif t == "run_model":
+        trainer.run_inference(model_bytes, phase_steps, broadcast_every, send_fn)
+    elif t == "pause":
+        trainer.pause()
+    elif t == "resume":
+        trainer.resume()
+    elif t == "stop":
+        trainer.stop()
+    elif t == "update_schedule":
+        trainer.update_schedule(events)
+\end{lstlisting}
+
+The trainer API is intentionally small and is designed to be used directly from the message
+handlers. Listing~\ref{lst:trainer-usage} summarises the typical call patterns.
+
+\begin{lstlisting}[style=py, caption={Typical trainer usage patterns from the server layer (pseudocode).}, label={lst:trainer-usage}]
+trainer = NCATrainer(base_dir="runs", checkpoint_interval=500)
+
+# Start/replace a training run.
+trainer.init(config, target, send_fn)
+
+# Training control.
+trainer.update_schedule(events)
+trainer.pause()
+trainer.resume()
+trainer.stop()
+
+# Inference from a raw checkpoint sent by the client.
+trainer.run_inference(model_bytes, phase_steps, broadcast_every, send_fn)
+\end{lstlisting}
 
 \subsection{Protocol}
 
-TODO
+Protocol behaviour at the session level is described in Section~\ref{sec:arch-server}. This
+subsection summarises the concrete framing and payload encoding used in the implementation.
+
+Each message consists of a four-byte big-endian unsigned integer carrying the JSON payload
+length, followed by the UTF-8 JSON itself (Figure~\ref{fig:message-frame-format}).
+
+Tensor payloads (targets and broadcast states) are transmitted as base64-encoded float32 byte
+arrays together with an explicit \texttt{shape} field. Model checkpoints are transmitted as
+base64-encoded raw \texttt{.pt} bytes during inference requests. Figure~\ref{fig:message-types}
+summarises the message types used by the client and the server.
+
+Listing~\ref{lst:wire-frame} shows the core framing operation used by both the client and server.
+
+\begin{lstlisting}[style=py, caption={Length-prefixed framing for TCP messages.}, label={lst:wire-frame}]
+payload = json.dumps(msg).encode("utf-8")
+wire = struct.pack(">I", len(payload)) + payload
+sock.sendall(wire)
+\end{lstlisting}
 
 \begin{figure}[htbp]
     \centering
@@ -1096,14 +1438,64 @@ TODO
 
 \subsection{Logging}
 
-TODO
+The role of logging and stored artefacts is described in Section~\ref{sec:arch-server}. In the
+implementation, run outputs are written by \texttt{NCALogger} (\texttt{src/server/logger.py}). Each
+training run claims the next available \texttt{runs/run\_NNN/} directory and persists both metadata
+and artefacts:
+\begin{itemize}
+        \item \texttt{meta.json}: configuration snapshot, timestamp, and optional git hash,
+        \item \texttt{loss.csv}: per-epoch loss components,
+        \item \texttt{events.jsonl}: applied schedule events (one JSON record per line),
+        \item \texttt{checkpoints/}: periodic \texttt{.pt} checkpoints containing \texttt{config} and \texttt{state\_dict}.
+\end{itemize}
+
+Listing~\ref{lst:run-layout} shows the on-disk layout created for each run.
+
+\begin{lstlisting}[basicstyle=\ttfamily\small, numbers=none, frame=single, breaklines=true, caption={Run directory layout produced by the training server.}, label={lst:run-layout}]
+runs/
+    run_003/
+        meta.json
+        loss.csv
+        events.jsonl
+        checkpoints/
+            model_ep00500.pt
+            model_ep01000.pt
+            ...
+\end{lstlisting}
 
 \section{Blender Add-on}
 
-TODO
+The add-on architecture (UI panels, operators, and the data flow to the server) is described in
+Section~\ref{sec:arch-blender}. This section highlights the implementation structure and the
+Blender-specific threading pattern needed for interactive visualisation.
 
-\chapter{Testing}
-TODO
+The add-on is implemented in the \texttt{blender/} package. UI properties are stored in
+scene-level property groups and exposed through sidebar panels. Actions are implemented as Blender
+operators that connect to the server and request either training or inference.
+
+Voxelisation and viewport rendering are handled by \texttt{voxel\_utils.py}. Meshes are converted
+into dense voxel arrays for transmission and then reconstructed into a voxel mesh for display.
+
+Network communication is kept off the Blender main thread. \texttt{NCAClient} runs a listener
+thread that receives protocol messages and decodes broadcast states. The listener stores only the
+latest received state into a shared buffer and schedules a timer callback. The timer runs on the
+main thread and performs the actual scene updates, which avoids thread-safety issues in Blender.
+
+Listing~\ref{lst:blender-timer} shows the buffer-and-timer pattern used for state visualisation.
+
+\begin{lstlisting}[style=py, caption={State visualisation via a listener thread and a main-thread timer (simplified).}, label={lst:blender-timer}]
+def on_state(arr):
+    global pending
+    pending = arr
+    bpy.app.timers.register(poll_state, first_interval=0.05)
+
+def poll_state():
+    global pending
+    if pending is not None:
+        render_state(pending)
+        pending = None
+    return 0.1
+\end{lstlisting}
 
 \chapter{Experiments}
 TODO
