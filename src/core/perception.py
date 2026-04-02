@@ -59,6 +59,9 @@ class Perception3D(torch.nn.Module):
 
         self._init_perception_kernels()
 
+        # Keep perception kernels fixed (matches the intended NCA formulation).
+        self.depthwise.weight.requires_grad_(False)
+
     def _init_perception_kernels(self) -> None:
         """Initialize the fixed perception weights (no gradients).
 
