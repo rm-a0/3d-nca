@@ -59,11 +59,14 @@ class NCAClient:
             self._listener_thread.join(timeout=5.0)
         self._listener_thread = None
         if self._sock:
-            for fn in (self._sock.shutdown, self._sock.close):
-                try:
-                    fn(socket.SHUT_RDWR) if fn is self._sock.shutdown else fn()
-                except Exception:
-                    pass
+            try:
+                self._sock.shutdown(socket.SHUT_RDWR)
+            except Exception:
+                pass
+            try:
+                self._sock.close()
+            except Exception:
+                pass
             self._sock = None
 
     # --- Send Helpers ---
