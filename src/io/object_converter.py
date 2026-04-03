@@ -9,6 +9,7 @@ between external (D,H,W,C) and internal (B,C,D,H,W) tensor layouts.
 import numpy as np
 import torch
 from torch import Tensor
+from numbers import Integral
 from typing import Tuple, Literal
 import trimesh
 
@@ -36,11 +37,16 @@ def obj_to_tensor(
         Uses internal (B,C,D,H,W) format (batch-first) for PyTorch compatibility.
         To convert to external (D,H,W,C) format: tensor[0].permute(1,2,3,0).numpy()
     """
+    if len(grid_size) != 3 or any(not isinstance(dim, Integral) or dim <= 0 for dim in grid_size):
+        raise ValueError(f"grid_size must be a tuple of 3 positive integers, got {grid_size}")
+
     mesh = trimesh.load_mesh(filepath)
 
     bounds = mesh.bounds
     center = (bounds[0] + bounds[1]) / 2
     scale = (bounds[1] - bounds[0]).max()
+    if scale <= 0:
+        raise ValueError(f"Mesh '{filepath}' has zero extent and cannot be voxelized")
     mesh.vertices = (mesh.vertices - center) / scale
 
     voxels = mesh.voxelized(pitch=2.0 / max(grid_size))
@@ -73,9 +79,8 @@ def obj_to_tensor(
     voxel_float = voxel_matrix.astype(np.float32)
 
     # Validate shape before stacking channels
-    assert (
-        voxel_float.ndim == 3
-    ), f"Voxel matrix must be 3D (D,H,W), got {voxel_float.ndim}D"
+    if voxel_float.ndim != 3:
+        raise ValueError(f"Voxel matrix must be 3D (D,H,W), got {voxel_float.ndim}D")
 
     if hasattr(mesh.visual, 'vertex_colors') and mesh.visual.vertex_colors is not None:
         vertex_colors = mesh.visual.vertex_colors[:, :3] / 255.0  # RGB, normalized
@@ -98,9 +103,13 @@ def obj_to_tensor(
 
     # Add batch dimension: (C, D, H, W) -> (1, C, D, H, W)
     result = torch.from_numpy(tensor).unsqueeze(0).to(device)
-    assert result.ndim == 5, f"Result must be 5D (B,C,D,H,W), got {result.ndim}D"
-    assert result.shape[0] == 1, f"Batch dimension must be 1, got {result.shape[0]}"
-    assert result.shape[1] == (
-        4 if mode == "rgba" else 1
-    ), f"Channel count mismatch for mode {mode}"
+    if result.ndim != 5:
+        raise ValueError(f"Result must be 5D (B,C,D,H,W), got {result.ndim}D")
+    if result.shape[0] != 1:
+        raise ValueError(f"Batch dimension must be 1, got {result.shape[0]}")
+    expected_channels = 4 if mode == "rgba" else 1
+    if result.shape[1] != expected_channels:
+        raise ValueError(
+            f"Channel count mismatch for mode {mode}: expected {expected_channels}, got {result.shape[1]}"
+        )
     return result

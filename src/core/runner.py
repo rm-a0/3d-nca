@@ -16,6 +16,7 @@ channels-last format.
 from __future__ import annotations
 
 import random
+from numbers import Integral
 from typing import Any, Dict, Generator, List, Optional
 
 import numpy as np
@@ -74,6 +75,8 @@ class NCARunner:
                 Internally converted to (B, C, D, H, W) batch-first for all computations.
                 Transpose: (D,H,W,C) -> (C,D,H,W) -> unsqueeze -> (1,C,D,H,W)
         """
+        self._validate_config(config)
+
         # Reset pool state so repeated init() calls do not accumulate old samples.
         self._pool = []
         self._pool_task_ids = []
@@ -100,15 +103,7 @@ class NCARunner:
             eta_min=1e-5,
         )
 
-        self.targets = []
-        target_list = target if isinstance(target, list) else [target]
-        for t in target_list:
-            t_chw = np.transpose(t, (3, 0, 1, 2)).astype(
-                np.float32
-            )  # (D,H,W,C) -> (C,D,H,W)
-            self.targets.append(
-                torch.from_numpy(t_chw).unsqueeze(0).to(self._device)
-            )  # (1,C,D,H,W)
+        self.targets = self._prepare_targets(target, self._cell_cfg.visible_channels)
 
         self.target = self.targets[0]  # Fallback to single target
 
@@ -131,6 +126,80 @@ class NCARunner:
         self.total_epochs = config["training"]["num_epochs"]
         self._batch_size = config["training"].get("batch_size", DEFAULT_BATCH_SIZE)
         self.latest_loss = 0.0
+
+    def _validate_config(self, config: dict) -> None:
+        if not isinstance(config, dict):
+            raise TypeError(f"Config must be a dict, got {type(config).__name__}")
+
+        required_sections = ("cell", "perception", "update", "grid", "training")
+        missing_sections = [name for name in required_sections if name not in config]
+        if missing_sections:
+            raise ValueError(
+                f"Missing required config section(s): {', '.join(missing_sections)}"
+            )
+
+        for section_name in required_sections:
+            section_value = config[section_name]
+            if not isinstance(section_value, dict):
+                raise TypeError(
+                    f"Config section '{section_name}' must be a dict, got {type(section_value).__name__}"
+                )
+
+        grid_size = config["grid"].get("size")
+        if not isinstance(grid_size, (list, tuple)) or len(grid_size) != 3:
+            raise ValueError("Config section 'grid' must define a 3D 'size' tuple")
+        if any(not isinstance(dim, Integral) or dim <= 0 for dim in grid_size):
+            raise ValueError("Grid dimensions must be positive integers")
+
+        training_cfg = config["training"]
+        learning_rate = training_cfg.get("learning_rate")
+        if not isinstance(learning_rate, (int, float)) or learning_rate <= 0:
+            raise ValueError("Config section 'training.learning_rate' must be positive")
+
+        num_epochs = training_cfg.get("num_epochs")
+        if not isinstance(num_epochs, Integral) or num_epochs <= 0:
+            raise ValueError(
+                "Config section 'training.num_epochs' must be a positive integer"
+            )
+
+        batch_size = training_cfg.get("batch_size", DEFAULT_BATCH_SIZE)
+        if not isinstance(batch_size, Integral) or batch_size <= 0:
+            raise ValueError(
+                "Config section 'training.batch_size' must be a positive integer"
+            )
+
+    def _prepare_targets(
+        self,
+        target: np.ndarray | list[np.ndarray],
+        visible_channels: int,
+    ) -> list[Tensor]:
+        target_list = target if isinstance(target, list) else [target]
+        if not target_list:
+            raise ValueError("Target list cannot be empty")
+
+        prepared_targets: list[Tensor] = []
+        for index, t in enumerate(target_list):
+            if not isinstance(t, np.ndarray):
+                raise TypeError(
+                    f"Target {index} must be a numpy.ndarray, got {type(t).__name__}"
+                )
+            if t.ndim != 4:
+                raise ValueError(
+                    f"Target {index} must have shape (D, H, W, C), got {t.ndim}D"
+                )
+            if t.shape[-1] != visible_channels:
+                raise ValueError(
+                    f"Target {index} channel count {t.shape[-1]} does not match visible_channels={visible_channels}"
+                )
+
+            t_chw = np.transpose(t, (3, 0, 1, 2)).astype(
+                np.float32
+            )  # (D,H,W,C) -> (C,D,H,W)
+            prepared_targets.append(
+                torch.from_numpy(t_chw).unsqueeze(0).to(self._device)
+            )  # (1,C,D,H,W)
+
+        return prepared_targets
 
     def set_target(self, target: Tensor) -> None:
         """Update training target.
