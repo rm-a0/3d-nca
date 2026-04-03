@@ -698,6 +698,12 @@ same time, the core framework remains independent of both the server and the gra
 so researchers who do not need interactive visualisation or want to use their own training algorithms can 
 import and use it directly in their own scripts or notebooks.
 
+Alongside the main client--server workflow, the repository also contains lightweight notebook utilities
+for basic mesh-to-voxel conversion and offline visualisation. These helpers were used during early
+exploration and intentionally cover only simple targets. They do not preserve Blender materials and
+do not provide per-voxel colour sampling.
+The Blender add-on supersedes them for practical target preparation and interactive visualisation.
+
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=\textwidth]{obrazky-figures/fig-system-overview.png}
@@ -739,12 +745,17 @@ on multiple targets simultaneously using a one-hot encoding to distinguish betwe
 Task channels remain constant for the duration of a training phase, while
 hidden and visible channels evolve freely under the learned update rule.
 
+Task channels are optional and are disabled in the baseline configuration. They were introduced later
+as an extension for an experiment that demonstrates modularity and extensibility; single-target
+training uses only hidden and visible channels.
+
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=\textwidth]{obrazky-figures/fig-cell-state-vector.png}
     \caption{Per-voxel state vector layout. The vector contains hidden channels, optional task
              channels encoded as a one-hot vector, and visible channels. The alpha channel, which
-             serves as the alive signal, is always the last visible channel.}
+             serves as the alive signal, is always the last visible channel. Task channels are an
+             optional extension and are disabled by default.}
     \label{fig:cell-state-vector}
 \end{figure}
 
@@ -1061,10 +1072,14 @@ The implementation is organised into a small number of Python packages:
 \begin{itemize}
     \item \texttt{src/core/}: NCA model, stepping logic, and training utilities,
     \item \texttt{src/server/}: TCP server, protocol handling, and the training runner,
-    \item \texttt{src/io/}: import/export and conversion utilities for voxel targets,
-    \item \texttt{src/viz/}: offline visualisation backends,
+    \item \texttt{src/io/}: legacy import/export and mesh conversion utilities used mainly in early notebooks,
+    \item \texttt{src/viz/}: notebook visualisation helpers for offline inspection,
     \item \texttt{blender/}: Blender add-on for voxelisation, UI, and viewport rendering.
 \end{itemize}
+
+The notebook utilities are not part of the interactive Blender workflow. Voxel targets for training are
+prepared and exported through the add-on, which samples colour from Blender materials and provides a
+single place to adjust grid size and training presets.
 
 PyTorch is used for tensor operations, 3D convolutions, and automatic
 differentiation required for unrolling the automaton through time~\cite{PaszkePyTorch, PyTorchDocs}.
@@ -1085,6 +1100,9 @@ alpha   = state[:, -1:, ...]
 Channel ordering follows the state vector layout shown in Figure~\ref{fig:cell-state-vector}.
 Hidden channels come first, optional task channels come next, and visible channels come last,
 with alpha stored in the final channel.
+
+Task channels are disabled in the baseline configuration and were introduced later as an optional
+extension used in a modularity experiment.
 
 Model hyperparameters are represented by small configuration dataclasses.
 Component-level parameters are stored in frozen dataclasses (\texttt{CellConfig},
@@ -1115,8 +1133,9 @@ In code, the implementation is split into four modules:
 A thin wrapper \texttt{NCAModel} provides a single entry point and standardises checkpointing.
 
 Two construction styles are used in the codebase. The server and runner build \texttt{Grid3D}
-directly from component configs, while notebooks and scripts can use \texttt{NCAModel} with a
-single \texttt{NCAConfig}. Listing~\ref{lst:model-entrypoints} shows both patterns.
+directly from component configs, while notebooks and scripts can use \texttt{NCAModel} either with a
+single \texttt{NCAConfig} or directly through keyword arguments that mirror the same fields.
+Listing~\ref{lst:model-entrypoints} shows both patterns.
 
 \begin{lstlisting}[style=py, caption={Two entry points for constructing the NCA model: low-level \texttt{Grid3D} and the high-level \texttt{NCAModel} wrapper.}, label={lst:model-entrypoints}]
 # Low-level construction (server/runner)
@@ -1127,8 +1146,7 @@ grid_cfg = GridConfig(size=(32, 32, 32))
 grid = Grid3D(cell_cfg, perc_cfg, upd_cfg, grid_cfg)
 
 # High-level wrapper (scripts/notebooks)
-cfg = NCAConfig(grid_size=(32, 32, 32), hidden_channels=16, visible_channels=4, alive_threshold=0.1)
-model = NCAModel(config=cfg)
+model = NCAModel(grid_size=(32, 32, 32), hidden_channels=16, visible_channels=4, alive_threshold=0.1)
 \end{lstlisting}
 
 \subsection{CellState}
@@ -1313,6 +1331,8 @@ pool.update(batch, pred)
 When multiple targets are used, the runner stores a list of target tensors and associates each
 pool sample with a target ID. If task channels are enabled, the corresponding one-hot slice is
 inserted into the state so that a single model can be trained on multiple morphing objectives.
+This mechanism is used only in the extensibility experiment; baseline single-target training keeps
+task channels disabled.
 Schedule events (learning rate, batch size, loss weights, target changes) are applied through the
 thread-safe \texttt{Schedule} class.
 
@@ -1496,6 +1516,60 @@ def poll_state():
         pending = None
     return 0.1
 \end{lstlisting}
+
+\chapter{Testing}
+
+Testing combined lightweight automated checks with exploratory evaluation in notebooks and interactive
+end-to-end runs through Blender. The automated test suite is intentionally small and focuses on
+correctness of core operations (tensor shapes, masking behaviour, serialisation) and on protocol
+round-trips rather than comprehensive coverage.
+
+Automated tests are implemented using \texttt{pytest} in the \texttt{tests/} directory:
+\begin{itemize}
+    \item\texttt{test\_core.py} Unit tests for the core model components. The suite verifies the
+    alive-mask computation in \texttt{CellState}, the fixed perception kernels and frozen weights in
+    \texttt{Perception3D}, basic invariants of \texttt{UpdateRule} (zero-initialised final layer and
+    masking of task-channel increments), and seed initialisation in \texttt{Grid3D} including the
+    optional task-channel one-hot slice. It also checks configuration and checkpoint
+    round-trips for \texttt{NCAModel}.
+
+    \item\texttt{test\_protocol\_schedule.py} Tests for the message protocol helpers and schedule
+    logic. These checks cover base64 tensor encoding/decoding, parsing/building of \texttt{init},
+    \texttt{run\_model}, and \texttt{state} messages, UTF-8 JSON handling, maximum message size
+    enforcement, disconnect behaviour, and schedule serialisation and execution (including the
+    immediate \texttt{NOW} events).
+
+    \item\texttt{test\_server\_client.py} Integration-style checks for server--client interaction
+    at the API boundary. The Blender client is exercised with a fake socket and monkeypatched send
+    function to confirm the generated control messages. The server dispatch loop is tested against a
+    fake trainer to confirm message routing. The trainer helper \texttt{\_switch\_task\_channel} and
+    the broadcast rate limiting are also verified.
+\end{itemize}
+
+Automated tests are complemented by practical protocol verification using Wireshark. This was used
+to monitor the TCP traffic between the Blender client and the server, inspect the framed JSON
+messages on the wire, and validate that message sizes and broadcast cadence match the expected
+behaviour.
+
+During early development, Jupyter notebooks were used as an exploratory testbed for the core model
+and training behaviour. These notebooks rely on the lightweight \texttt{src/viz/} and \texttt{src/io/}
+helpers, which is the primary reason these modules exist despite not being part of the main
+core--server--Blender workflow.
+Each notebook focuses on a different aspect:
+\begin{itemize}
+    \item \texttt{01\_basic\_functionality.ipynb}: stepping the untrained model forward and inspecting
+    basic state statistics and alive voxels.
+    \item \texttt{02\_sphere\_training\_alpha.ipynb}: an analytic voxel target (sphere) and alpha-only
+    optimisation with slice and volume visualisations.
+    \item \texttt{03\_donut\_training\_alpha.ipynb}: a mesh-based target imported from an OBJ file and
+    trained in an occupancy-only setting.
+    \item \texttt{04\_donut\_training\_rgba.ipynb}: an RGBA target and colour-supervised training with
+    volume visualisation.
+\end{itemize}
+
+After the Blender add-on was implemented, it became the primary environment for end-to-end testing
+and qualitative observation of training dynamics, target voxelisation, protocol responsiveness, and
+viewport rendering. The resulting experiments and observations are discussed in the next chapter.
 
 \chapter{Experiments}
 TODO
