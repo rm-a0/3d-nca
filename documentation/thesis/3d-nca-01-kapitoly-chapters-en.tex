@@ -709,7 +709,7 @@ The Blender add-on supersedes them for practical target preparation and interact
     \includegraphics[width=\textwidth]{obrazky-figures/fig-system-overview.png}
     \caption{High-level system architecture. Arrows indicate dependency direction.
              The dashed TCP boundary marks the network separation between the
-             server and the Blender client.}
+             server and the Blender client}
     \label{fig:system-overview}
 \end{figure}
 
@@ -755,7 +755,7 @@ training uses only hidden and visible channels.
     \caption{Per-voxel state vector layout. The vector contains hidden channels, optional task
              channels encoded as a one-hot vector, and visible channels. The alpha channel, which
              serves as the alive signal, is always the last visible channel. Task channels are an
-             optional extension and are disabled by default.}
+             optional extension and are disabled by default}
     \label{fig:cell-state-vector}
 \end{figure}
 
@@ -828,7 +828,7 @@ shows the data flow through a single step.
     \includegraphics[width=\textwidth]{obrazky-figures/fig-nca-step-abstract.png}
     \caption{Data flow through a single NCA update step. The state passes through the fixed 3D
              perception filters, is transformed by the shared update rule, and is then gated by
-             the alive masking mechanism before producing the updated state.}
+             the alive masking mechanism before producing the updated state}
     \label{fig:nca-step-abstract}
 \end{figure}
 
@@ -931,7 +931,7 @@ schedule update, pause and resume, to inference and final disconnect.
     \caption{Client-server message sequence for a complete session. The
              client drives all state transitions; the server responds with
              acknowledgements and streams state broadcasts during active
-             training or inference.}
+             training or inference}
     \label{fig:client-server-sequence}
 \end{figure}
 
@@ -949,7 +949,7 @@ stopped or until the configured number of forward steps is complete.
     \caption{Session state machine. The server transitions between
              disconnected, idle, training, paused, and inference states in
              response to client messages. All active states return to
-             disconnected if the client closes the connection.}
+             disconnected if the client closes the connection}
     \label{fig:protocol-fsm}
 \end{figure}
 
@@ -1267,7 +1267,7 @@ MLP together with the stochastic fire mask and the bounded output.
     \centering
     \includegraphics[width=\textwidth]{obrazky-figures/fig-nca-step-detailed.png}
     \caption{Detailed data flow through a single NCA update step, showing the full layer sequence
-             within the update MLP, the optional stochastic fire mask, and the bounded tanh output.}
+             within the update MLP, the optional stochastic fire mask, and the bounded tanh output}
     \label{fig:nca-step-detailed}
 \end{figure}
 
@@ -1444,7 +1444,7 @@ sock.sendall(wire)
     \centering
     \includegraphics[width=0.75\textwidth]{obrazky-figures/fig-message-frame-format.png}
     \caption{Wire message format. Each message consists of a four-byte big-endian unsigned integer
-             carrying the payload byte length, followed by the UTF-8 JSON payload.}
+             carrying the payload byte length, followed by the UTF-8 JSON payload}
     \label{fig:message-frame-format}
 \end{figure}
 
@@ -1452,7 +1452,7 @@ sock.sendall(wire)
     \centering
     \includegraphics[width=0.85\textwidth]{obrazky-figures/fig-message-types.png}
     \caption{Protocol message types and their JSON fields. Messages above the divider are sent by
-             the client; messages below are sent by the server.}
+             the client; messages below are sent by the server}
     \label{fig:message-types}
 \end{figure}
 

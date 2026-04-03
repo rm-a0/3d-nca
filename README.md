@@ -54,26 +54,34 @@ code notebooks/01_basic_functionality.ipynb
 Or in Python:
 
 ```python
-from src.core.nca_model import NCAModel
+from src.core.runner import NCARunner
 from src.io.object_converter import obj_to_tensor
-import numpy as np
 
-# Load target mesh
 target = obj_to_tensor("path/to/mesh.obj", grid_size=(100, 100, 100), mode="rgba")
+target = target.squeeze(0).permute(1, 2, 3, 0).cpu().numpy()
 
-# Create and train model
-model = NCAModel()
-model.train(target.numpy(), epochs=5000)
+config = {
+  "cell": {"hidden_channels": 16, "visible_channels": 4},
+  "perception": {},
+  "update": {"hidden_dim": 128},
+  "grid": {"size": (100, 100, 100)},
+  "training": {"learning_rate": 1e-3, "num_epochs": 5000},
+}
 
-# Export result
-state = model.export_state()  # shape (D, H, W, C)
+runner = NCARunner(verbose=True)
+runner.init(config, target)
+
+for metrics in runner.train():
+  print(metrics["loss_total"])
+
+# The current state is available as runner.state in internal (B, C, D, H, W) format.
 ```
 
 ### 3. Real-time Blender Visualization (Optional)
 
 1. Open Blender
 2. Edit → Preferences → Add-ons → Install from file → select `blender/` folder
-3. Start training server: `python -c "from src.server.server import serve_forever; serve_forever()"`
+3. Start training server: `python -c "from src.server.server import NCAServer; NCAServer(port=9999).start()"`
 4. In Blender, click "Connect to Server" in the NCA panel
 5. Watch the NCA grow in real-time
 
@@ -121,12 +129,24 @@ code notebooks/01_basic_functionality.ipynb
 or from CLI:
 ```bash
 python -c "
-from src.core.nca_model import NCAModel
+from src.core.runner import NCARunner
 from src.io.object_converter import obj_to_tensor
 
 target = obj_to_tensor('assets/donut/donut.obj', mode='rgba')
-model = NCAModel(config={'training': {'num_epochs': 5000}})
-model.train(target.numpy())
+target = target.squeeze(0).permute(1, 2, 3, 0).cpu().numpy()
+
+config = {
+  'cell': {'hidden_channels': 16, 'visible_channels': 4},
+  'perception': {},
+  'update': {'hidden_dim': 128},
+  'grid': {'size': (100, 100, 100)},
+  'training': {'learning_rate': 1e-3, 'num_epochs': 5000},
+}
+
+runner = NCARunner(verbose=True)
+runner.init(config, target)
+for metrics in runner.train():
+  print(metrics['loss_total'])
 "
 ```
 
@@ -134,7 +154,7 @@ model.train(target.numpy())
 
 Terminal 1 — Start training server:
 ```bash
-python -c "from src.server.server import NCAServer; s = NCAServer(port=9999); s.serve_forever()"
+python -c "from src.server.server import NCAServer; NCAServer(port=9999).start()"
 ```
 
 Terminal 2 — Blender connects via addon:
@@ -183,8 +203,8 @@ The server accepts commands:
 │
 ├── blender/                       # Blender add-on (Python 3.11 bundled)
 │   ├── __init__.py
-│   ├── operator.py                # UI operators: start/stop/pause
-│   ├── panel.py                   # Blender UI panel in N-sidebar
+│   ├── operators.py               # UI operators: start/stop/pause
+│   ├── panels.py                  # Blender UI panel in N-sidebar
 │   ├── client.py                  # Socket client: connection management
 │   ├── protocol.py                # Wire protocol (shared with server)
 │   ├── voxel_utils.py             # Voxel→mesh conversion for Blender viewport
@@ -216,7 +236,7 @@ The server accepts commands:
 │   │   └── 3d-nca.tex             # LaTeX thesis source
 │   └── README.md                  # Documentation index
 │
-├── tests/                         # Unit & integration tests (future)
+├── tests/                         # Unit & integration tests
 ├── conda_env.yml                  # Reproducible Conda environment
 ├── pyproject.toml                 # Poetry metadata, dependencies
 └── README.md                      # This file
