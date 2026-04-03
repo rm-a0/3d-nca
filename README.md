@@ -517,13 +517,5 @@ pytest tests/ -xvs
 
 ## TODO / Known Limitations
 
-- **Docstring standardization**: Some older modules lack detailed docstrings; standardize across entire codebase
-- **Unit tests**: No pytest suite yet; add tests for core ops (grid.step, alive_mask)
-- **Logging**: Currently uses print + CSV; consider structured logging (loguru/structlog)
-- **Memory profiling**: Profile peak memory during large grid sizes to enable better checkpointing heuristics
-- **Data pipeline**: Currently single-mesh per run; could enable multi-target curriculum
-- **Async I/O**: Blender addon uses polling; consider websocket for lower latency
-- **Type annotations**: Add full type hints to remaining files (perception.py, update.py)
-- **Error handling**: Server protocol needs better error messages and recovery
 - **CI/CD**: Add GitHub Actions for lint (ruff), type check (mypy), test runs
 - **Documentation**: Add more notebook examples (multi-material, symmetry constraints, etc.)
