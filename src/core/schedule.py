@@ -160,6 +160,20 @@ class Schedule:
 
 
 def _apply_event(event: Event, runner: "NCARunner") -> None:
+    supports_events = getattr(runner, "supports_schedule_events", None)
+    if supports_events is False:
+        print(f"[Schedule] Ignored event {event.event_type}: runtime does not support schedule events")
+        return
+
+    handler = getattr(runner, "apply_schedule_event", None)
+    if callable(handler):
+        handled = handler(event)
+        if handled:
+            print(f"[Schedule] Epoch {event.epoch}: {event.event_type.value.lower()}")
+        else:
+            print(f"[Schedule] Unhandled event type: {event.event_type}")
+        return
+
     t = event.event_type
     v = event.value
 

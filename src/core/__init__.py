@@ -11,6 +11,7 @@ from .update import UpdateConfig, UpdateRule
 from .grid import GridConfig, Grid3D
 from .nca_model import NCAModel, NCAConfig
 from .schedule import Schedule, Event, EventType
+from .runtime import TrainingRuntime, BaseTrainingRuntime, TrainingSnapshot
 from .runner import NCARunner
 
 __all__ = [
@@ -27,5 +28,8 @@ __all__ = [
     "Schedule",
     "Event",
     "EventType",
+    "TrainingRuntime",
+    "BaseTrainingRuntime",
+    "TrainingSnapshot",
     "NCARunner",
 ]

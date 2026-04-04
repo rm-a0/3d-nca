@@ -11,6 +11,7 @@ See protocol.py for full wire format specification.
 """
 
 import socket
+from typing import Optional
 
 from .trainer import NCATrainer
 from .protocol import (
@@ -25,8 +26,8 @@ from .protocol import (
 
 
 class NCAServer:
-    def __init__(self, host: str = "0.0.0.0", port: int = 5555) -> None:
-        self.trainer = NCATrainer()
+    def __init__(self, host: str = "0.0.0.0", port: int = 5555, trainer: Optional[NCATrainer] = None) -> None:
+        self.trainer = trainer or NCATrainer()
         self.host = host
         self.port = port
         self._sock = None

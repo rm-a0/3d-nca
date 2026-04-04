@@ -27,6 +27,7 @@ from torch import Tensor
 from .cell import CellConfig
 from .grid import Grid3D, GridConfig
 from .perception import PerceptionConfig
+from .runtime import BaseTrainingRuntime, TrainingSnapshot
 from .update import UpdateConfig
 from .schedule import Schedule
 
@@ -44,8 +45,9 @@ DEFAULT_COLOR_WEIGHT = 1.0
 DEFAULT_OVERFLOW_WEIGHT = 2.0
 
 
-class NCARunner:
+class NCARunner(BaseTrainingRuntime):
     def __init__(self, verbose: bool = True):
+        super().__init__(verbose=verbose)
         self.model: Optional[Grid3D] = None
         self.optimizer = None
         self.target: Optional[Tensor] = None
@@ -54,7 +56,6 @@ class NCARunner:
         self.current_epoch: int = 0
         self.total_epochs: int = 0
         self.latest_loss: float = 0.0
-        self.verbose = verbose
 
         self._alpha_weight: float = DEFAULT_ALPHA_WEIGHT
         self._color_weight: float = DEFAULT_COLOR_WEIGHT
@@ -64,7 +65,9 @@ class NCARunner:
         self._cell_cfg: Optional[CellConfig] = None
         self._device: Optional[str] = None
         self._pool: List[Tensor] = []
+        self._pool_task_ids: List[int] = []
         self._lr_scheduler = None
+        self._latest_metrics: Dict[str, float] = {}
 
     def init(self, config: dict, target: np.ndarray | list[np.ndarray]) -> None:
         """Initialize runner with config and target.
@@ -126,6 +129,7 @@ class NCARunner:
         self.total_epochs = config["training"]["num_epochs"]
         self._batch_size = config["training"].get("batch_size", DEFAULT_BATCH_SIZE)
         self.latest_loss = 0.0
+        self._latest_metrics = {}
 
     def _validate_config(self, config: dict) -> None:
         if not isinstance(config, dict):
@@ -212,6 +216,62 @@ class NCARunner:
         if self.verbose:
             print(f"[Runner] Target swapped at epoch {self.current_epoch}")
 
+    def snapshot(self) -> TrainingSnapshot:
+        """Return a stable snapshot for broadcasting and logging."""
+        if self.state is None or self._cell_cfg is None:
+            raise RuntimeError("Runner is not initialized")
+
+        state_np = self.state.detach().cpu().numpy().astype(np.float32)
+        return TrainingSnapshot(
+            state=state_np,
+            epoch=self.current_epoch,
+            total_epochs=self.total_epochs,
+            loss=self.latest_loss,
+            visible_channels=self._cell_cfg.visible_channels,
+            metrics=dict(self._latest_metrics),
+        )
+
+    def apply_schedule_event(self, event: Any) -> bool:
+        """Apply one schedule event through the runtime's public boundary."""
+        from .schedule import EventType
+
+        if self.optimizer is None or self._cell_cfg is None:
+            return False
+
+        event_type = event.event_type
+        value = float(event.value)
+
+        if event_type == EventType.LEARNING_RATE:
+            for param_group in self.optimizer.param_groups:
+                param_group["lr"] = value
+            return True
+        if event_type == EventType.BATCH_SIZE:
+            self._batch_size = max(1, int(value))
+            return True
+        if event_type == EventType.ALPHA_WEIGHT:
+            self._alpha_weight = value
+            return True
+        if event_type == EventType.COLOR_WEIGHT:
+            self._color_weight = value
+            return True
+        if event_type == EventType.OVERFLOW_WEIGHT:
+            self._overflow_weight = value
+            return True
+        if event_type == EventType.TARGET_CHANGE:
+            if event.target is None:
+                raise ValueError("TARGET_CHANGE event requires a target array")
+            import torch
+
+            target_chw = np.transpose(event.target, (3, 0, 1, 2)).astype(np.float32)
+            self.set_target(torch.from_numpy(target_chw).unsqueeze(0))
+            return True
+
+        return False
+
+    @property
+    def supports_schedule_events(self) -> bool:
+        return True
+
     def train(
         self, schedule: Optional[Schedule] = None
     ) -> Generator[Dict[str, Any], None, None]:
@@ -226,17 +286,35 @@ class NCARunner:
         Yields:
             Dict[epoch, loss_alpha, loss_color, loss_overflow, loss_total, best_np]
         """
-        for epoch in range(1, self.total_epochs + 1):
-            metrics = self._step()
-            self.current_epoch = epoch
-            self.latest_loss = metrics["loss_total"]
-            if schedule is not None:
-                schedule.check_and_execute(epoch, self)
-            if self.verbose:
-                print(
-                    f"Epoch {epoch}/{self.total_epochs} - Loss: {metrics['loss_total']:.4f}"
-                )
-            yield metrics
+        self._begin_training_loop()
+        try:
+            for epoch in range(1, self.total_epochs + 1):
+                if self.stop_requested:
+                    break
+
+                self._wait_if_paused()
+                if self.stop_requested:
+                    break
+
+                metrics = self._step()
+                self.current_epoch = epoch
+                self.latest_loss = metrics["loss_total"]
+                self._latest_metrics = {
+                    key: float(value)
+                    for key, value in metrics.items()
+                    if isinstance(value, (int, float))
+                }
+
+                if schedule is not None and self.supports_schedule_events:
+                    schedule.check_and_execute(epoch, self)
+
+                if self.verbose:
+                    print(
+                        f"Epoch {epoch}/{self.total_epochs} - Loss: {metrics['loss_total']:.4f}"
+                    )
+                yield metrics
+        finally:
+            self._end_training_loop()
 
     def _get_step_range(self) -> tuple[int, int]:
         """Compute curriculum learning step range for current epoch.

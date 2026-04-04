@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from src.core.runner import NCARunner
+from src.core.schedule import Event, EventType
 from src.io.object_converter import obj_to_tensor
 
 
@@ -59,6 +60,39 @@ def test_runner_train_yields_metrics_for_one_epoch() -> None:
     assert set(metrics) >= {"loss_alpha", "loss_color", "loss_overflow", "loss_total"}
     assert runner.current_epoch == 1
     assert runner.latest_loss == metrics["loss_total"]
+
+
+def test_runner_snapshot_and_schedule_event_boundary() -> None:
+    runner = NCARunner(verbose=False)
+    runner.init(_make_config(num_epochs=1, batch_size=1), _make_target())
+
+    snapshot = runner.snapshot()
+    assert snapshot.epoch == 0
+    assert snapshot.total_epochs == 1
+    assert snapshot.visible_channels == 4
+    assert snapshot.state.shape == (1, 8, 4, 4, 4)
+
+    before = runner.optimizer.param_groups[0]["lr"]
+    handled = runner.apply_schedule_event(Event(epoch=1, event_type=EventType.LEARNING_RATE, value=before * 0.5))
+
+    assert handled is True
+    assert runner.optimizer.param_groups[0]["lr"] == before * 0.5
+
+
+def test_runner_lifecycle_defaults_exposed_by_base_runtime() -> None:
+    runner = NCARunner(verbose=False)
+
+    assert runner.is_running is False
+    assert runner.is_paused is False
+
+    runner.pause()
+    assert runner.is_paused is True
+
+    runner.resume()
+    assert runner.is_paused is False
+
+    runner.stop()
+    assert runner.stop_requested is True
 
 
 def test_runner_init_rejects_missing_config_section() -> None:

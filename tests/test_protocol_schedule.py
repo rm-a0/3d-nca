@@ -8,6 +8,7 @@ import pytest
 import torch
 
 from src.core.schedule import Event, EventType, NOW, Schedule
+from src.core.runtime import BaseTrainingRuntime, TrainingSnapshot
 from src.server.protocol import (
     MAX_MSG_SIZE,
     b64_to_tensor,
@@ -168,4 +169,54 @@ def test_schedule_executes_multiple_same_epoch_events() -> None:
     assert runner._alpha_weight == 1.5
     assert runner._color_weight == 0.7
     assert runner._overflow_weight == 2.2
+    assert schedule.events == []
+
+
+def test_schedule_prefers_runtime_event_handler(monkeypatch) -> None:
+    schedule = Schedule()
+    schedule.add_event(Event(epoch=2, event_type=EventType.BATCH_SIZE, value=5.0))
+
+    calls: list[Event] = []
+
+    class RuntimeStub:
+        def apply_schedule_event(self, event: Event) -> bool:
+            calls.append(event)
+            return True
+
+    runtime = RuntimeStub()
+    schedule.check_and_execute(2, runtime)
+
+    assert len(calls) == 1
+    assert calls[0].event_type == EventType.BATCH_SIZE
+    assert schedule.events == []
+
+
+def test_schedule_ignores_events_for_runtime_without_support() -> None:
+    schedule = Schedule()
+    schedule.add_event(Event(epoch=1, event_type=EventType.BATCH_SIZE, value=7.0))
+
+    class NoEventRuntime(BaseTrainingRuntime):
+        def init(self, config, target) -> None:
+            return None
+
+        def train(self, schedule=None):
+            if False:
+                yield {}
+
+        def set_target(self, target) -> None:
+            return None
+
+        def snapshot(self) -> TrainingSnapshot:
+            return TrainingSnapshot(
+                state=np.zeros((1, 1, 1, 1, 1), dtype=np.float32),
+                epoch=0,
+                total_epochs=0,
+                loss=0.0,
+                visible_channels=1,
+                metrics={},
+            )
+
+    runtime = NoEventRuntime(verbose=False)
+    schedule.check_and_execute(1, runtime)
+
     assert schedule.events == []

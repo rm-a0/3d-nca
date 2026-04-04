@@ -257,3 +257,26 @@ def test_trainer_switch_channel_and_broadcast(monkeypatch) -> None:
     assert captured[0]["epoch"] == 3
     assert captured[0]["loss"] == 0.5
     assert captured[0]["shape"] == [1, 1, 2, 2, 2]
+
+
+def test_trainer_forwards_controls_to_runtime() -> None:
+    calls: list[str] = []
+
+    class RuntimeStub:
+        def pause(self) -> None:
+            calls.append("pause")
+
+        def resume(self) -> None:
+            calls.append("resume")
+
+        def stop(self) -> None:
+            calls.append("stop")
+
+    trainer = NCATrainer(verbose=False)
+    trainer._runtime = RuntimeStub()
+
+    trainer.pause()
+    trainer.resume()
+    trainer.stop()
+
+    assert calls == ["pause", "resume", "stop"]

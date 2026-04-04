@@ -23,8 +23,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
-_BROADCAST_MIN_INTERVAL_S = 0.05  # cap log broadcasts at 20 Hz
-
 
 class NCALogger:
     """Persists training metadata, losses, events, and checkpoints for one run."""
@@ -94,6 +92,7 @@ class NCALogger:
         phase: str = "",
         model=None,
         is_final: bool = False,
+        metrics: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Append one CSV row.  Optionally save a model checkpoint."""
         with self._loss_path.open("a", newline="", encoding="utf-8") as f:

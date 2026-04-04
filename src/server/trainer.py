@@ -15,6 +15,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 import numpy as np
 
+from src.core.runtime import TrainingRuntime
 from src.core.runner import NCARunner
 from src.core.schedule import Event, Schedule
 from .protocol import build_state_msg
@@ -24,6 +25,18 @@ SendFn = Callable[[Dict[str, Any]], None]
 
 # Minimum seconds between state broadcasts to avoid flooding the socket.
 _BROADCAST_INTERVAL = 0.05  # 20 fps max
+
+
+def _state_to_display_array(state, visible_channels: int) -> np.ndarray:
+    if hasattr(state, "detach"):
+        state = state.detach().cpu().numpy()
+    else:
+        state = np.asarray(state)
+
+    state = state.astype(np.float32, copy=False)
+    if state.ndim == 5:
+        return state[:, -visible_channels:]
+    return state[-visible_channels:]
 
 
 def _switch_task_channel(state, task_id: int, cell_cfg) -> Any:
@@ -62,12 +75,15 @@ class NCATrainer:
         base_dir: str = "runs",
         checkpoint_interval: int = 500,
         verbose: bool = True,
+        runtime_factory: Optional[Callable[[], TrainingRuntime]] = None,
     ) -> None:
         self._base_dir = base_dir
         self._checkpoint_interval = checkpoint_interval
         self.verbose = verbose
 
-        self._runner: Optional[NCARunner] = None
+        self._runtime_factory = runtime_factory or (lambda: NCARunner(verbose=self.verbose))
+        self._runtime: Optional[TrainingRuntime] = None
+        self._runner: Optional[TrainingRuntime] = None
         self._schedule = Schedule()
         self.logger: Optional[NCALogger] = None
 
@@ -93,8 +109,9 @@ class NCATrainer:
         self.logger._send_fn = send_fn
         self.logger.log_meta(config)
 
-        self._runner = NCARunner(verbose=self.verbose)
-        self._runner.init(config, target)
+        self._runtime = self._runtime_factory()
+        self._runner = self._runtime
+        self._runtime.init(config, target)
         self._schedule = Schedule()
 
         self._start_thread(self._training_loop)
@@ -115,20 +132,28 @@ class NCATrainer:
 
     def pause(self) -> None:
         self._pause_event.clear()
+        if self._runtime is not None:
+            self._runtime.pause()
         if self.verbose:
             print("[Trainer] Paused")
 
     def resume(self) -> None:
         self._pause_event.set()
+        if self._runtime is not None:
+            self._runtime.resume()
         if self.verbose:
             print("[Trainer] Resumed")
 
     def stop(self) -> None:
         self._stop_event.set()
+        if self._runtime is not None:
+            self._runtime.stop()
         self._pause_event.set()  # unblock any waiting thread
         if self._train_thread is not None and self._train_thread.is_alive():
             self._train_thread.join(timeout=10.0)
         self._train_thread = None
+        self._runtime = None
+        self._runner = None
         self._stop_event.clear()
 
     def update_schedule(self, events_data: List[dict]) -> None:
@@ -160,8 +185,11 @@ class NCATrainer:
         Pulls metrics from runner.train() generator, logs to disk, broadcasts state,
         and checks schedule for parameter updates each epoch. Respects pause/stop events.
         """
-        runner = self._runner
-        gen = runner.train(schedule=self._schedule)
+        runtime = self._runtime
+        if runtime is None:
+            return
+
+        gen = runtime.train(schedule=self._schedule)
 
         while not self._stop_event.is_set():
             self._pause_event.wait()
@@ -172,24 +200,27 @@ class NCATrainer:
             except StopIteration:
                 break
 
+            snapshot = runtime.snapshot()
+
             if self.logger is not None:
-                is_final = runner.current_epoch == runner.total_epochs
+                is_final = snapshot.epoch == snapshot.total_epochs
+                metrics = snapshot.metrics or {}
                 self.logger.log_epoch(
-                    epoch=runner.current_epoch,
-                    loss_alpha=metrics["loss_alpha"],
-                    loss_color=metrics["loss_color"],
-                    loss_overflow=metrics["loss_overflow"],
-                    loss_total=metrics["loss_total"],
+                    epoch=snapshot.epoch,
+                    loss_alpha=float(metrics.get("loss_alpha", snapshot.loss)),
+                    loss_color=float(metrics.get("loss_color", 0.0)),
+                    loss_overflow=float(metrics.get("loss_overflow", 0.0)),
+                    loss_total=float(metrics.get("loss_total", snapshot.loss)),
                     phase=str(metrics.get("phase", "")),
-                    model=runner.model,
+                    model=getattr(runtime, "model", None),
                     is_final=is_final,
                 )
 
             self._broadcast(
-                runner.state,
-                runner.current_epoch,
-                runner.latest_loss,
-                runner._cell_cfg.visible_channels,
+                snapshot.state,
+                snapshot.epoch,
+                snapshot.loss,
+                snapshot.visible_channels,
             )
 
         if self.verbose:
@@ -307,11 +338,7 @@ class NCATrainer:
             return
         self._last_broadcast = now
         try:
-            arr = state.detach().cpu().numpy().astype(np.float32)
-            # extract only visible channels
-            arr = (
-                arr[:, -visible_channels:] if arr.ndim == 5 else arr[-visible_channels:]
-            )
+            arr = _state_to_display_array(state, visible_channels=visible_channels)
             self._send_fn(build_state_msg(arr, epoch, loss))
         except Exception as exc:
             if self.verbose:
