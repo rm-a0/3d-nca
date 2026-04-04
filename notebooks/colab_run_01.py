@@ -24,7 +24,7 @@ print("VRAM:", round(torch.cuda.get_device_properties(0).total_memory / 1e9, 2),
 
 from pyngrok import ngrok
 
-NGROK_TOKEN = "35X2T98JO9wlMzeARzHYtpAT1qk_ayVYY36YM1MfpehHA2eP"
+NGROK_TOKEN = "use-your-own-token"
 ngrok.set_auth_token(NGROK_TOKEN)
 
 # Kill any existing tunnels from previous runs
@@ -38,7 +38,6 @@ print("=" * 40)
 print(f"  Host : {host}")
 print(f"  Port : {port}")
 print("=" * 40)
-print("Paste these into Blender → NCA → Connection panel")
 
 import sys
 sys.path.insert(0, '/content/3d-nca')

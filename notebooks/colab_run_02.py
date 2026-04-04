@@ -22,64 +22,70 @@ print("CUDA:", torch.cuda.is_available(),
 
 import numpy as np
 
-GRID = 32   # voxel grid size — change to 24 to go faster, 40 for higher res
+GRID = 32  # voxel grid size
 
-def _rgba(mask: np.ndarray, r=1., g=1., b=1.) -> np.ndarray:
-    """Turn a boolean (D,H,W) mask into a (D,H,W,4) RGBA target tensor."""
+def _rgba(mask: np.ndarray, r=1.0, g=1.0, b=1.0) -> np.ndarray:
+    """Convert a (D,H,W) mask to (D,H,W,4) RGBA."""
     t = np.zeros((*mask.shape, 4), dtype=np.float32)
     t[mask, 0] = r
     t[mask, 1] = g
     t[mask, 2] = b
-    t[mask, 3] = 1.0        # alpha = alive
+    t[mask, 3] = 1.0  # alpha = alive
     return t
 
-def make_tetrahedron(grid=GRID, pad=2) -> np.ndarray:
-    """Solid tetrahedron (four-faced 3D triangle), blue-ish."""
+def make_tetrahedron(grid: int = GRID, pad: int = 2) -> np.ndarray:
+    """Create a solid regular tetrahedron target."""
     n = grid - 2 * pad
     i, j, k = np.mgrid[0:n, 0:n, 0:n]
-    # four half-space inequalities that define a tetrahedron in [0,n]³
-    p, q, r = i / n, j / n, k / n
+
+    # Centered coordinates in [-1, 1] for a symmetric tetrahedron.
+    x = ((i + 0.5) / n) * 2.0 - 1.0
+    y = ((j + 0.5) / n) * 2.0 - 1.0
+    z = ((k + 0.5) / n) * 2.0 - 1.0
+    s = 0.72
+
     mask_raw = (
-        (p + q + r <= 1.4) &
-        (p >= 0.05) & (q >= 0.05) & (r >= 0.05) &
-        (-p + q + r <= 0.9) & (p - q + r <= 0.9) & (p + q - r <= 0.9)
+        (x + y + z <= s)
+        & (-x - y + z <= s)
+        & (-x + y - z <= s)
+        & (x - y - z <= s)
     )
     full = np.zeros((grid, grid, grid), dtype=bool)
-    full[pad:pad+n, pad:pad+n, pad:pad+n] = mask_raw
-    return _rgba(full, r=0.3, g=0.5, b=1.0)   # blue
+    full[pad : pad + n, pad : pad + n, pad : pad + n] = mask_raw
+    return _rgba(full, r=0.3, g=0.5, b=1.0)
 
-def make_cube(grid=GRID, pad=4) -> np.ndarray:
-    """Solid cube (centred, with a small padding inset), orange-ish."""
+def make_cube(grid: int = GRID, pad: int = 4) -> np.ndarray:
+    """Create a solid centered cube target."""
     full = np.zeros((grid, grid, grid), dtype=bool)
-    full[pad:grid-pad, pad:grid-pad, pad:grid-pad] = True
-    return _rgba(full, r=1.0, g=0.6, b=0.2)   # orange
+    full[pad : grid - pad, pad : grid - pad, pad : grid - pad] = True
+    return _rgba(full, r=1.0, g=0.6, b=0.2)
 
-def make_sphere(grid=GRID) -> np.ndarray:
-    """Solid sphere (centred), green-ish."""
+def make_sphere(grid: int = GRID) -> np.ndarray:
+    """Create a solid centered sphere target."""
     cx = cy = cz = grid / 2.0
-    r  = grid / 2.0 - 1.5
+    r = grid / 2.0 - 1.5
     i, j, k = np.mgrid[0:grid, 0:grid, 0:grid]
-    mask = (i - cx)**2 + (j - cy)**2 + (k - cz)**2 <= r**2
-    return _rgba(mask, r=0.2, g=0.9, b=0.4)   # green
+    mask = (i - cx) ** 2 + (j - cy) ** 2 + (k - cz) ** 2 <= r**2
+    return _rgba(mask, r=0.2, g=0.9, b=0.4)
 
 target_triangle = make_tetrahedron()
-target_cube     = make_cube()
-target_sphere   = make_sphere()
+target_cube = make_cube()
+target_sphere = make_sphere()
 
-print("Shapes — alive voxels:")
+print("Shapes - alive voxels:")
 for name, t in [("tetrahedron", target_triangle),
-                ("cube",        target_cube),
-                ("sphere",      target_sphere)]:
-    print(f"  {name}: {int((t[...,3]>0).sum())}")
+                ("cube", target_cube),
+                ("sphere", target_sphere)]:
+    print(f"  {name}: {int((t[..., 3] > 0).sum())}")
 
-TOTAL_EPOCHS   = 6000
-SWITCH_1       = 2000   # triangle → cube
-SWITCH_2       = 4000   # cube     → sphere
+TOTAL_EPOCHS = 6000
+SWITCH_1 = 2000  # tetrahedron -> cube
+SWITCH_2 = 4000  # cube -> sphere
 
 config = {
     "cell": {
         "hidden_channels": 16,
-        "visible_channels": 4,      # RGBA
+        "visible_channels": 4,  # RGBA
         "alive_threshold": 0.1,
     },
     "perception": {
@@ -118,7 +124,7 @@ schedule_events = [
 
 
 
-import time, os
+import os
 from src.server.trainer import NCATrainer
 
 LOG_DIR = "/content/drive/MyDrive/nca_morph"
@@ -127,15 +133,16 @@ os.makedirs(LOG_DIR, exist_ok=True)
 loss_log = []
 
 def send_fn(msg):
-    """Called by the trainer instead of a socket — log to file & print."""
+    """Log trainer state updates."""
     if msg.get("type") == "state":
         epoch = msg["epoch"]
-        loss  = msg["loss"]
+        loss = msg["loss"]
         loss_log.append((epoch, loss))
         if epoch % 100 == 0:
             print(f"  epoch {epoch:>4}/{TOTAL_EPOCHS}  loss={loss:.5f}")
             # save state snapshot to Drive every 100 epochs
-            import base64, json
+            import json
+
             path = f"{LOG_DIR}/state_epoch_{epoch:04d}.json"
             with open(path, "w") as f:
                 json.dump({"epoch": epoch, "loss": loss,
@@ -147,7 +154,7 @@ trainer.init(config, target_triangle, send_fn)
 # Inject schedule directly (bypasses the socket message path)
 trainer._schedule.replace(schedule_events)
 
-print("Training started — triangle → cube → sphere")
+print("Training started - tetrahedron -> cube -> sphere")
 print(f"  Switch 1 at epoch {SWITCH_1}, Switch 2 at epoch {SWITCH_2}")
 
 # Block until the background thread finishes
