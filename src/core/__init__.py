@@ -1,8 +1,8 @@
 """
 Core NCA Package.
 
-Exports core model components, configurations, scheduling primitives,
-and training runtime utilities for 3D neural cellular automata.
+Exports model components, configurations, scheduling primitives,
+and the training runner interface.
 """
 
 from .cell import CellConfig, CellState
@@ -11,12 +11,13 @@ from .update import UpdateConfig, UpdateRule
 from .grid import GridConfig, Grid3D
 from .nca_model import NCAModel, NCAConfig
 from .schedule import Schedule, Event, EventType
-from .runtime import TrainingRuntime, BaseTrainingRuntime, TrainingSnapshot
-from .runner import NCARunner
+from .runner import TrainingRunner, TrainingSnapshot, NCARunner
 
 __all__ = [
+    # High level wrapper
     "NCAModel",
     "NCAConfig",
+    # Core components
     "Grid3D",
     "GridConfig",
     "CellState",
@@ -25,11 +26,12 @@ __all__ = [
     "PerceptionConfig",
     "UpdateRule",
     "UpdateConfig",
+    # Scheduling
     "Schedule",
     "Event",
     "EventType",
-    "TrainingRuntime",
-    "BaseTrainingRuntime",
+    # Training interface
+    "TrainingRunner",
     "TrainingSnapshot",
     "NCARunner",
 ]

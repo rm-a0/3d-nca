@@ -1,9 +1,11 @@
 """
-NCATrainer - orchestrates training and inference in a background thread.
+NCATrainer - Orchestrates a TrainingRunner in a background thread.
 
-Two modes:
-  - Training:  runner.train() generator, streams state every broadcast cycle.
-  - Inference: load saved model from bytes, run forward phases, stream state.
+Wraps any TrainingRunner implementation in a background thread and handles
+logging and state broadcasting.  Swap the backend by passing runner_factory::
+
+    trainer = NCATrainer(runner_factory=MyRunner)
+    server  = NCAServer(trainer=trainer)
 """
 
 from __future__ import annotations
@@ -15,36 +17,29 @@ from typing import Any, Callable, Dict, List, Optional
 
 import numpy as np
 
-from src.core.runtime import TrainingRuntime
-from src.core.runner import NCARunner
+from src.core.runner import TrainingRunner, NCARunner
 from src.core.schedule import Event, Schedule
 from .protocol import build_state_msg
 from .logger import NCALogger
 
 SendFn = Callable[[Dict[str, Any]], None]
 
-# Minimum seconds between state broadcasts to avoid flooding the socket.
-_BROADCAST_INTERVAL = 0.05  # 20 fps max
-
-
-def _state_to_display_array(state, visible_channels: int) -> np.ndarray:
-    if hasattr(state, "detach"):
-        state = state.detach().cpu().numpy()
-    else:
-        state = np.asarray(state)
-
-    state = state.astype(np.float32, copy=False)
-    if state.ndim == 5:
-        return state[:, -visible_channels:]
-    return state[-visible_channels:]
+_BROADCAST_INTERVAL = 0.02  # seconds - cap broadcasts at 50 fps
 
 
 def _switch_task_channel(state, task_id: int, cell_cfg) -> Any:
-    """Replace task-channel slice with a fresh one-hot via torch.cat.
+    """Replace the task-channel slice with a fresh one-hot encoding.
 
-    Uses cat instead of in-place assignment so autograd graphs in the
-    hidden and visible channels are preserved (needed for sequential morph
-    training where gradients must flow through task switches).
+    Uses torch.cat rather than in-place assignment so autograd graphs in the
+    hidden and visible channels are preserved across task switches.
+
+    Args:
+        state: Current state tensor [B, C, D, H, W].
+        task_id: Index of the task channel to activate.
+        cell_cfg: Cell configuration with task_channels and visible_channels.
+
+    Returns:
+        New state tensor with task channels replaced.
     """
     import torch
 
@@ -59,15 +54,18 @@ def _switch_task_channel(state, task_id: int, cell_cfg) -> Any:
 
 
 class NCATrainer:
-    """Manages NCA training and inference in a background thread.
+    """Orchestrates a TrainingRunner in a background thread.
 
-    Supports two modes via separate thread loops:
-    - Training: runner.train() generator yields metrics each epoch
-    - Inference: load pretrained model, run forward phases
+    Handles threading, logging, and state broadcasting for any TrainingRunner
+    implementation.  The runner_factory parameter is the extension point for
+    custom training backends.
 
-    Provides public control API: init, run_inference, pause, resume, stop, update_schedule.
-    All state access and thread coordination uses lock-free event flags or
-    thread-safe Schedule class. Broadcasts state snapshots to client at configurable intervals.
+    Args:
+        base_dir: Root directory for run logs and checkpoints.
+        checkpoint_interval: Save a model checkpoint every N epochs.
+        verbose: Print progress and event messages.
+        runner_factory: Callable that returns a new TrainingRunner instance.
+            Defaults to NCARunner.
     """
 
     def __init__(
@@ -75,30 +73,36 @@ class NCATrainer:
         base_dir: str = "runs",
         checkpoint_interval: int = 500,
         verbose: bool = True,
-        runtime_factory: Optional[Callable[[], TrainingRuntime]] = None,
+        runner_factory: Optional[Callable[[], TrainingRunner]] = None,
     ) -> None:
         self._base_dir = base_dir
         self._checkpoint_interval = checkpoint_interval
         self.verbose = verbose
+        self._runner_factory: Callable[[], TrainingRunner] = (
+            runner_factory or (lambda: NCARunner(verbose=verbose))
+        )
 
-        self._runtime_factory = runtime_factory or (lambda: NCARunner(verbose=self.verbose))
-        self._runtime: Optional[TrainingRuntime] = None
-        self._runner: Optional[TrainingRuntime] = None
+        self._runner: Optional[TrainingRunner] = None
         self._schedule = Schedule()
         self.logger: Optional[NCALogger] = None
 
-        self._train_thread: Optional[threading.Thread] = None
+        self._thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
         self._pause_event = threading.Event()
         self._pause_event.set()
-
-        self._send_fn: Optional[SendFn] = None
         self._last_broadcast: float = 0.0
+        self._send_fn: Optional[SendFn] = None
 
     # --- Public API ---
 
     def init(self, config: dict, target: np.ndarray, send_fn: SendFn) -> None:
-        """Stop any active session, then start a new training run."""
+        """Stop any active session and start a new training run.
+
+        Args:
+            config: Training configuration dict.
+            target: Target voxel grid in (D, H, W, C) external format.
+            send_fn: Callback used to send protocol messages to the client.
+        """
         self.stop()
         self._send_fn = send_fn
 
@@ -109,9 +113,8 @@ class NCATrainer:
         self.logger._send_fn = send_fn
         self.logger.log_meta(config)
 
-        self._runtime = self._runtime_factory()
-        self._runner = self._runtime
-        self._runtime.init(config, target)
+        self._runner = self._runner_factory()
+        self._runner.init(config, target)
         self._schedule = Schedule()
 
         self._start_thread(self._training_loop)
@@ -123,40 +126,46 @@ class NCATrainer:
         broadcast_every: int,
         send_fn: SendFn,
     ) -> None:
-        """Stop any active session, load model from bytes, run forward inference."""
+        """Stop any active session and start an inference run.
+
+        Args:
+            model_bytes: Serialised PyTorch checkpoint (.pt file bytes).
+            phase_steps: Forward steps per task phase.
+            broadcast_every: Broadcast state every N steps.
+            send_fn: Callback used to send protocol messages to the client.
+        """
         self.stop()
         self._send_fn = send_fn
-        self._start_thread(
-            self._inference_loop, model_bytes, phase_steps, broadcast_every
-        )
+        self._start_thread(self._inference_loop, model_bytes, phase_steps, broadcast_every)
 
     def pause(self) -> None:
+        """Pause the active training session."""
         self._pause_event.clear()
-        if self._runtime is not None:
-            self._runtime.pause()
         if self.verbose:
             print("[Trainer] Paused")
 
     def resume(self) -> None:
+        """Resume a paused training session."""
         self._pause_event.set()
-        if self._runtime is not None:
-            self._runtime.resume()
         if self.verbose:
             print("[Trainer] Resumed")
 
     def stop(self) -> None:
+        """Stop the active session and wait for the background thread to exit."""
         self._stop_event.set()
-        if self._runtime is not None:
-            self._runtime.stop()
-        self._pause_event.set()  # unblock any waiting thread
-        if self._train_thread is not None and self._train_thread.is_alive():
-            self._train_thread.join(timeout=10.0)
-        self._train_thread = None
-        self._runtime = None
+        self._pause_event.set()
+        if self._thread is not None and self._thread.is_alive():
+            self._thread.join(timeout=10.0)
+        self._thread = None
         self._runner = None
         self._stop_event.clear()
 
     def update_schedule(self, events_data: List[dict]) -> None:
+        """Replace the active schedule with a new event list.
+
+        Args:
+            events_data: List of event dicts from the wire protocol.
+        """
         events = [Event.from_dict(d) for d in events_data]
         self._schedule.replace(events)
         if self.verbose:
@@ -164,102 +173,92 @@ class NCATrainer:
 
     @property
     def is_running(self) -> bool:
-        return self._train_thread is not None and self._train_thread.is_alive()
+        """True while the background thread is alive."""
+        return self._thread is not None and self._thread.is_alive()
 
     @property
     def is_paused(self) -> bool:
+        """True while the session is intentionally paused."""
         return not self._pause_event.is_set()
 
-    # --- Private Loops ---
+    # --- Private: thread management ---
 
-    def _start_thread(self, target, *args) -> None:
+    def _start_thread(self, target: Callable, *args: Any) -> None:
         self._stop_event.clear()
         self._pause_event.set()
         self._last_broadcast = 0.0
-        self._train_thread = threading.Thread(target=target, args=args, daemon=True)
-        self._train_thread.start()
+        self._thread = threading.Thread(target=target, args=args, daemon=True)
+        self._thread.start()
+
+    # --- Private: training loop ---
 
     def _training_loop(self) -> None:
-        """Run training loop in background thread.
-
-        Pulls metrics from runner.train() generator, logs to disk, broadcasts state,
-        and checks schedule for parameter updates each epoch. Respects pause/stop events.
-        """
-        runtime = self._runtime
-        if runtime is None:
+        runner = self._runner
+        if runner is None:
             return
 
-        gen = runtime.train(schedule=self._schedule)
+        gen = runner.train(schedule=self._schedule)
+        try:
+            while not self._stop_event.is_set():
+                self._pause_event.wait()
+                if self._stop_event.is_set():
+                    break
 
-        while not self._stop_event.is_set():
-            self._pause_event.wait()
-            if self._stop_event.is_set():
-                break
-            try:
-                metrics = next(gen)
-            except StopIteration:
-                break
+                try:
+                    next(gen)
+                except StopIteration:
+                    break
 
-            snapshot = runtime.snapshot()
+                snap = runner.snapshot()
 
-            if self.logger is not None:
-                is_final = snapshot.epoch == snapshot.total_epochs
-                metrics = snapshot.metrics or {}
-                self.logger.log_epoch(
-                    epoch=snapshot.epoch,
-                    loss_alpha=float(metrics.get("loss_alpha", snapshot.loss)),
-                    loss_color=float(metrics.get("loss_color", 0.0)),
-                    loss_overflow=float(metrics.get("loss_overflow", 0.0)),
-                    loss_total=float(metrics.get("loss_total", snapshot.loss)),
-                    phase=str(metrics.get("phase", "")),
-                    model=getattr(runtime, "model", None),
-                    is_final=is_final,
-                )
+                if self.logger is not None:
+                    m = snap.metrics
+                    self.logger.log_epoch(
+                        epoch=snap.epoch,
+                        loss_alpha=float(m.get("loss_alpha", snap.loss)),
+                        loss_color=float(m.get("loss_color", 0.0)),
+                        loss_overflow=float(m.get("loss_overflow", 0.0)),
+                        loss_total=float(m.get("loss_total", snap.loss)),
+                        model=getattr(runner, "model", None),
+                        is_final=snap.epoch == snap.total_epochs,
+                    )
 
-            self._broadcast(
-                snapshot.state,
-                snapshot.epoch,
-                snapshot.loss,
-                snapshot.visible_channels,
-            )
+                self._broadcast(snap.state, snap.epoch, snap.loss, snap.visible_channels)
+        finally:
+            gen.close()
 
         if self.verbose:
             run_id = self.logger.run_id if self.logger else "?"
             print(f"[Trainer] Run {run_id} finished")
 
+    # --- Private: inference loop ---
+
     def _inference_loop(
         self, model_bytes: bytes, phase_steps: int, broadcast_every: int
     ) -> None:
-        """Run inference loop in background thread.
-
-        Load model checkpoint from bytes, initialize state, and run forward passes
-        (one phase per task channel). Broadcasts state every N steps.
+        """Load a checkpoint from bytes and run forward inference phases.
 
         Args:
-            model_bytes: Serialized PyTorch checkpoint (.pt file binary).
-            phase_steps: How many forward steps per task phase.
-            broadcast_every: Broadcast state every N steps (rate limiting).
+            model_bytes: Serialised PyTorch checkpoint (.pt file bytes).
+            phase_steps: How many forward steps to run per task phase.
+            broadcast_every: Broadcast state every N steps.
         """
         import torch
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        # --- Load Checkpoint ---
         try:
-            ckpt = torch.load(
-                io.BytesIO(model_bytes), map_location=device, weights_only=False
-            )
+            ckpt = torch.load(io.BytesIO(model_bytes), map_location=device, weights_only=False)
         except Exception as exc:
             self._send_error(f"Failed to load model: {exc}")
             return
-
-        config = ckpt.get("config", {})
 
         from src.core.cell import CellConfig
         from src.core.grid import Grid3D, GridConfig
         from src.core.perception import PerceptionConfig
         from src.core.update import UpdateConfig
 
+        config = ckpt.get("config", {})
         try:
             cell_cfg = CellConfig(**config["cell"])
             perc_cfg = PerceptionConfig(**config.get("perception", {}))
@@ -280,7 +279,6 @@ class NCATrainer:
         n_phases = max(cell_cfg.task_channels, 1)
         step = 0
 
-        # --- Forward Pass ---
         with torch.no_grad():
             task0 = (
                 torch.tensor([0], device=device) if cell_cfg.task_channels > 0 else None
@@ -305,28 +303,26 @@ class NCATrainer:
                     if step % broadcast_every == 0:
                         self._broadcast(state, step, 0.0, cell_cfg.visible_channels)
 
-            # always send final state
             self._broadcast(state, step, 0.0, cell_cfg.visible_channels)
 
         if self.verbose:
             print(f"[Trainer] Inference complete ({step} steps)")
 
-    # --- Helpers ---
+    # --- Private: helpers ---
 
     def _broadcast(
         self,
-        state,
+        state: Any,
         epoch: int,
         loss: float,
         visible_channels: int,
     ) -> None:
-        """Send state snapshot to client at rate-limited intervals.
+        """Send a state snapshot to the client at a rate-limited frequency.
 
-        Drops redundant frames if called faster than _BROADCAST_INTERVAL to avoid
-        flooding the socket. Extracts only visible channels from state [B,C,X,Y,Z].
+        Drops frames if called faster than _BROADCAST_INTERVAL.
 
         Args:
-            state: Current state tensor [B, C, X, Y, Z] or None.
+            state: State tensor [B, C, D, H, W] or numpy array.
             epoch: Current training epoch or inference step count.
             loss: Scalar loss value for display.
             visible_channels: Number of channels to extract and send.
@@ -338,14 +334,18 @@ class NCATrainer:
             return
         self._last_broadcast = now
         try:
-            arr = _state_to_display_array(state, visible_channels=visible_channels)
+            if hasattr(state, "detach"):
+                arr = state.detach().cpu().numpy().astype(np.float32)
+            else:
+                arr = np.asarray(state, dtype=np.float32)
+            arr = arr[:, -visible_channels:] if arr.ndim == 5 else arr[-visible_channels:]
             self._send_fn(build_state_msg(arr, epoch, loss))
         except Exception as exc:
             if self.verbose:
                 print(f"[Trainer] Broadcast error: {exc}")
 
     def _send_error(self, message: str) -> None:
-        """Send error message to client and log to console if verbose.
+        """Send an error message to the client.
 
         Args:
             message: Error description.
