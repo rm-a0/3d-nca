@@ -314,7 +314,7 @@ class NCA_PT_SchedulePanel(NCA_PT_BasePanel):
                 box.prop(ev, "value")
 
         row = layout.row()
-        row.enabled = is_connected() and not is_server_busy()
+        row.enabled = is_connected() and is_server_busy()
         row.operator("nca.send_schedule", icon="EXPORT")
 
 
