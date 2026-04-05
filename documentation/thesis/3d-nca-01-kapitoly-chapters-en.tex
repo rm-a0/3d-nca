@@ -858,17 +858,26 @@ The training pipeline sits above the core NCA model and provides the
 infrastructure needed to optimise the model parameters toward a target voxel
 configuration. It consists of two components: a training runner, which
 implements the training loop, and a schedule manager, which handles dynamic
-parameter changes during training.
+parameter changes during training. In the current implementation, the runner
+boundary is defined by an abstract \\texttt{TrainingRunner} interface. The
+default implementation is \\texttt{NCARunner}, but the server can inject a
+custom runner backend without changing protocol or Blender code.
 
-\subsection{Runner}
+\subsection{Runner Interface and Default Implementation}
 
-The runner implements pool-based training. Rather than restarting from a fresh
-seed on every iteration, it maintains a fixed-size pool of persistent states
+The default \\texttt{NCARunner} implements pool-based training. Rather than
+restarting from a fresh seed on every iteration, it maintains a fixed-size
+pool of persistent states
 representing the grid at various stages of development. Each training iteration
 samples a batch from the pool, runs it forward for a randomly chosen number of steps,
 evaluates the result against the target, and writes the updated states back. The
 sample with the highest loss is replaced with a fresh seed, maintaining pool diversity and
 preventing convergence to a single developmental stage~\cite{Mordvintsev2020}.
+
+From the server perspective, any backend that implements
+\\texttt{TrainingRunner.init()}, \\texttt{train()}, \\texttt{snapshot()},
+\\texttt{set\_target()}, and \\texttt{on\_event()} can be used as a drop-in
+replacement.
 
 The training objective has three weighted parts. Alpha loss compares the
 predicted and target alive channels. Colour loss compares RGB values only in
@@ -891,10 +900,15 @@ final values.
 The schedule component manages one-shot events that fire at specified training
 epochs. Supported events include learning rate changes, batch size adjustments,
 individual loss weight updates, and target replacements (changing the objective
-mid-session). Events are thread-safe: the training loop and server message
-handler access them via a lock. A special epoch value (NOW = -1) fires an event
-immediately rather than waiting, allowing users to adjust parameters during
-live training without restarting.
+mid-session) in the default runner implementation. Events are thread-safe: the
+training loop and server message handler access them via a lock. A special
+epoch value (NOW = -1) fires an event immediately rather than waiting, allowing
+users to adjust parameters during live training without restarting.
+
+At execution time, the schedule forwards each due event to the runner via
+\\texttt{on\_event(event)}. The event is one-shot and removed from the queue
+after the attempt; if a custom runner does not handle a given event type,
+the event is reported as not handled.
 
 
 \section{Server and Networking}
@@ -1278,11 +1292,13 @@ The conceptual structure of pool-based training, curriculum stepping, and schedu
 parameter updates is described in Section~\ref{sec:arch-training}. This section focuses on the
 code-level composition and the data formats used at the training boundary.
 
-Training is implemented in \texttt{NCARunner} (\texttt{src/core/runner.py}). The runner owns the
-model instance (\texttt{Grid3D}), the optimiser, the current target tensor, and a pool of
-intermediate states used as training samples. The main entry point is the generator method
-\texttt{train()}, which yields per-epoch metrics and makes it easy for the server to stream
-progress without blocking on long GPU workloads.
+Training backends are defined by the abstract \texttt{TrainingRunner}
+interface in \texttt{src/core/runner.py}. The default implementation,
+\texttt{NCARunner}, owns the model instance (\texttt{Grid3D}), optimiser,
+current target tensor, and a pool of intermediate states used as training
+samples. The main entry point is the generator method \texttt{train()}, which
+yields per-epoch metrics and makes it easy for the server to stream progress
+without blocking on long GPU workloads.
 
 Runner initialisation accepts voxel targets in external channels-last format
 \texttt{[D, H, W, C]}, which is convenient for Blender and for protocol messages. Before training,
@@ -1374,10 +1390,12 @@ Expensive work (training and inference) is delegated to \texttt{NCATrainer}, whi
 background thread and exposes a small control API: \texttt{pause}, \texttt{resume}, \texttt{stop},
 and \texttt{update\_schedule}.
 
-During training, the trainer drives the \texttt{NCARunner.train()} generator and broadcasts
-state snapshots to the client with rate limiting, so viewport updates remain smooth even when
-the training loop produces updates faster than the network link can handle. During inference,
-the trainer loads a checkpoint from raw bytes and runs forward steps without checkpointing.
+During training, the trainer drives the selected
+\texttt{TrainingRunner.train()} generator and broadcasts state snapshots to the
+client with rate limiting, so viewport updates remain smooth even when the
+training loop produces updates faster than the network link can handle. During
+inference, the trainer loads a checkpoint from raw bytes and runs forward
+steps without checkpointing.
 
 Listing~\ref{lst:server-dispatch} shows the message dispatch loop in simplified form.
 
@@ -1417,6 +1435,9 @@ trainer.stop()
 
 # Inference from a raw checkpoint sent by the client.
 trainer.run_inference(model_bytes, phase_steps, broadcast_every, send_fn)
+
+# Optional: inject a custom backend that implements TrainingRunner.
+trainer = NCATrainer(runner_factory=MyCustomRunner)
 \end{lstlisting}
 
 \subsection{Protocol}
@@ -1519,10 +1540,11 @@ def poll_state():
 
 \chapter{Testing}
 
-Testing combined lightweight automated checks with exploratory evaluation in notebooks and interactive
-end-to-end runs through Blender. The automated test suite is intentionally small and focuses on
-correctness of core operations (tensor shapes, masking behaviour, serialisation) and on protocol
-round-trips rather than comprehensive coverage.
+Testing combined lightweight automated checks with exploratory evaluation in
+notebooks and interactive end-to-end runs through Blender. The automated test
+suite is intentionally small and focuses on core tensor invariants, runner and
+trainer API behaviour, and client/server command flow rather than comprehensive
+coverage.
 
 Automated tests are implemented using \texttt{pytest} in the \texttt{tests/} directory:
 \begin{itemize}
@@ -1533,11 +1555,15 @@ Automated tests are implemented using \texttt{pytest} in the \texttt{tests/} dir
     optional task-channel one-hot slice. It also checks configuration and checkpoint
     round-trips for \texttt{NCAModel}.
 
-    \item\texttt{test\_protocol\_schedule.py} Tests for the message protocol helpers and schedule
-    logic. These checks cover base64 tensor encoding/decoding, parsing/building of \texttt{init},
-    \texttt{run\_model}, and \texttt{state} messages, UTF-8 JSON handling, maximum message size
-    enforcement, disconnect behaviour, and schedule serialisation and execution (including the
-    immediate \texttt{NOW} events).
+    \item\texttt{test\_protocol\_schedule.py} Currently contains additional runner-facing
+    contract checks (snapshot shape and event handling) that overlap with
+    \texttt{test\_runner\_validation.py}. It is used as a lightweight regression
+    file for training-interface behaviour after the runner abstraction changes.
+
+    \item\texttt{test\_runner\_validation.py} Focused tests for the default
+    \texttt{NCARunner}: initialisation, one-epoch training metrics, snapshot
+    contract, event handling through \texttt{on\_event()}, abstract-interface
+    compliance, and input-shape validation.
 
     \item\texttt{test\_server\_client.py} Integration-style checks for server--client interaction
     at the API boundary. The Blender client is exercised with a fake socket and monkeypatched send
@@ -1546,10 +1572,10 @@ Automated tests are implemented using \texttt{pytest} in the \texttt{tests/} dir
     the broadcast rate limiting are also verified.
 \end{itemize}
 
-Automated tests are complemented by practical protocol verification using Wireshark. This was used
-to monitor the TCP traffic between the Blender client and the server, inspect the framed JSON
-messages on the wire, and validate that message sizes and broadcast cadence match the expected
-behaviour.
+Automated tests are complemented by practical protocol verification using
+Wireshark. This was used to monitor the TCP traffic between the Blender client
+and the server, inspect the framed JSON messages on the wire, and validate
+message framing and broadcast cadence during interactive sessions.
 
 During early development, Jupyter notebooks were used as an exploratory testbed for the core model
 and training behaviour. These notebooks rely on the lightweight \texttt{src/viz/} and \texttt{src/io/}
