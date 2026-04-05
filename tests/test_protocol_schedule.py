@@ -1,222 +1,145 @@
 from __future__ import annotations
 
-import struct
-from types import SimpleNamespace
-
 import numpy as np
 import pytest
-import torch
 
-from src.core.schedule import Event, EventType, NOW, Schedule
-from src.core.runtime import BaseTrainingRuntime, TrainingSnapshot
-from src.server.protocol import (
-    MAX_MSG_SIZE,
-    b64_to_tensor,
-    build_init_msg,
-    build_run_model_msg,
-    build_state_msg,
-    decode_message,
-    encode_message,
-    parse_init_msg,
-    parse_run_model_msg,
-    parse_schedule_msg,
-    parse_state_msg,
-    tensor_to_b64,
-    recv_msg,
-)
+from src.core.runner import NCARunner, TrainingRunner, TrainingSnapshot
+from src.core.schedule import Event, EventType
+from src.io.object_converter import obj_to_tensor
 
 
-def test_protocol_message_and_tensor_round_trips() -> None:
-    array = np.array([[1.25, -2.5], [3.75, 4.0]], dtype=np.float64)
-    encoded = tensor_to_b64(array)
-    decoded = b64_to_tensor(encoded, [2, 2])
-
-    assert decoded.dtype == np.float32
-    assert np.allclose(decoded, array.astype(np.float32))
-
-    target = np.arange(8, dtype=np.float32).reshape(2, 2, 2, 1)
-    config = {"name": "demo", "steps": 4}
-    init_msg = build_init_msg(config, target)
-    parsed_config, parsed_target = parse_init_msg(init_msg)
-
-    assert parsed_config == config
-    assert np.array_equal(parsed_target, target)
-
-    state = np.ones((1, 4, 2, 2, 2), dtype=np.float32)
-    state_msg = build_state_msg(state, epoch=7, loss=1.5)
-    parsed_state, epoch, loss = parse_state_msg(state_msg)
-
-    assert epoch == 7
-    assert loss == 1.5
-    assert np.array_equal(parsed_state, state)
-
-    model_msg = build_run_model_msg("Y2hlY2twb2ludA==", phase_steps=12, broadcast_every=3)
-    model_bytes, phase_steps, broadcast_every = parse_run_model_msg(model_msg)
-
-    assert model_bytes == b"checkpoint"
-    assert phase_steps == 12
-    assert broadcast_every == 3
-
-    message = {"type": "ping", "payload": {"nested": [1, 2, 3]}}
-    wire = encode_message(message)
-    assert decode_message(wire[4:]) == message
+def _make_config(
+    *,
+    num_epochs: int = 1,
+    learning_rate: float = 1e-3,
+    batch_size: int = 1,
+    visible_channels: int = 4,
+) -> dict:
+    return {
+        "cell": {
+            "hidden_channels": 4,
+            "visible_channels": visible_channels,
+            "alive_threshold": 0.1,
+            "task_channels": 0,
+        },
+        "perception": {},
+        "update": {"hidden_dim": 8},
+        "grid": {"size": (4, 4, 4)},
+        "training": {
+            "learning_rate": learning_rate,
+            "num_epochs": num_epochs,
+            "batch_size": batch_size,
+        },
+    }
 
 
-def test_protocol_json_handles_utf8_payload() -> None:
-    message = {"type": "ack", "message": "Ň3D model připraven"}
-    wire = encode_message(message)
-    decoded = decode_message(wire[4:])
-    assert decoded == message
+def _make_target(visible_channels: int = 4) -> np.ndarray:
+    target = np.zeros((4, 4, 4, visible_channels), dtype=np.float32)
+    target[..., -1] = 1.0
+    return target
 
 
-def test_recv_msg_rejects_payload_larger_than_max_size() -> None:
-    oversized_header = struct.pack(">I", MAX_MSG_SIZE + 1)
+# --- Init / basic shape tests ---
 
-    class FakeSocket:
-        def __init__(self) -> None:
-            self.calls = 0
+def test_runner_init_accepts_valid_config_and_target() -> None:
+    runner = NCARunner(verbose=False)
+    runner.init(_make_config(), _make_target())
 
-        def recv(self, n: int) -> bytes:
-            self.calls += 1
-            if self.calls == 1:
-                return oversized_header
-            return b""
-
-    with pytest.raises(ValueError, match="Message too large"):
-        recv_msg(FakeSocket())
+    assert runner.model is not None
+    assert runner.target is not None
+    assert runner.total_epochs == 1
+    assert runner.target.shape == (1, 4, 4, 4, 4)
+    assert len(runner._pool) == 32
 
 
-def test_recv_msg_returns_none_on_disconnect_before_header_complete() -> None:
-    class FakeSocket:
-        def recv(self, n: int) -> bytes:
-            return b""
+def test_runner_train_yields_metrics_for_one_epoch() -> None:
+    runner = NCARunner(verbose=False)
+    runner.init(_make_config(num_epochs=1, batch_size=1), _make_target())
 
-    assert recv_msg(FakeSocket()) is None
+    metrics = next(runner.train())
+
+    assert set(metrics) >= {"loss_alpha", "loss_color", "loss_overflow", "loss_total"}
+    assert runner.current_epoch == 1
+    assert runner.latest_loss == metrics["loss_total"]
 
 
-def test_schedule_serialization_and_execution() -> None:
-    schedule = Schedule()
-    target = np.ones((2, 2, 2, 1), dtype=np.float32)
+# --- Snapshot tests ---
 
-    schedule.add_event(Event(epoch=1, event_type=EventType.LEARNING_RATE, value=0.05))
-    schedule.add_event(Event(epoch=NOW, event_type=EventType.BATCH_SIZE, value=2.0))
-    schedule.add_event(
-        Event(epoch=1, event_type=EventType.TARGET_CHANGE, value=1.0, target=target)
+def test_runner_snapshot_returns_training_snapshot() -> None:
+    runner = NCARunner(verbose=False)
+    runner.init(_make_config(num_epochs=1, batch_size=1), _make_target())
+
+    snap = runner.snapshot()
+
+    assert isinstance(snap, TrainingSnapshot)
+    assert snap.epoch == 0
+    assert snap.total_epochs == 1
+    assert snap.visible_channels == 4
+    assert snap.state.shape == (1, 8, 4, 4, 4)
+
+
+def test_runner_snapshot_raises_before_init() -> None:
+    runner = NCARunner(verbose=False)
+    with pytest.raises(RuntimeError, match="init"):
+        runner.snapshot()
+
+
+# --- on_event tests ---
+
+def test_runner_on_event_learning_rate() -> None:
+    runner = NCARunner(verbose=False)
+    runner.init(_make_config(), _make_target())
+    before = runner.optimizer.param_groups[0]["lr"]
+
+    handled = runner.on_event(
+        Event(epoch=1, event_type=EventType.LEARNING_RATE, value=before * 0.5)
     )
 
-    snapshot = schedule.to_dict_list()
-    restored = Schedule.from_dict_list(snapshot)
-
-    assert [event.event_type for event in restored.events] == [
-        EventType.LEARNING_RATE,
-        EventType.BATCH_SIZE,
-        EventType.TARGET_CHANGE,
-    ]
-    assert parse_schedule_msg({"events": snapshot}) == snapshot
-
-    runner = SimpleNamespace(
-        optimizer=SimpleNamespace(param_groups=[{"lr": 0.1}]),
-        _batch_size=4,
-        _alpha_weight=4.0,
-        _color_weight=1.0,
-        _overflow_weight=2.0,
-        target=None,
-    )
-
-    def set_target(tensor: torch.Tensor) -> None:
-        runner.target = tensor
-
-    runner.set_target = set_target
-
-    schedule.check_and_execute(1, runner)
-
-    assert runner.optimizer.param_groups[0]["lr"] == 0.05
-    assert runner._batch_size == 2
-    assert isinstance(runner.target, torch.Tensor)
-    assert runner.target.shape == (1, 1, 2, 2, 2)
-    assert torch.allclose(runner.target, torch.ones_like(runner.target))
-    assert schedule.events == []
+    assert handled is True
+    assert runner.optimizer.param_groups[0]["lr"] == before * 0.5
 
 
-def test_schedule_now_event_executes_on_any_epoch() -> None:
-    schedule = Schedule()
-    schedule.add_event(Event(epoch=NOW, event_type=EventType.BATCH_SIZE, value=9.0))
+def test_runner_on_event_unknown_type_returns_false() -> None:
+    from unittest.mock import MagicMock
 
-    runner = SimpleNamespace(_batch_size=1)
-    schedule.check_and_execute(123, runner)
+    runner = NCARunner(verbose=False)
+    runner.init(_make_config(), _make_target())
 
-    assert runner._batch_size == 9
-    assert schedule.events == []
+    fake_event = MagicMock()
+    fake_event.event_type = "NONEXISTENT"
+    fake_event.value = 0.0
 
-
-def test_schedule_executes_multiple_same_epoch_events() -> None:
-    schedule = Schedule()
-    schedule.add_event(Event(epoch=4, event_type=EventType.ALPHA_WEIGHT, value=1.5))
-    schedule.add_event(Event(epoch=4, event_type=EventType.COLOR_WEIGHT, value=0.7))
-    schedule.add_event(Event(epoch=4, event_type=EventType.OVERFLOW_WEIGHT, value=2.2))
-
-    runner = SimpleNamespace(
-        _alpha_weight=0.0,
-        _color_weight=0.0,
-        _overflow_weight=0.0,
-        optimizer=SimpleNamespace(param_groups=[]),
-        _batch_size=1,
-    )
-    runner.set_target = lambda tensor: None
-
-    schedule.check_and_execute(4, runner)
-
-    assert runner._alpha_weight == 1.5
-    assert runner._color_weight == 0.7
-    assert runner._overflow_weight == 2.2
-    assert schedule.events == []
+    assert runner.on_event(fake_event) is False
 
 
-def test_schedule_prefers_runtime_event_handler(monkeypatch) -> None:
-    schedule = Schedule()
-    schedule.add_event(Event(epoch=2, event_type=EventType.BATCH_SIZE, value=5.0))
-
-    calls: list[Event] = []
-
-    class RuntimeStub:
-        def apply_schedule_event(self, event: Event) -> bool:
-            calls.append(event)
-            return True
-
-    runtime = RuntimeStub()
-    schedule.check_and_execute(2, runtime)
-
-    assert len(calls) == 1
-    assert calls[0].event_type == EventType.BATCH_SIZE
-    assert schedule.events == []
+def test_runner_on_event_before_init_returns_false() -> None:
+    runner = NCARunner(verbose=False)
+    assert runner.on_event(
+        Event(epoch=1, event_type=EventType.LEARNING_RATE, value=0.001)
+    ) is False
 
 
-def test_schedule_ignores_events_for_runtime_without_support() -> None:
-    schedule = Schedule()
-    schedule.add_event(Event(epoch=1, event_type=EventType.BATCH_SIZE, value=7.0))
+# --- Strategy interface compliance ---
 
-    class NoEventRuntime(BaseTrainingRuntime):
-        def init(self, config, target) -> None:
-            return None
+def test_training_runner_is_abstract() -> None:
+    with pytest.raises(TypeError):
+        TrainingRunner()  # type: ignore[abstract]
 
-        def train(self, schedule=None):
-            if False:
-                yield {}
 
-        def set_target(self, target) -> None:
-            return None
+def test_nca_runner_is_training_runner() -> None:
+    assert issubclass(NCARunner, TrainingRunner)
 
-        def snapshot(self) -> TrainingSnapshot:
-            return TrainingSnapshot(
-                state=np.zeros((1, 1, 1, 1, 1), dtype=np.float32),
-                epoch=0,
-                total_epochs=0,
-                loss=0.0,
-                visible_channels=1,
-                metrics={},
-            )
 
-    runtime = NoEventRuntime(verbose=False)
-    schedule.check_and_execute(1, runtime)
+# --- Target validation ---
 
-    assert schedule.events == []
+def test_runner_init_rejects_invalid_target_shape() -> None:
+    runner = NCARunner(verbose=False)
+    with pytest.raises(ValueError, match=r"shape \(D, H, W, C\)"):
+        runner.init(_make_config(), np.zeros((4, 4, 4), dtype=np.float32))
+
+
+def test_obj_to_tensor_rejects_invalid_grid_size() -> None:
+    with pytest.raises(
+        ValueError, match="grid_size must be a tuple of 3 positive integers"
+    ):
+        obj_to_tensor("ignored.obj", grid_size=(0, 4, 4))
