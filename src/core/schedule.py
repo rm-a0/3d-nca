@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, List, Optional
 import numpy as np
 
 if TYPE_CHECKING:
-    from .runner import TrainingRunner
+    from .runners import NCARunner
 
 NOW = -1
 
@@ -147,14 +147,14 @@ class Schedule:
         with self._lock:
             self.events.clear()
 
-    def check_and_execute(self, epoch: int, runner: "TrainingRunner") -> None:
+    def check_and_execute(self, epoch: int, runner: "NCARunner") -> None:
         """Fire all events whose epoch matches and remove them from the list.
 
         Delivers each event to ``runner.on_event(event)``.
 
         Args:
             epoch: Current epoch number.
-            runner: TrainingRunner instance that handles the events.
+            runner: NCARunner instance that handles the events.
         """
         with self._lock:
             remaining: List[Event] = []
@@ -190,12 +190,12 @@ class Schedule:
         return sched
 
 
-def _apply_event(event: Event, runner: "TrainingRunner") -> None:
+def _apply_event(event: Event, runner: "NCARunner") -> None:
     """Deliver one event to the runner and log the outcome.
 
     Args:
         event: Event to deliver.
-        runner: TrainingRunner that handles the event via on_event().
+        runner: NCARunner that handles the event via on_event().
     """
     handled = runner.on_event(event)
     label = event.event_type.value.lower()

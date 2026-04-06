@@ -198,7 +198,7 @@ def build_run_model_msg(
 
     Args:
         model_b64: Previously base64-encoded model file bytes.
-        phase_steps: Forward pass steps per task phase.
+        phase_steps: Total forward steps to run.
         broadcast_every: Broadcast interval (steps).
 
     Returns:
@@ -219,7 +219,7 @@ def parse_run_model_msg(msg: Dict[str, Any]) -> Tuple[bytes, int, int]:
         msg: Run model message dict.
 
     Returns:
-        Tuple (raw model PyTorch checkpoint bytes, phase_steps, broadcast_every).
+        Tuple (raw model PyTorch checkpoint bytes, total_steps, broadcast_every).
     """
     model_bytes = base64.b64decode(msg["model_b64"])
     return model_bytes, msg.get("phase_steps", 32), msg.get("broadcast_every", 4)

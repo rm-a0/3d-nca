@@ -1,7 +1,7 @@
 """
-NCATrainer - Orchestrates a TrainingRunner in a background thread.
+NCATrainer - Orchestrates an NCARunner backend in a background thread.
 
-Wraps any TrainingRunner implementation in a background thread and handles
+Wraps any NCARunner implementation in a background thread and handles
 logging and state broadcasting.  Swap the backend by passing runner_factory::
 
     trainer = NCATrainer(runner_factory=MyRunner)
@@ -17,7 +17,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 import numpy as np
 
-from src.core.runner import TrainingRunner, NCARunner
+from src.core.runners import NCARunner, MorphRunner
 from src.core.schedule import Event, Schedule
 from .protocol import build_state_msg
 from .logger import NCALogger
@@ -27,36 +27,10 @@ SendFn = Callable[[Dict[str, Any]], None]
 _BROADCAST_INTERVAL = 0.02  # seconds - cap broadcasts at 50 fps
 
 
-def _switch_task_channel(state, task_id: int, cell_cfg) -> Any:
-    """Replace the task-channel slice with a fresh one-hot encoding.
-
-    Uses torch.cat rather than in-place assignment so autograd graphs in the
-    hidden and visible channels are preserved across task switches.
-
-    Args:
-        state: Current state tensor [B, C, D, H, W].
-        task_id: Index of the task channel to activate.
-        cell_cfg: Cell configuration with task_channels and visible_channels.
-
-    Returns:
-        New state tensor with task channels replaced.
-    """
-    import torch
-
-    tc = cell_cfg.task_channels
-    vc = cell_cfg.visible_channels
-    B, C, D, H, W = state.shape
-    hidden_end = C - vc - tc
-
-    new_task = torch.zeros(B, tc, D, H, W, device=state.device, dtype=state.dtype)
-    new_task[:, task_id, ...] = 1.0
-    return torch.cat([state[:, :hidden_end], new_task, state[:, -vc:]], dim=1)
-
-
 class NCATrainer:
-    """Orchestrates a TrainingRunner in a background thread.
+    """Orchestrates an NCARunner backend in a background thread.
 
-    Handles threading, logging, and state broadcasting for any TrainingRunner
+    Handles threading, logging, and state broadcasting for any NCARunner
     implementation.  The runner_factory parameter is the extension point for
     custom training backends.
 
@@ -64,8 +38,8 @@ class NCATrainer:
         base_dir: Root directory for run logs and checkpoints.
         checkpoint_interval: Save a model checkpoint every N epochs.
         verbose: Print progress and event messages.
-        runner_factory: Callable that returns a new TrainingRunner instance.
-            Defaults to NCARunner.
+        runner_factory: Callable that returns a new NCARunner instance.
+            Defaults to MorphRunner.
     """
 
     def __init__(
@@ -73,16 +47,16 @@ class NCATrainer:
         base_dir: str = "runs",
         checkpoint_interval: int = 500,
         verbose: bool = True,
-        runner_factory: Optional[Callable[[], TrainingRunner]] = None,
+        runner_factory: Optional[Callable[[], NCARunner]] = None,
     ) -> None:
         self._base_dir = base_dir
         self._checkpoint_interval = checkpoint_interval
         self.verbose = verbose
-        self._runner_factory: Callable[[], TrainingRunner] = (
-            runner_factory or (lambda: NCARunner(verbose=verbose))
+        self._runner_factory: Callable[[], NCARunner] = (
+            runner_factory or (lambda: MorphRunner(verbose=verbose))
         )
 
-        self._runner: Optional[TrainingRunner] = None
+        self._runner: Optional[NCARunner] = None
         self._schedule = Schedule()
         self.logger: Optional[NCALogger] = None
 
@@ -236,11 +210,11 @@ class NCATrainer:
     def _inference_loop(
         self, model_bytes: bytes, phase_steps: int, broadcast_every: int
     ) -> None:
-        """Load a checkpoint from bytes and run forward inference phases.
+        """Load a checkpoint from bytes and run forward inference steps.
 
         Args:
             model_bytes: Serialised PyTorch checkpoint (.pt file bytes).
-            phase_steps: How many forward steps to run per task phase.
+            phase_steps: Total number of forward steps to run.
             broadcast_every: Broadcast state every N steps.
         """
         import torch
@@ -276,32 +250,26 @@ class NCATrainer:
             return
 
         model.eval()
-        n_phases = max(cell_cfg.task_channels, 1)
+        total_steps = max(int(phase_steps), 1)
+        broadcast_every = max(int(broadcast_every), 1)
         step = 0
 
         with torch.no_grad():
-            task0 = (
-                torch.tensor([0], device=device) if cell_cfg.task_channels > 0 else None
-            )
-            state = model.seed_center(1, device, task0)
+            state = model.seed_center(1, device, None)
 
-            for phase_id in range(n_phases):
-                if phase_id > 0 and cell_cfg.task_channels > 0:
-                    state = _switch_task_channel(state, phase_id, cell_cfg)
+            for _ in range(total_steps):
+                if self._stop_event.is_set():
+                    return
+                self._pause_event.wait()
+                if self._stop_event.is_set():
+                    return
 
-                for _ in range(phase_steps):
-                    if self._stop_event.is_set():
-                        return
-                    self._pause_event.wait()
-                    if self._stop_event.is_set():
-                        return
+                state = model(state, steps=1, use_checkpointing=False)
+                state = torch.clamp(state, -1.0, 1.0)
+                step += 1
 
-                    state = model(state, steps=1, use_checkpointing=False)
-                    state = torch.clamp(state, -1.0, 1.0)
-                    step += 1
-
-                    if step % broadcast_every == 0:
-                        self._broadcast(state, step, 0.0, cell_cfg.visible_channels)
+                if step % broadcast_every == 0:
+                    self._broadcast(state, step, 0.0, cell_cfg.visible_channels)
 
             self._broadcast(state, step, 0.0, cell_cfg.visible_channels)
 
