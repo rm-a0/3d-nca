@@ -18,6 +18,12 @@ Try the interactive Blender integration: Launch Blender with the addon, connect 
 | **Blender Addon** | Visualize NCA growth live during training; voxel rendering with pygame-based UI; no polling overhead |
 | **Flexible I/O** | Mesh voxelization via trimesh; checkpoint save/load; exports to external formats |
 
+### Experiment Tracks
+
+1. **Morphogenesis (core default)** using `MorphRunner`
+2. **Regeneration (core modular extension)** using `RegenRunner`
+3. **Metamorphogenesis (notebook experiment)** using a notebook-defined runner and explicit channel manipulation
+
 ---
 
 ## Quick Start
@@ -54,7 +60,7 @@ code notebooks/01_basic_functionality.ipynb
 Or in Python:
 
 ```python
-from src.core.runner import NCARunner
+from src.core.runners import MorphRunner
 from src.io.object_converter import obj_to_tensor
 
 target = obj_to_tensor("path/to/mesh.obj", grid_size=(100, 100, 100), mode="rgba")
@@ -68,7 +74,7 @@ config = {
   "training": {"learning_rate": 1e-3, "num_epochs": 5000},
 }
 
-runner = NCARunner(verbose=True)
+runner = MorphRunner(verbose=True)
 runner.init(config, target)
 
 for metrics in runner.train():
@@ -129,7 +135,7 @@ code notebooks/01_basic_functionality.ipynb
 or from CLI:
 ```bash
 python -c "
-from src.core.runner import NCARunner
+from src.core.runners import MorphRunner
 from src.io.object_converter import obj_to_tensor
 
 target = obj_to_tensor('assets/donut/donut.obj', mode='rgba')
@@ -143,7 +149,7 @@ config = {
   'training': {'learning_rate': 1e-3, 'num_epochs': 5000},
 }
 
-runner = NCARunner(verbose=True)
+runner = MorphRunner(verbose=True)
 runner.init(config, target)
 for metrics in runner.train():
   print(metrics['loss_total'])
@@ -184,7 +190,7 @@ The server accepts commands:
 │   │   ├── perception.py          # Perception3D: 3×3×3 depthwise convolutions
 │   │   ├── update.py              # UpdateRule: learnable MLP (Conv + GroupNorm + tanh)
 │   │   ├── nca_model.py           # NCAModel: high-level user API
-│   │   ├── runner.py              # NCARunner: training loop, curriculum, pool management
+│   │   ├── runners/               # Runner interfaces and training strategies
 │   │   └── schedule.py            # Schedule: thread-safe event dispatch (target changes, LR)
 │   │
 │   ├── server/                    # Training server & Blender integration
@@ -358,10 +364,13 @@ Training loop:
 
 ### Runner (Single Process)
 
-`NCARunner` orchestrates one training session:
+`MorphRunner` orchestrates one training session as the default concrete `NCARunner` implementation:
+
+- `RegenRunner` extends this baseline by damaging pooled states before updates, so the model learns recovery.
+- Metamorphogenesis is intentionally left as a notebook-side custom runner to keep the core framework clean.
 
 ```python
-runner = NCARunner()
+runner = MorphRunner()
 runner.init(config, target)
 
 for epoch in range(1, num_epochs + 1):

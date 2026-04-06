@@ -859,13 +859,20 @@ infrastructure needed to optimise the model parameters toward a target voxel
 configuration. It consists of two components: a training runner, which
 implements the training loop, and a schedule manager, which handles dynamic
 parameter changes during training. In the current implementation, the runner
-boundary is defined by an abstract \\texttt{TrainingRunner} interface. The
-default implementation is \\texttt{NCARunner}, but the server can inject a
+boundary is defined by an abstract \\texttt{NCARunner} interface. The
+default implementation is \\texttt{MorphRunner}, but the server can inject a
 custom runner backend without changing protocol or Blender code.
+
+Alongside this baseline, the core package now includes a regeneration-focused
+implementation, \\texttt{RegenRunner}, which applies random local damage to
+pooled states during training so recovery behaviour can be learned under the
+same interface. More aggressive channel-centric variants (for example
+metamorphogenesis with explicit task-channel switching) are intentionally kept
+as notebook-level runners rather than fixed core classes.
 
 \subsection{Runner Interface and Default Implementation}
 
-The default \\texttt{NCARunner} implements pool-based training. Rather than
+The default \\texttt{MorphRunner} implements pool-based training. Rather than
 restarting from a fresh seed on every iteration, it maintains a fixed-size
 pool of persistent states
 representing the grid at various stages of development. Each training iteration
@@ -875,9 +882,23 @@ sample with the highest loss is replaced with a fresh seed, maintaining pool div
 preventing convergence to a single developmental stage~\cite{Mordvintsev2020}.
 
 From the server perspective, any backend that implements
-\\texttt{TrainingRunner.init()}, \\texttt{train()}, \\texttt{snapshot()},
+\\texttt{NCARunner.init()}, \\texttt{train()}, \\texttt{snapshot()},
 \\texttt{set\_target()}, and \\texttt{on\_event()} can be used as a drop-in
 replacement.
+
+For experimental work, this interface supports a notebook-first workflow: a
+custom runner can keep additional experiment parameters hardcoded in notebook
+code and treat \\texttt{init(config, target)} primarily as a server handshake.
+This is practical for non-standard loops, where changing notebook code is
+often faster than repeatedly extending Blender UI properties.
+
+In this setup, sending a minimal or dummy \\texttt{config}/\\texttt{target}
+pair from Blender can still be valid for visualisation-only sessions, provided
+the custom runner intentionally ignores these values and emits proper
+snapshots. The key requirement is that \\texttt{snapshot().state} remains in
+the expected internal format \\texttt{[B, C, D, H, W]} and reports a consistent
+\\texttt{visible\_channels} value so server broadcasting and Blender rendering
+remain compatible.
 
 The training objective has three weighted parts. Alpha loss compares the
 predicted and target alive channels. Colour loss compares RGB values only in
@@ -1055,6 +1076,12 @@ The state mesh is rebuilt from each received broadcast. A voxel cap
 prevents rendering from overwhelming the GPU when the grid contains an
 unusually large number of active cells; in that case only the
 highest-alpha voxels are retained for display.
+
+Before rendering, a dedicated conversion step maps received state tensors to
+the display voxel format used by Blender. Treating this as an explicit adapter
+keeps visualisation agnostic to internal experiment details and makes it
+straightforward to support alternative state layouts by changing conversion
+logic rather than rewriting protocol framing.
 
 The network listener and the Blender main thread, which owns all scene data,
 run separately. The listener receives incoming states and passes them to the
@@ -1292,13 +1319,19 @@ The conceptual structure of pool-based training, curriculum stepping, and schedu
 parameter updates is described in Section~\ref{sec:arch-training}. This section focuses on the
 code-level composition and the data formats used at the training boundary.
 
-Training backends are defined by the abstract \texttt{TrainingRunner}
-interface in \texttt{src/core/runner.py}. The default implementation,
-\texttt{NCARunner}, owns the model instance (\texttt{Grid3D}), optimiser,
+Training backends are defined by the abstract \texttt{NCARunner}
+interface in \texttt{src/core/runners/base.py}. The default implementation,
+\texttt{MorphRunner}, owns the model instance (\texttt{Grid3D}), optimiser,
 current target tensor, and a pool of intermediate states used as training
 samples. The main entry point is the generator method \texttt{train()}, which
 yields per-epoch metrics and makes it easy for the server to stream progress
 without blocking on long GPU workloads.
+
+The second core backend, \texttt{RegenRunner}
+(\texttt{src/core/runners/regeneration.py}), reuses the same optimisation
+path but injects random local damage into pooled states before updates,
+providing a regeneration-oriented experiment without changing server or
+protocol code.
 
 Runner initialisation accepts voxel targets in external channels-last format
 \texttt{[D, H, W, C]}, which is convenient for Blender and for protocol messages. Before training,
@@ -1391,7 +1424,7 @@ background thread and exposes a small control API: \texttt{pause}, \texttt{resum
 and \texttt{update\_schedule}.
 
 During training, the trainer drives the selected
-\texttt{TrainingRunner.train()} generator and broadcasts state snapshots to the
+\texttt{NCARunner.train()} generator and broadcasts state snapshots to the
 client with rate limiting, so viewport updates remain smooth even when the
 training loop produces updates faster than the network link can handle. During
 inference, the trainer loads a checkpoint from raw bytes and runs forward
@@ -1436,7 +1469,7 @@ trainer.stop()
 # Inference from a raw checkpoint sent by the client.
 trainer.run_inference(model_bytes, phase_steps, broadcast_every, send_fn)
 
-# Optional: inject a custom backend that implements TrainingRunner.
+# Optional: inject a custom backend that implements NCARunner.
 trainer = NCATrainer(runner_factory=MyCustomRunner)
 \end{lstlisting}
 
@@ -1452,6 +1485,26 @@ Tensor payloads (targets and broadcast states) are transmitted as base64-encoded
 arrays together with an explicit \texttt{shape} field. Model checkpoints are transmitted as
 base64-encoded raw \texttt{.pt} bytes during inference requests. Figure~\ref{fig:message-types}
 summarises the message types used by the client and the server.
+
+Architecturally, the protocol defines message types and their control
+semantics, while allowing payload adaptation where necessary. In practice,
+\\texttt{init} is the primary extension point: researchers may add, remove, or
+reshape fields (for example to support multi-target voxelisation or different
+configuration structures). Control messages such as \\texttt{pause},
+\\texttt{resume}, and \\texttt{stop} are intentionally stable, because their
+behaviour is transport-level session control and should stay predictable across
+clients.
+
+When payload semantics are changed across tools, introducing protocol
+versioning is recommended to keep compatibility explicit.
+
+The protocol layer itself is intentionally layout-agnostic: it transports
+typed payload bytes together with explicit shape metadata, but does not define
+a single visualisation axis convention. In the current implementation, the
+server broadcasts visible-channel state slices and the Blender side performs
+the final conversion to display voxel layout. This separation is deliberate,
+because experiments can change internal state organisation while keeping the
+wire framing stable and updating only the conversion adapters.
 
 Listing~\ref{lst:wire-frame} shows the core framing operation used by both the client and server.
 
@@ -1560,16 +1613,17 @@ Automated tests are implemented using \texttt{pytest} in the \texttt{tests/} dir
     \texttt{test\_runner\_validation.py}. It is used as a lightweight regression
     file for training-interface behaviour after the runner abstraction changes.
 
-    \item\texttt{test\_runner\_validation.py} Focused tests for the default
-    \texttt{NCARunner}: initialisation, one-epoch training metrics, snapshot
+    \item\texttt{test\_runner\_validation.py} Focused tests for
+    \texttt{MorphRunner} and \texttt{RegenRunner}: initialisation,
+    one-epoch training metrics, snapshot
     contract, event handling through \texttt{on\_event()}, abstract-interface
     compliance, and input-shape validation.
 
     \item\texttt{test\_server\_client.py} Integration-style checks for server--client interaction
     at the API boundary. The Blender client is exercised with a fake socket and monkeypatched send
     function to confirm the generated control messages. The server dispatch loop is tested against a
-    fake trainer to confirm message routing. The trainer helper \texttt{\_switch\_task\_channel} and
-    the broadcast rate limiting are also verified.
+    fake trainer to confirm message routing. Trainer broadcast rate limiting is
+    also verified.
 \end{itemize}
 
 Automated tests are complemented by practical protocol verification using
