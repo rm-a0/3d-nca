@@ -87,7 +87,7 @@ class NCAClient:
 
         Args:
             model_path: Path to .pt checkpoint file.
-            phase_steps: Forward steps per task phase.
+            phase_steps: Total forward steps to run.
             broadcast_every: Broadcast interval (steps).
         """
         with open(model_path, "rb") as f:

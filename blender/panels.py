@@ -153,7 +153,7 @@ class NCA_PT_InferencePanel(NCA_PT_BasePanel):
         col = layout.column()
         col.enabled = not busy
         col.prop(infer, "model_path", text="Model (.pt)")
-        col.prop(infer, "steps_per_phase", text="Steps / Phase")
+        col.prop(infer, "steps_per_phase", text="Steps")
         col.prop(infer, "broadcast_every", text="Broadcast Every")
 
         layout.separator()
