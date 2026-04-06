@@ -8,10 +8,10 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from src.core.runner import TrainingRunner, NCARunner
+from src.core.runners import MorphRunner
 from src.core.schedule import Event, EventType
 from src.server.server import NCAServer
-from src.server.trainer import NCATrainer, _switch_task_channel
+from src.server.trainer import NCATrainer
 from src.server.protocol import build_init_msg, build_run_model_msg, build_state_msg
 
 
@@ -208,7 +208,7 @@ def test_server_handle_client_stops_on_recv_error(monkeypatch) -> None:
 def test_trainer_accepts_custom_runner_factory() -> None:
     calls: list[str] = []
 
-    class CountingRunner(NCARunner):
+    class CountingRunner(MorphRunner):
         def __init__(self):
             super().__init__(verbose=False)
             calls.append("created")
@@ -219,19 +219,8 @@ def test_trainer_accepts_custom_runner_factory() -> None:
     assert calls == []
 
 
-def test_trainer_switch_channel_and_broadcast(monkeypatch) -> None:
-    from types import SimpleNamespace
-
-    cell_cfg = SimpleNamespace(task_channels=2, visible_channels=1)
+def test_trainer_broadcast_rate_limit(monkeypatch) -> None:
     state = torch.zeros(1, 4, 2, 2, 2)
-    state[:, 2, ...] = 0.5
-
-    switched = _switch_task_channel(state, 1, cell_cfg)
-
-    assert switched.shape == state.shape
-    assert torch.allclose(switched[:, 1], torch.zeros_like(switched[:, 1]))
-    assert torch.allclose(switched[:, 2], torch.ones_like(switched[:, 2]))
-
     trainer = NCATrainer(verbose=False)
     captured: list[dict] = []
     trainer._send_fn = lambda m: captured.append(m)

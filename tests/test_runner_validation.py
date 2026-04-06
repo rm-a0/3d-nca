@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from src.core.runner import NCARunner, TrainingRunner, TrainingSnapshot
+from src.core.runners import MorphRunner, NCARunner, RegenRunner, TrainingSnapshot
 from src.core.schedule import Event, EventType
 from src.io.object_converter import obj_to_tensor
 
@@ -39,10 +39,39 @@ def _make_target(visible_channels: int = 4) -> np.ndarray:
     return target
 
 
+def _make_regen_config(
+    *,
+    num_epochs: int = 1,
+    learning_rate: float = 1e-3,
+    batch_size: int = 1,
+    visible_channels: int = 4,
+    regen_damage_prob: float = 0.5,
+    regen_damage_size: int = 2,
+) -> dict:
+    return {
+        "cell": {
+            "hidden_channels": 4,
+            "visible_channels": visible_channels,
+            "alive_threshold": 0.1,
+            "task_channels": 0,
+        },
+        "perception": {},
+        "update": {"hidden_dim": 8},
+        "grid": {"size": (4, 4, 4)},
+        "training": {
+            "learning_rate": learning_rate,
+            "num_epochs": num_epochs,
+            "batch_size": batch_size,
+            "regen_damage_prob": regen_damage_prob,
+            "regen_damage_size": regen_damage_size,
+        },
+    }
+
+
 # --- Init / basic shape tests ---
 
 def test_runner_init_accepts_valid_config_and_target() -> None:
-    runner = NCARunner(verbose=False)
+    runner = MorphRunner(verbose=False)
     runner.init(_make_config(), _make_target())
 
     assert runner.model is not None
@@ -53,7 +82,7 @@ def test_runner_init_accepts_valid_config_and_target() -> None:
 
 
 def test_runner_train_yields_metrics_for_one_epoch() -> None:
-    runner = NCARunner(verbose=False)
+    runner = MorphRunner(verbose=False)
     runner.init(_make_config(num_epochs=1, batch_size=1), _make_target())
 
     metrics = next(runner.train())
@@ -63,10 +92,38 @@ def test_runner_train_yields_metrics_for_one_epoch() -> None:
     assert runner.latest_loss == metrics["loss_total"]
 
 
+def test_default_runner_rejects_task_channels() -> None:
+    runner = MorphRunner(verbose=False)
+    cfg = _make_config()
+    cfg["cell"]["task_channels"] = 2
+
+    with pytest.raises(ValueError, match="task_channels == 0"):
+        runner.init(cfg, _make_target())
+
+
+def test_regen_runner_trains_one_epoch() -> None:
+    runner = RegenRunner(verbose=False)
+    runner.init(
+        _make_regen_config(
+            num_epochs=1,
+            batch_size=1,
+            regen_damage_prob=1.0,
+            regen_damage_size=2,
+        ),
+        _make_target(),
+    )
+
+    metrics = next(runner.train())
+
+    assert set(metrics) >= {"loss_alpha", "loss_color", "loss_overflow", "loss_total"}
+    assert metrics["damaged_pool_states"] >= 1.0
+    assert runner.current_epoch == 1
+
+
 # --- Snapshot tests ---
 
 def test_runner_snapshot_returns_training_snapshot() -> None:
-    runner = NCARunner(verbose=False)
+    runner = MorphRunner(verbose=False)
     runner.init(_make_config(num_epochs=1, batch_size=1), _make_target())
 
     snap = runner.snapshot()
@@ -79,7 +136,7 @@ def test_runner_snapshot_returns_training_snapshot() -> None:
 
 
 def test_runner_snapshot_raises_before_init() -> None:
-    runner = NCARunner(verbose=False)
+    runner = MorphRunner(verbose=False)
     with pytest.raises(RuntimeError, match="init"):
         runner.snapshot()
 
@@ -87,7 +144,7 @@ def test_runner_snapshot_raises_before_init() -> None:
 # --- on_event tests ---
 
 def test_runner_on_event_learning_rate() -> None:
-    runner = NCARunner(verbose=False)
+    runner = MorphRunner(verbose=False)
     runner.init(_make_config(), _make_target())
     before = runner.optimizer.param_groups[0]["lr"]
 
@@ -102,7 +159,7 @@ def test_runner_on_event_learning_rate() -> None:
 def test_runner_on_event_unknown_type_returns_false() -> None:
     from unittest.mock import MagicMock
 
-    runner = NCARunner(verbose=False)
+    runner = MorphRunner(verbose=False)
     runner.init(_make_config(), _make_target())
 
     fake_event = MagicMock()
@@ -113,7 +170,7 @@ def test_runner_on_event_unknown_type_returns_false() -> None:
 
 
 def test_runner_on_event_before_init_returns_false() -> None:
-    runner = NCARunner(verbose=False)
+    runner = MorphRunner(verbose=False)
     assert runner.on_event(
         Event(epoch=1, event_type=EventType.LEARNING_RATE, value=0.001)
     ) is False
@@ -123,17 +180,17 @@ def test_runner_on_event_before_init_returns_false() -> None:
 
 def test_training_runner_is_abstract() -> None:
     with pytest.raises(TypeError):
-        TrainingRunner()  # type: ignore[abstract]
+        NCARunner()  # type: ignore[abstract]
 
 
-def test_nca_runner_is_training_runner() -> None:
-    assert issubclass(NCARunner, TrainingRunner)
+def test_morph_runner_is_nca_runner() -> None:
+    assert issubclass(MorphRunner, NCARunner)
 
 
 # --- Target validation ---
 
 def test_runner_init_rejects_invalid_target_shape() -> None:
-    runner = NCARunner(verbose=False)
+    runner = MorphRunner(verbose=False)
     with pytest.raises(ValueError, match=r"shape \(D, H, W, C\)"):
         runner.init(_make_config(), np.zeros((4, 4, 4), dtype=np.float32))
 
