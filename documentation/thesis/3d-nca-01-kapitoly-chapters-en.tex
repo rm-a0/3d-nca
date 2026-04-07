@@ -702,7 +702,7 @@ Alongside the main client--server workflow, the repository also contains lightwe
 for basic mesh-to-voxel conversion and offline visualisation. These helpers were used during early
 exploration and intentionally cover only simple targets. They do not preserve Blender materials and
 do not provide per-voxel colour sampling.
-The Blender add-on supersedes them for practical target preparation and interactive visualisation.
+The Blender add-on replaces them for practical target preparation and interactive visualisation.
 
 \begin{figure}[htbp]
     \centering
@@ -753,7 +753,7 @@ training uses only hidden and visible channels.
     \centering
     \includegraphics[width=\textwidth]{obrazky-figures/fig-cell-state-vector.png}
     \caption{Per-voxel state vector layout. The vector contains hidden channels, optional task
-             channels encoded as a one-hot vector, and visible channels. The alpha channel, which
+             channels, and visible channels. The alpha channel, which
              serves as the alive signal, is always the last visible channel. Task channels are an
              optional extension and are disabled by default}
     \label{fig:cell-state-vector}
@@ -859,20 +859,20 @@ infrastructure needed to optimise the model parameters toward a target voxel
 configuration. It consists of two components: a training runner, which
 implements the training loop, and a schedule manager, which handles dynamic
 parameter changes during training. In the current implementation, the runner
-boundary is defined by an abstract \\texttt{NCARunner} interface. The
-default implementation is \\texttt{MorphRunner}, but the server can inject a
+boundary is defined by an abstract \texttt{NCARunner} interface. The
+default implementation is \texttt{MorphRunner}, but the server can inject a
 custom runner backend without changing protocol or Blender code.
 
 Alongside this baseline, the core package now includes a regeneration-focused
-implementation, \\texttt{RegenRunner}, which applies random local damage to
-pooled states during training so recovery behaviour can be learned under the
-same interface. More aggressive channel-centric variants (for example
-metamorphogenesis with explicit task-channel switching) are intentionally kept
-as notebook-level runners rather than fixed core classes.
+implementation, \texttt{RegenRunner}. It applies random local damage to
+pooled states during training so recovery behaviour can be learned through the
+same server and protocol path. More channel-centric variants (for example
+metamorphogenesis with explicit task-channel switching) are kept as
+notebook-level runners rather than fixed core classes.
 
 \subsection{Runner Interface and Default Implementation}
 
-The default \\texttt{MorphRunner} implements pool-based training. Rather than
+The default \texttt{MorphRunner} implements pool-based training. Rather than
 restarting from a fresh seed on every iteration, it maintains a fixed-size
 pool of persistent states
 representing the grid at various stages of development. Each training iteration
@@ -882,22 +882,22 @@ sample with the highest loss is replaced with a fresh seed, maintaining pool div
 preventing convergence to a single developmental stage~\cite{Mordvintsev2020}.
 
 From the server perspective, any backend that implements
-\\texttt{NCARunner.init()}, \\texttt{train()}, \\texttt{snapshot()},
-\\texttt{set\_target()}, and \\texttt{on\_event()} can be used as a drop-in
+\texttt{NCARunner.init()}, \texttt{train()}, \texttt{snapshot()},
+\texttt{set\_target()}, and \texttt{on\_event()} can be used as a drop-in
 replacement.
 
 For experimental work, this interface supports a notebook-first workflow: a
 custom runner can keep additional experiment parameters hardcoded in notebook
-code and treat \\texttt{init(config, target)} primarily as a server handshake.
+code and treat \texttt{init(config, target)} primarily as a server handshake.
 This is practical for non-standard loops, where changing notebook code is
 often faster than repeatedly extending Blender UI properties.
 
-In this setup, sending a minimal or dummy \\texttt{config}/\\texttt{target}
+In this setup, sending a minimal or dummy \texttt{config}/\texttt{target}
 pair from Blender can still be valid for visualisation-only sessions, provided
 the custom runner intentionally ignores these values and emits proper
-snapshots. The key requirement is that \\texttt{snapshot().state} remains in
-the expected internal format \\texttt{[B, C, D, H, W]} and reports a consistent
-\\texttt{visible\_channels} value so server broadcasting and Blender rendering
+snapshots. The key requirement is that \texttt{snapshot().state} remains in
+the expected internal format \texttt{[B, C, D, H, W]} and reports a consistent
+\texttt{visible\_channels} value so server broadcasting and Blender rendering
 remain compatible.
 
 The training objective has three weighted parts. Alpha loss compares the
@@ -927,7 +927,7 @@ epoch value (NOW = -1) fires an event immediately rather than waiting, allowing
 users to adjust parameters during live training without restarting.
 
 At execution time, the schedule forwards each due event to the runner via
-\\texttt{on\_event(event)}. The event is one-shot and removed from the queue
+\texttt{on\_event(event)}. The event is one-shot and removed from the queue
 after the attempt; if a custom runner does not handle a given event type,
 the event is reported as not handled.
 
@@ -1331,7 +1331,9 @@ The second core backend, \texttt{RegenRunner}
 (\texttt{src/core/runners/regeneration.py}), reuses the same optimisation
 path but injects random local damage into pooled states before updates,
 providing a regeneration-oriented experiment without changing server or
-protocol code.
+protocol code. The damage behaviour is controlled by
+\texttt{training.regen\_damage\_prob} and
+\texttt{training.regen\_damage\_size}.
 
 Runner initialisation accepts voxel targets in external channels-last format
 \texttt{[D, H, W, C]}, which is convenient for Blender and for protocol messages. Before training,
@@ -1377,11 +1379,12 @@ optimizer.step()
 pool.update(batch, pred)
 \end{lstlisting}
 
-When multiple targets are used, the runner stores a list of target tensors and associates each
-pool sample with a target ID. If task channels are enabled, the corresponding one-hot slice is
-inserted into the state so that a single model can be trained on multiple morphing objectives.
-This mechanism is used only in the extensibility experiment; baseline single-target training keeps
-task channels disabled.
+Task channels and multi-target conditioning remain available at the model level,
+but they are not used by the two core runners.
+In this codebase they are demonstrated in the notebook-level metamorphogenesis
+experiment, where a custom runner manipulates channel slices before broadcasting
+snapshots. Baseline morphogenesis and regeneration both keep task channels
+disabled.
 Schedule events (learning rate, batch size, loss weights, target changes) are applied through the
 thread-safe \texttt{Schedule} class.
 
@@ -1441,6 +1444,7 @@ while True:
         trainer.init(config, target, send_fn)
     elif t == "run_model":
         trainer.run_inference(model_bytes, phase_steps, broadcast_every, send_fn)
+        # phase_steps in the wire message is used as total forward steps.
     elif t == "pause":
         trainer.pause()
     elif t == "resume":
@@ -1473,6 +1477,29 @@ trainer.run_inference(model_bytes, phase_steps, broadcast_every, send_fn)
 trainer = NCATrainer(runner_factory=MyCustomRunner)
 \end{lstlisting}
 
+For notebook/Colab experiments with Blender visualization, the minimal pattern is to define a small
+\texttt{NCARunner} subclass in a notebook cell, inject it via
+\texttt{runner\_factory}, and start the server.
+Listing~\ref{lst:colab-minimal-runner} shows this setup in compact form.
+
+\begin{lstlisting}[style=py, caption={Minimal notebook/Colab custom runner injection (simplified).}, label={lst:colab-minimal-runner}]
+from src.core.runners import NCARunner, MorphRunner
+from src.server.trainer import NCATrainer
+from src.server.server import NCAServer
+
+class NotebookRunner(NCARunner):
+    def __init__(self):
+        self.base = MorphRunner(verbose=False)
+    def init(self, config, target): self.base.init(config, target)
+    def train(self, schedule=None): yield from self.base.train(schedule=schedule)
+    def snapshot(self): return self.base.snapshot()
+    def set_target(self, target): self.base.set_target(target)
+    def on_event(self, event): return self.base.on_event(event)
+
+trainer = NCATrainer(runner_factory=NotebookRunner, verbose=False)
+NCAServer(host="0.0.0.0", port=5555, trainer=trainer).start()
+\end{lstlisting}
+
 \subsection{Protocol}
 
 Protocol behaviour at the session level is described in Section~\ref{sec:arch-server}. This
@@ -1486,12 +1513,12 @@ arrays together with an explicit \texttt{shape} field. Model checkpoints are tra
 base64-encoded raw \texttt{.pt} bytes during inference requests. Figure~\ref{fig:message-types}
 summarises the message types used by the client and the server.
 
-Architecturally, the protocol defines message types and their control
-semantics, while allowing payload adaptation where necessary. In practice,
-\\texttt{init} is the primary extension point: researchers may add, remove, or
+At protocol level, message types define control behaviour, while payload
+fields can be adapted where needed. In practice,
+\texttt{init} is the primary extension point: researchers may add, remove, or
 reshape fields (for example to support multi-target voxelisation or different
-configuration structures). Control messages such as \\texttt{pause},
-\\texttt{resume}, and \\texttt{stop} are intentionally stable, because their
+configuration structures). Control messages such as \texttt{pause},
+\texttt{resume}, and \texttt{stop} are intentionally stable, because their
 behaviour is transport-level session control and should stay predictable across
 clients.
 
