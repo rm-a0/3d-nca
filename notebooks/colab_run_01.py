@@ -10,7 +10,6 @@ Original file is located at
 # Commented out IPython magic to ensure Python compatibility.
 !git clone https://github.com/rm-a0/3d-nca
 # %cd 3d-nca
-!git checkout feature/logger
 
 from google.colab import drive
 drive.mount('/content/drive')
