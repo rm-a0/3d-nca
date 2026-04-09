@@ -155,6 +155,7 @@ class NCA_PT_InferencePanel(NCA_PT_BasePanel):
         col.prop(infer, "model_path", text="Model (.pt)")
         col.prop(infer, "steps_per_phase", text="Steps")
         col.prop(infer, "broadcast_every", text="Broadcast Every")
+        col.prop(infer, "send_delay_ms", text="Send Delay (ms)")
 
         layout.separator()
         row = layout.row()

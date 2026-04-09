@@ -81,7 +81,11 @@ class NCAClient:
         send_msg(self._sock, build_init_msg(config, target))
 
     def send_run_model(
-        self, model_path: str, phase_steps: int, broadcast_every: int
+        self,
+        model_path: str,
+        phase_steps: int,
+        broadcast_every: int,
+        send_delay_ms: int = 40,
     ) -> None:
         """Send inference request with model from disk.
 
@@ -89,13 +93,19 @@ class NCAClient:
             model_path: Path to .pt checkpoint file.
             phase_steps: Total forward steps to run.
             broadcast_every: Broadcast interval (steps).
+            send_delay_ms: Delay before each state send in milliseconds.
         """
         with open(model_path, "rb") as f:
             model_b64 = base64.b64encode(f.read()).decode("ascii")
 
         send_msg(
             self._sock,
-            build_run_model_msg(model_b64, phase_steps, broadcast_every),
+            build_run_model_msg(
+                model_b64,
+                phase_steps,
+                broadcast_every,
+                send_delay_ms,
+            ),
         )
 
     def send_stop(self) -> None:

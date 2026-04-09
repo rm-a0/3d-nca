@@ -220,6 +220,13 @@ class NCA_PG_InferenceProperties(bpy.types.PropertyGroup):
         min=1,
         max=64,
     )  # type: ignore
+    send_delay_ms: bpy.props.IntProperty(
+        name="Send Delay (ms)",
+        description="Delay before each state broadcast during inference",
+        default=40,
+        min=0,
+        max=1000,
+    )  # type: ignore
 
 
 classes = (

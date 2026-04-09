@@ -193,6 +193,7 @@ def build_run_model_msg(
     model_b64: str,
     phase_steps: int,
     broadcast_every: int,
+    send_delay_ms: int = 40,
 ) -> Dict[str, Any]:
     """Build run_model message for inference.
 
@@ -200,6 +201,7 @@ def build_run_model_msg(
         model_b64: Previously base64-encoded model file bytes.
         phase_steps: Forward pass steps per task phase.
         broadcast_every: Broadcast interval (steps).
+        send_delay_ms: Delay before each state send in milliseconds.
 
     Returns:
         Run model message dict.
@@ -209,20 +211,26 @@ def build_run_model_msg(
         "model_b64": model_b64,
         "phase_steps": phase_steps,
         "broadcast_every": broadcast_every,
+        "send_delay_ms": send_delay_ms,
     }
 
 
-def parse_run_model_msg(msg: Dict[str, Any]) -> Tuple[bytes, int, int]:
+def parse_run_model_msg(msg: Dict[str, Any]) -> Tuple[bytes, int, int, int]:
     """Extract model bytes and parameters from run_model message.
 
     Args:
         msg: Run model message dict.
 
     Returns:
-        Tuple (raw model PyTorch checkpoint bytes, phase_steps, broadcast_every).
+        Tuple (raw model bytes, phase_steps, broadcast_every, send_delay_ms).
     """
     model_bytes = base64.b64decode(msg["model_b64"])
-    return model_bytes, msg.get("phase_steps", 32), msg.get("broadcast_every", 4)
+    return (
+        model_bytes,
+        msg.get("phase_steps", 32),
+        msg.get("broadcast_every", 4),
+        msg.get("send_delay_ms", 40),
+    )
 
 
 def build_stop_msg() -> Dict[str, Any]:

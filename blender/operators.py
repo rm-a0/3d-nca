@@ -437,6 +437,7 @@ class NCA_OT_RunModel(bpy.types.Operator):
                 model_path,
                 infer.steps_per_phase,
                 infer.broadcast_every,
+                infer.send_delay_ms,
             )
         except Exception as exc:
             self.report({"ERROR"}, f"Failed to run model: {exc}")
