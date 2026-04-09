@@ -93,6 +93,7 @@ def test_nca_client_connect_send_and_disconnect(monkeypatch, tmp_path) -> None:
     assert sent[4]["type"] == "update_schedule"
     assert sent[5]["type"] == "run_model"
     assert sent[5]["phase_steps"] == 12
+    assert sent[5]["send_delay_ms"] == 40
 
     client.disconnect()
     assert not client.connected
@@ -169,7 +170,7 @@ def test_server_handle_client_dispatches_protocol_messages(monkeypatch) -> None:
         calls: list = []
 
         def init(self, c, t, fn): self.calls.append(("init",))
-        def run_inference(self, b, ps, be, fn): self.calls.append(("run_inference",))
+        def run_inference(self, b, ps, be, sd, fn): self.calls.append(("run_inference", sd))
         def stop(self): self.calls.append(("stop",))
         def pause(self): self.calls.append(("pause",))
         def resume(self): self.calls.append(("resume",))
@@ -186,6 +187,7 @@ def test_server_handle_client_dispatches_protocol_messages(monkeypatch) -> None:
     assert [c[0] for c in ft.calls] == [
         "init", "run_inference", "pause", "resume", "stop", "update_schedule"
     ]
+    assert ft.calls[1][1] == 40
     assert sent[0] == {"type": "ack", "message": "Training started"}
     assert sent[6] == {"type": "pong"}
     assert sent[7]["type"] == "error"
@@ -236,3 +238,57 @@ def test_trainer_broadcast_rate_limit(monkeypatch) -> None:
     assert captured[0]["epoch"] == 3
     assert captured[0]["loss"] == 0.5
     assert captured[0]["shape"] == [1, 1, 2, 2, 2]
+
+
+def test_trainer_parse_inference_checkpoint_accepts_nested_schema() -> None:
+    trainer = NCATrainer(verbose=False)
+    ckpt = {
+        "config": {
+            "cell": {
+                "hidden_channels": 2,
+                "visible_channels": 1,
+                "alive_threshold": 0.1,
+                "task_channels": 0,
+            },
+            "perception": {"kernel_radius": 1, "channel_groups": 3},
+            "update": {"hidden_dim": 8, "stochastic_update": False, "fire_rate": 0.5},
+            "grid": {"size": [4, 4, 4]},
+        },
+        "state_dict": {"perception.depthwise.weight": torch.zeros(9, 1, 3, 3, 3)},
+    }
+
+    cell_cfg, _perc_cfg, _upd_cfg, grid_cfg, state_dict = trainer._parse_inference_checkpoint(ckpt)
+
+    assert cell_cfg.hidden_channels == 2
+    assert cell_cfg.visible_channels == 1
+    assert cell_cfg.task_channels == 0
+    assert grid_cfg.size == (4, 4, 4)
+    assert "perception.depthwise.weight" in state_dict
+
+
+def test_trainer_parse_inference_checkpoint_accepts_flat_nca_schema() -> None:
+    trainer = NCATrainer(verbose=False)
+    ckpt = {
+        "config": {
+            "grid_size": [4, 4, 4],
+            "hidden_channels": 2,
+            "visible_channels": 1,
+            "alive_threshold": 0.15,
+            "task_channels": 3,
+            "perception_kernel_radius": 1,
+            "perception_channel_groups": 3,
+            "update_hidden_dim": 8,
+            "update_stochastic": False,
+            "update_fire_rate": 0.5,
+        },
+        "state_dict": {"grid.perception.depthwise.weight": torch.zeros(18, 1, 3, 3, 3)},
+    }
+
+    cell_cfg, _perc_cfg, _upd_cfg, grid_cfg, state_dict = trainer._parse_inference_checkpoint(ckpt)
+
+    assert cell_cfg.hidden_channels == 2
+    assert cell_cfg.visible_channels == 1
+    assert cell_cfg.task_channels == 3
+    assert grid_cfg.size == (4, 4, 4)
+    assert "grid.perception.depthwise.weight" not in state_dict
+    assert "perception.depthwise.weight" in state_dict

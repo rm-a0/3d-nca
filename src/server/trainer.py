@@ -98,6 +98,7 @@ class NCATrainer:
         model_bytes: bytes,
         phase_steps: int,
         broadcast_every: int,
+        send_delay_ms: int,
         send_fn: SendFn,
     ) -> None:
         """Stop any active session and start an inference run.
@@ -106,11 +107,18 @@ class NCATrainer:
             model_bytes: Serialised PyTorch checkpoint (.pt file bytes).
             phase_steps: Forward steps per task phase.
             broadcast_every: Broadcast state every N steps.
+            send_delay_ms: Delay before each state send in milliseconds.
             send_fn: Callback used to send protocol messages to the client.
         """
         self.stop()
         self._send_fn = send_fn
-        self._start_thread(self._inference_loop, model_bytes, phase_steps, broadcast_every)
+        self._start_thread(
+            self._inference_loop,
+            model_bytes,
+            phase_steps,
+            broadcast_every,
+            send_delay_ms,
+        )
 
     def pause(self) -> None:
         """Pause the active training session."""
@@ -208,14 +216,19 @@ class NCATrainer:
     # --- Private: inference loop ---
 
     def _inference_loop(
-        self, model_bytes: bytes, phase_steps: int, broadcast_every: int
+        self,
+        model_bytes: bytes,
+        phase_steps: int,
+        broadcast_every: int,
+        send_delay_ms: int,
     ) -> None:
         """Load a checkpoint from bytes and run forward inference steps.
 
         Args:
             model_bytes: Serialised PyTorch checkpoint (.pt file bytes).
-            phase_steps: Total number of forward steps to run.
+            phase_steps: Number of forward steps to run per phase.
             broadcast_every: Broadcast state every N steps.
+            send_delay_ms: Delay before each broadcast in milliseconds.
         """
         import torch
 
@@ -227,56 +240,151 @@ class NCATrainer:
             self._send_error(f"Failed to load model: {exc}")
             return
 
-        from src.core.cell import CellConfig
         from src.core.grid import Grid3D, GridConfig
-        from src.core.perception import PerceptionConfig
-        from src.core.update import UpdateConfig
 
-        config = ckpt.get("config", {})
         try:
-            cell_cfg = CellConfig(**config["cell"])
-            perc_cfg = PerceptionConfig(**config.get("perception", {}))
-            upd_cfg = UpdateConfig(**config.get("update", {}))
-            grid_cfg = GridConfig(size=tuple(config["grid"]["size"]))
+            cell_cfg, perc_cfg, upd_cfg, grid_cfg, state_dict = (
+                self._parse_inference_checkpoint(ckpt)
+            )
         except Exception as exc:
             self._send_error(f"Invalid model config: {exc}")
             return
 
         model = Grid3D(cell_cfg, perc_cfg, upd_cfg, grid_cfg).to(device)
         try:
-            model.load_state_dict(ckpt["state_dict"])
+            model.load_state_dict(state_dict)
         except Exception as exc:
             self._send_error(f"State dict mismatch: {exc}")
             return
 
         model.eval()
-        total_steps = max(int(phase_steps), 1)
+        phase_steps = max(int(phase_steps), 1)
         broadcast_every = max(int(broadcast_every), 1)
+        send_delay_s = max(float(send_delay_ms), 0.0) / 1000.0
         step = 0
 
         with torch.no_grad():
-            state = model.seed_center(1, device, None)
+            if cell_cfg.task_channels > 0:
+                n_tasks = int(cell_cfg.task_channels)
+                task_ids = torch.tensor([0], device=device)
+                state = model.seed_center(1, device, task_ids)
 
-            for _ in range(total_steps):
-                if self._stop_event.is_set():
-                    return
-                self._pause_event.wait()
-                if self._stop_event.is_set():
-                    return
+                for task_id in range(n_tasks):
+                    self._set_task_channels(state, task_id, cell_cfg)
 
-                state = model(state, steps=1, use_checkpointing=False)
-                state = torch.clamp(state, -1.0, 1.0)
-                step += 1
+                    for _ in range(phase_steps):
+                        if self._stop_event.is_set():
+                            return
+                        self._pause_event.wait()
+                        if self._stop_event.is_set():
+                            return
 
-                if step % broadcast_every == 0:
+                        state = model(state, steps=1, use_checkpointing=False)
+                        state = torch.clamp(state, -1.0, 1.0)
+                        step += 1
+
+                        if step % broadcast_every == 0:
+                            if send_delay_s > 0.0:
+                                time.sleep(send_delay_s)
+                            self._broadcast(state, step, 0.0, cell_cfg.visible_channels)
+
+                    if send_delay_s > 0.0:
+                        time.sleep(send_delay_s)
                     self._broadcast(state, step, 0.0, cell_cfg.visible_channels)
+            else:
+                state = model.seed_center(1, device, None)
+                for _ in range(phase_steps):
+                    if self._stop_event.is_set():
+                        return
+                    self._pause_event.wait()
+                    if self._stop_event.is_set():
+                        return
 
+                    state = model(state, steps=1, use_checkpointing=False)
+                    state = torch.clamp(state, -1.0, 1.0)
+                    step += 1
+
+                    if step % broadcast_every == 0:
+                        if send_delay_s > 0.0:
+                            time.sleep(send_delay_s)
+                        self._broadcast(state, step, 0.0, cell_cfg.visible_channels)
+
+            if send_delay_s > 0.0:
+                time.sleep(send_delay_s)
             self._broadcast(state, step, 0.0, cell_cfg.visible_channels)
 
         if self.verbose:
             print(f"[Trainer] Inference complete ({step} steps)")
 
     # --- Private: helpers ---
+
+    def _parse_inference_checkpoint(self, ckpt: Dict[str, Any]) -> tuple:
+        """Parse both legacy and NCAModel checkpoint formats for inference."""
+        from src.core.cell import CellConfig
+        from src.core.perception import PerceptionConfig
+        from src.core.update import UpdateConfig
+        from src.core.grid import GridConfig
+
+        config = ckpt.get("config")
+        if not isinstance(config, dict):
+            raise ValueError("checkpoint missing dict config")
+
+        if "cell" in config and "grid" in config:
+            # Legacy run checkpoint format emitted by NCALogger.
+            cell_cfg = CellConfig(**config["cell"])
+            perc_cfg = PerceptionConfig(**config.get("perception", {}))
+            upd_cfg = UpdateConfig(**config.get("update", {}))
+            grid_cfg = GridConfig(size=tuple(int(v) for v in config["grid"]["size"]))
+        elif "grid_size" in config:
+            # NCAModel.save() format (flat NCAConfig fields).
+            cell_cfg = CellConfig(
+                hidden_channels=int(config["hidden_channels"]),
+                visible_channels=int(config["visible_channels"]),
+                alive_threshold=float(config.get("alive_threshold", 0.1)),
+                task_channels=int(config.get("task_channels", 0)),
+            )
+            perc_cfg = PerceptionConfig(
+                kernel_radius=int(config.get("perception_kernel_radius", 1)),
+                channel_groups=int(config.get("perception_channel_groups", 3)),
+            )
+            upd_cfg = UpdateConfig(
+                hidden_dim=int(config.get("update_hidden_dim", 128)),
+                stochastic_update=bool(config.get("update_stochastic", False)),
+                fire_rate=float(config.get("update_fire_rate", 0.5)),
+            )
+            grid_cfg = GridConfig(size=tuple(int(v) for v in config["grid_size"]))
+        else:
+            raise ValueError(
+                "unsupported config schema (expected nested keys 'cell'/'grid' or flat 'grid_size')"
+            )
+
+        state_dict = ckpt.get("state_dict")
+        if not isinstance(state_dict, dict):
+            raise ValueError("checkpoint missing state_dict")
+
+        state_dict = self._normalize_grid_state_dict(state_dict)
+        return cell_cfg, perc_cfg, upd_cfg, grid_cfg, state_dict
+
+    @staticmethod
+    def _normalize_grid_state_dict(state_dict: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert NCAModel-style keys (grid.*) into Grid3D keys when needed."""
+        has_grid_prefix = any(k.startswith("grid.") for k in state_dict)
+        if not has_grid_prefix:
+            return state_dict
+        return {
+            (k[5:] if k.startswith("grid.") else k): v for k, v in state_dict.items()
+        }
+
+    @staticmethod
+    def _set_task_channels(state: Any, task_id: int, cell_cfg: Any) -> None:
+        """Set one-hot task conditioning channels on an existing state tensor."""
+        tc = int(cell_cfg.task_channels)
+        if tc <= 0:
+            return
+        vis = int(cell_cfg.visible_channels)
+        task_slice = state[:, -(vis + tc) : -vis, ...]
+        task_slice.zero_()
+        task_slice[:, int(task_id), ...] = 1.0
 
     def _broadcast(
         self,

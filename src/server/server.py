@@ -91,9 +91,13 @@ class NCAServer:
                 send_msg(client, build_ack_msg("Training started"))
 
             elif msg_type == "run_model":
-                model_bytes, phase_steps, broadcast_every = parse_run_model_msg(msg)
+                model_bytes, phase_steps, broadcast_every, send_delay_ms = parse_run_model_msg(msg)
                 self.trainer.run_inference(
-                    model_bytes, phase_steps, broadcast_every, send_fn
+                    model_bytes,
+                    phase_steps,
+                    broadcast_every,
+                    send_delay_ms,
+                    send_fn,
                 )
                 send_msg(client, build_ack_msg("Inference started"))
 
