@@ -105,7 +105,7 @@ class NCATrainer:
 
         Args:
             model_bytes: Serialised PyTorch checkpoint (.pt file bytes).
-            phase_steps: Forward steps per task phase.
+            phase_steps: Total forward steps to run.
             broadcast_every: Broadcast state every N steps.
             send_delay_ms: Delay before each state send in milliseconds.
             send_fn: Callback used to send protocol messages to the client.
@@ -226,88 +226,49 @@ class NCATrainer:
 
         Args:
             model_bytes: Serialised PyTorch checkpoint (.pt file bytes).
-            phase_steps: Number of forward steps to run per phase.
+            phase_steps: Total number of forward steps to run.
             broadcast_every: Broadcast state every N steps.
             send_delay_ms: Delay before each broadcast in milliseconds.
         """
         import torch
+        from src.core.grid import Grid3D
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
         try:
             ckpt = torch.load(io.BytesIO(model_bytes), map_location=device, weights_only=False)
-        except Exception as exc:
-            self._send_error(f"Failed to load model: {exc}")
-            return
-
-        from src.core.grid import Grid3D, GridConfig
-
-        try:
             cell_cfg, perc_cfg, upd_cfg, grid_cfg, state_dict = (
                 self._parse_inference_checkpoint(ckpt)
             )
-        except Exception as exc:
-            self._send_error(f"Invalid model config: {exc}")
-            return
-
-        model = Grid3D(cell_cfg, perc_cfg, upd_cfg, grid_cfg).to(device)
-        try:
+            model = Grid3D(cell_cfg, perc_cfg, upd_cfg, grid_cfg).to(device)
             model.load_state_dict(state_dict)
         except Exception as exc:
-            self._send_error(f"State dict mismatch: {exc}")
+            self._send_error(f"Inference setup failed: {exc}")
             return
 
         model.eval()
-        phase_steps = max(int(phase_steps), 1)
+        total_steps = max(int(phase_steps), 1)
         broadcast_every = max(int(broadcast_every), 1)
         send_delay_s = max(float(send_delay_ms), 0.0) / 1000.0
         step = 0
 
         with torch.no_grad():
-            if cell_cfg.task_channels > 0:
-                n_tasks = int(cell_cfg.task_channels)
-                task_ids = torch.tensor([0], device=device)
-                state = model.seed_center(1, device, task_ids)
+            state = model.seed_center(1, device, None)
+            for _ in range(total_steps):
+                if self._stop_event.is_set():
+                    return
+                self._pause_event.wait()
+                if self._stop_event.is_set():
+                    return
 
-                for task_id in range(n_tasks):
-                    self._set_task_channels(state, task_id, cell_cfg)
+                state = model(state, steps=1, use_checkpointing=False)
+                state = torch.clamp(state, -1.0, 1.0)
+                step += 1
 
-                    for _ in range(phase_steps):
-                        if self._stop_event.is_set():
-                            return
-                        self._pause_event.wait()
-                        if self._stop_event.is_set():
-                            return
-
-                        state = model(state, steps=1, use_checkpointing=False)
-                        state = torch.clamp(state, -1.0, 1.0)
-                        step += 1
-
-                        if step % broadcast_every == 0:
-                            if send_delay_s > 0.0:
-                                time.sleep(send_delay_s)
-                            self._broadcast(state, step, 0.0, cell_cfg.visible_channels)
-
+                if step % broadcast_every == 0:
                     if send_delay_s > 0.0:
                         time.sleep(send_delay_s)
                     self._broadcast(state, step, 0.0, cell_cfg.visible_channels)
-            else:
-                state = model.seed_center(1, device, None)
-                for _ in range(phase_steps):
-                    if self._stop_event.is_set():
-                        return
-                    self._pause_event.wait()
-                    if self._stop_event.is_set():
-                        return
-
-                    state = model(state, steps=1, use_checkpointing=False)
-                    state = torch.clamp(state, -1.0, 1.0)
-                    step += 1
-
-                    if step % broadcast_every == 0:
-                        if send_delay_s > 0.0:
-                            time.sleep(send_delay_s)
-                        self._broadcast(state, step, 0.0, cell_cfg.visible_channels)
 
             if send_delay_s > 0.0:
                 time.sleep(send_delay_s)
@@ -375,17 +336,6 @@ class NCATrainer:
             (k[5:] if k.startswith("grid.") else k): v for k, v in state_dict.items()
         }
 
-    @staticmethod
-    def _set_task_channels(state: Any, task_id: int, cell_cfg: Any) -> None:
-        """Set one-hot task conditioning channels on an existing state tensor."""
-        tc = int(cell_cfg.task_channels)
-        if tc <= 0:
-            return
-        vis = int(cell_cfg.visible_channels)
-        task_slice = state[:, -(vis + tc) : -vis, ...]
-        task_slice.zero_()
-        task_slice[:, int(task_id), ...] = 1.0
-
     def _broadcast(
         self,
         state: Any,
@@ -409,12 +359,14 @@ class NCATrainer:
         if now - self._last_broadcast < _BROADCAST_INTERVAL:
             return
         self._last_broadcast = now
+
+        if hasattr(state, "detach"):
+            arr = state.detach().cpu().numpy().astype(np.float32)
+        else:
+            arr = np.asarray(state, dtype=np.float32)
+        arr = arr[:, -visible_channels:] if arr.ndim == 5 else arr[-visible_channels:]
+
         try:
-            if hasattr(state, "detach"):
-                arr = state.detach().cpu().numpy().astype(np.float32)
-            else:
-                arr = np.asarray(state, dtype=np.float32)
-            arr = arr[:, -visible_channels:] if arr.ndim == 5 else arr[-visible_channels:]
             self._send_fn(build_state_msg(arr, epoch, loss))
         except Exception as exc:
             if self.verbose:
@@ -429,7 +381,8 @@ class NCATrainer:
         if self._send_fn is not None:
             try:
                 self._send_fn({"type": "error", "message": message})
-            except Exception:
-                pass
+            except Exception as exc:
+                if self.verbose:
+                    print(f"[Trainer] Failed to send error to client: {exc}")
         if self.verbose:
             print(f"[Trainer] Error: {message}")
