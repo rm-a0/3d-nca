@@ -2,7 +2,7 @@
 UpdateRule - MLP that learns how a cell should change.
 
 Input
-  - perceived  [B, 3*C, X, Y, Z]   (output of Perception3D)
+  - perceived  [B, G*C, X, Y, Z]   (output of Perception3D)
   - alive_mask [B, 1, X, Y, Z]    (bool, from CellState)
   - state      [B, C, X, Y, Z]    (current world)
 
@@ -28,8 +28,8 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-from .perception import Perception3D, PerceptionConfig
-from .cell import CellConfig, CellState
+from .perception import PerceptionConfig
+from .cell import CellConfig
 
 
 @dataclass(frozen=True)

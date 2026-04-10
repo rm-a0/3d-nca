@@ -774,15 +774,17 @@ The perception component converts the current grid state into a per-cell represe
 applying a fixed set of three-dimensional convolutional filters over the local neighbourhood.
 
 The filters are non-learnable; their weights are fixed at initialisation and
-do not change during training. Three filter groups are applied across all
-channels. The identity filter returns each cell's own current state
-unchanged, giving the update rule direct access to what the cell
-already contains. The neighbour sum filter aggregates the six face-adjacent
-neighbours, capturing the local occupancy and composition of the immediate
-neighbourhood. The Laplacian filter measures how much a cell's state differs
-from its neighbourhood average, encoding local spatial variation. Applying
-all three groups across all $C$ channels produces a perception vector at
-each cell location with dimensionality $3 \times C$.
+do not change during training. In the baseline model, three filter groups
+are applied across all channels (identity, six-neighbour sum, Laplacian).
+For asymmetric targets, an optional directional mode uses five groups by
+replacing the Laplacian with three signed directional gradients ($x$, $y$,
+$z$). This retains strict locality while introducing orientation-sensitive
+features that reduce reflection ambiguity.
+
+This directional design helps break reflection ambiguity for asymmetric
+targets (for example, chess pieces). Without signed directional cues, the
+local rule can converge to mirrored solutions that match occupancy statistics
+but not global orientation.
 
 Keeping the filters fixed follows the original design of Mordvintsev et
 al.~\cite{Mordvintsev2020}. In practical terms, this means the perception
@@ -1181,7 +1183,7 @@ Listing~\ref{lst:model-entrypoints} shows both patterns.
 \begin{lstlisting}[style=py, caption={Two entry points for constructing the NCA model: low-level \texttt{Grid3D} and the high-level \texttt{NCAModel} wrapper.}, label={lst:model-entrypoints}]
 # Low-level construction (server/runner)
 cell_cfg = CellConfig(hidden_channels=16, visible_channels=4, alive_threshold=0.1, task_channels=0)
-perc_cfg = PerceptionConfig(kernel_radius=1, channel_groups=3)
+perc_cfg = PerceptionConfig(kernel_radius=1, channel_groups=5)  # optional directional mode
 upd_cfg  = UpdateConfig(hidden_dim=128, stochastic_update=False, fire_rate=0.5)
 grid_cfg = GridConfig(size=(32, 32, 32))
 grid = Grid3D(cell_cfg, perc_cfg, upd_cfg, grid_cfg)
@@ -1208,8 +1210,10 @@ alive = pooled > alive_threshold
 \subsection{Perception3D}
 
 \texttt{Perception3D} implements the fixed perception stage as a depthwise \texttt{Conv3d}.
-With three filter groups per input channel, the perception tensor has \texttt{3C} channels.
-The kernels correspond to identity, face-neighbour aggregation, and a discrete Laplacian.
+In the baseline setup, three filter groups per input channel produce
+\texttt{3C} features. In the optional directional setup, five groups produce
+\texttt{5C} features. The directional variant keeps identity and
+face-neighbour aggregation while adding signed gradients along each axis.
 Weights are initialised once and kept fixed during training.
 
 Listing~\ref{lst:perception-kernels} shows the kernel patterns in a compact, conceptual form.
@@ -1222,9 +1226,10 @@ K_id[1, 1, 1] = 1
 for (dz, dy, dx) in [(1,0,0), (-1,0,0), (0,1,0), (0,-1,0), (0,0,1), (0,0,-1)]:
     K_sum[1+dz, 1+dy, 1+dx] = 1
 
-# discrete Laplacian
-K_lap[1, 1, 1] = 6
-K_lap[K_sum == 1] = -1
+# optional signed directional gradients
+K_dx[2, 1, 1] =  1; K_dx[0, 1, 1] = -1
+K_dy[1, 2, 1] =  1; K_dy[1, 0, 1] = -1
+K_dz[1, 1, 2] =  1; K_dz[1, 1, 0] = -1
 \end{lstlisting}
 
 \subsection{UpdateRule}
@@ -1242,7 +1247,7 @@ Listing~\ref{lst:update-rule} shows the layer sequence used in the implementatio
 
 \begin{lstlisting}[style=py, caption={Update rule as a point-wise MLP implemented by $1\times1\times1$ convolutions.}, label={lst:update-rule}]
 mlp = nn.Sequential(
-    nn.Conv3d(3*C, H, 1),
+    nn.Conv3d(G*C, H, 1),
     nn.GroupNorm(4, H),
     nn.ReLU(inplace=True),
     nn.Conv3d(H, H, 1),

@@ -39,6 +39,7 @@ from src.core.update     import UpdateConfig
 from src.core.runners.base import NCARunner, TrainingSnapshot
 from src.core.nca_model  import NCAModel, NCAConfig
 from src.server.logger   import NCALogger
+from src.viz.volume_mpl import show_volume_rgba_mpl, show_state_rgba_mpl
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Device : {device}")
@@ -114,91 +115,20 @@ plt.rcParams.update({
     "grid.alpha":       0.3,
 })
 
-
-def _surface_mask(alpha: np.ndarray, threshold: float = 0.15) -> np.ndarray:
-    """Boolean mask of *surface* voxels only."""
-    filled   = alpha > threshold
-    interior = np.ones_like(filled)
-    for ax in range(3):
-        interior &= np.roll(filled,  1, axis=ax)
-        interior &= np.roll(filled, -1, axis=ax)
-    return filled & ~interior
-
-
-def viz_rgba(
-    rgba        : np.ndarray,
-    title       : str   = "",
-    ax                  = None,
-    threshold   : float = 0.15,
-    surface_only: bool  = True,
-    elev        : float = 25.0,
-    azim        : float = 45.0,
-    s           : int   = 12,
-    show        : bool  = True,
-) -> None:
-    """3-D scatter of a (D,H,W,4) RGBA voxel volume.
-
-    Args:
-        rgba:         (D,H,W,4) RGBA float32 array.
-        title:        Subplot or figure title.
-        ax:           Existing 3-D matplotlib axes; creates new figure if None.
-        threshold:    Alpha threshold for voxel inclusion.
-        surface_only: If True, render only surface voxels (recommended).
-        elev, azim:   Camera elevation and azimuth in degrees.
-        s:            Scatter point size.
-        show:         Call plt.show() when ax is None.
-    """
-    alpha = rgba[..., 3]
-    rgb   = np.clip(rgba[..., :3], 0.0, 1.0)
-    mask  = _surface_mask(alpha, threshold) if surface_only else (alpha > threshold)
-    xs, ys, zs = np.where(mask)
-    colors = rgb[xs, ys, zs]
-
-    created = ax is None
-    if created:
-        fig = plt.figure(figsize=(4.5, 4.5))
-        ax  = fig.add_subplot(111, projection="3d")
-
-    if len(xs):
-        ax.scatter(xs, ys, zs, c=colors, s=s, depthshade=True, linewidths=0)
-
-    ax.set_title(title, pad=4)
-    ax.set_xlabel("X", labelpad=1)
-    ax.set_ylabel("Y", labelpad=1)
-    ax.set_zlabel("Z", labelpad=1)
-    ax.tick_params(labelsize=6)
-    ax.view_init(elev=elev, azim=azim)
-    g = rgba.shape[0]
-    ax.set_xlim(0, g); ax.set_ylim(0, g); ax.set_zlim(0, g)
-    ax.set_box_aspect([1, 1, 1])
-
-    if created and show:
-        plt.tight_layout()
-        plt.show()
-
-
-def viz_state(
-    state       : Tensor,
-    vis         : int   = 4,
-    title       : str   = "",
-    ax                  = None,
-    threshold   : float = 0.20,
-    surface_only: bool  = True,
-    elev        : float = 25.0,
-    azim        : float = 45.0,
-) -> None:
-    """Visualise NCA state tensor (1, C, D, H, W) using the last `vis` channels."""
-    arr  = state[0, -vis:].detach().cpu().numpy()   # (4, D, H, W)
-    rgba = np.clip(np.transpose(arr, (1, 2, 3, 0)), 0.0, 1.0)  # (D, H, W, 4)
-    viz_rgba(rgba, title=title, ax=ax, threshold=threshold,
-             surface_only=surface_only, elev=elev, azim=azim)
-
 fig, axes = plt.subplots(
     1, 3, figsize=(13, 5), subplot_kw={"projection": "3d"}
 )
 for col, (rgba, name) in enumerate(zip(TARGETS, TASK_NAMES)):
-    viz_rgba(rgba, title=f"Target — {name}", ax=axes[col],
-             surface_only=True, elev=28, azim=40, s=14, show=False)
+    show_volume_rgba_mpl(
+        rgba,
+        title=f"Target — {name}",
+        ax=axes[col],
+        surface_only=True,
+        threshold=0.15,
+        point_size=14,
+        view_angle=(28, 40),
+        show=False,
+    )
 fig.suptitle("Training targets  (surface voxels only)", fontsize=12, y=1.0)
 plt.tight_layout()
 plt.savefig(f"{DRIVE_DIR}/targets.png", dpi=150, bbox_inches="tight")
@@ -214,7 +144,7 @@ config = {
     },
     "perception": {
         "kernel_radius":  1,
-        "channel_groups": 3,
+        "channel_groups": 5,
     },
     "update": {
         "hidden_dim":        96,
@@ -503,23 +433,27 @@ row_labels = ["Target", "Model output"]
 
 for col, name in enumerate(TASK_NAMES):
     # Row 0 — target
-    viz_rgba(
+    show_volume_rgba_mpl(
         TARGETS[col],
         title=f"Target\n{name}",
         ax=axes[0, col],
         surface_only=True,
-        elev=28, azim=40, s=14, show=False,
+        threshold=0.15,
+        point_size=14,
+        view_angle=(28, 40),
+        show=False,
     )
     # Row 1 — model output
-    arr  = inferred[name][0, -VIS:].numpy()               # (4, D, H, W)
-    rgba = np.clip(np.transpose(arr, (1, 2, 3, 0)), 0, 1) # (D, H, W, 4)
-    viz_rgba(
-        rgba,
+    show_state_rgba_mpl(
+        inferred[name],
+        visible_channels=VIS,
         title=f"Model output\n{name}",
         ax=axes[1, col],
         surface_only=True,
         threshold=0.20,
-        elev=28, azim=40, s=14, show=False,
+        point_size=14,
+        view_angle=(28, 40),
+        show=False,
     )
 
 # Row labels on the left

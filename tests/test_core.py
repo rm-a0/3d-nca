@@ -82,6 +82,28 @@ def test_perception_weights_are_frozen_and_channel_groups_scale() -> None:
     assert perception.depthwise.weight.shape[0] == in_channels * 3
 
 
+def test_perception_legacy_three_group_mode_still_supported() -> None:
+    perception = Perception3D(PerceptionConfig(channel_groups=3), in_channels=1)
+    weights = perception.depthwise.weight.detach()
+
+    assert weights.shape == (3, 1, 3, 3, 3)
+    assert weights[2, 0, 1, 1, 1].item() == 6.0
+    assert weights[2].sum().item() == 0.0
+
+
+def test_perception_directional_five_group_mode_supported() -> None:
+    perception = Perception3D(PerceptionConfig(channel_groups=5), in_channels=1)
+    weights = perception.depthwise.weight.detach()
+
+    assert weights.shape == (5, 1, 3, 3, 3)
+    assert weights[2, 0, 2, 1, 1].item() == 1.0
+    assert weights[2, 0, 0, 1, 1].item() == -1.0
+    assert weights[3, 0, 1, 2, 1].item() == 1.0
+    assert weights[3, 0, 1, 0, 1].item() == -1.0
+    assert weights[4, 0, 1, 1, 2].item() == 1.0
+    assert weights[4, 0, 1, 1, 0].item() == -1.0
+
+
 def test_cell_config_is_frozen() -> None:
     cfg = CellConfig()
     with pytest.raises(dataclasses.FrozenInstanceError):
@@ -112,7 +134,8 @@ def test_update_rule_masks_task_channels() -> None:
         final_conv = rule.mlp[-1]
         final_conv.bias.fill_(2.0)
 
-    perceived = torch.zeros(1, cell_cfg.total_channels * 3, 2, 2, 2)
+    g = PerceptionConfig().channel_groups
+    perceived = torch.zeros(1, cell_cfg.total_channels * g, 2, 2, 2)
     alive_mask = torch.ones(1, 1, 2, 2, 2, dtype=torch.bool)
     state = torch.zeros(1, cell_cfg.total_channels, 2, 2, 2)
 
