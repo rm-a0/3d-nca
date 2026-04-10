@@ -23,9 +23,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Plot NCA losses with curriculum ramp")
     parser.add_argument("--run", default="001", help="Run id (default: 001)")
     parser.add_argument("--out", default=None, help="Output PNG path")
+    parser.add_argument("--base-dir", default="runs")
     args = parser.parse_args()
 
-    run_dir = Path("runs") / f"run_{args.run}"
+    run_dir = Path(args.base_dir) / f"run_{args.run}"
     csv_path = run_dir / "loss.csv"
     out_path = Path(args.out) if args.out else run_dir / "plot_loss.png"
 
