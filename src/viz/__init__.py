@@ -15,6 +15,9 @@ from .slice_mpl import (
 from .volume_mpl import (
     show_volume_alpha_mpl,
     show_volume_alpha_comparison_mpl,
+    show_volume_rgba_mpl,
+    show_state_rgba_mpl,
+    show_state_target_comparison_mpl,
 )
 
 from .volume_pv import (
@@ -31,6 +34,9 @@ __all__ = [
     "show_slice_alpha_comparison_mpl",
     "show_volume_alpha_mpl",
     "show_volume_alpha_comparison_mpl",
+    "show_volume_rgba_mpl",
+    "show_state_rgba_mpl",
+    "show_state_target_comparison_mpl",
     "show_volume_alpha_pv",
     "show_volume_alpha_comparison_pv",
     "show_volume_color_pv",
