@@ -28,11 +28,17 @@ class CellConfig:
     visible_channels: int = 4
     alive_threshold: float = 0.1
     task_channels: int = 0
+    pos_channels: int = 0
 
     @property
     def total_channels(self) -> int:
-        """Total number of channels (hidden + visible + task)."""
-        return self.hidden_channels + self.visible_channels + self.task_channels
+        """Total number of channels (hidden + visible + task + positional)."""
+        return (
+            self.hidden_channels
+            + self.visible_channels
+            + self.task_channels
+            + self.pos_channels
+        )
 
 
 class CellState(torch.nn.Module):
@@ -50,7 +56,7 @@ class CellState(torch.nn.Module):
 
     @property
     def total_channels(self) -> int:
-        """Total number of channels (hidden + visible)."""
+        """Total number of channels (hidden + visible + task + positional)."""
         return self.cfg.total_channels
 
     @torch.no_grad()

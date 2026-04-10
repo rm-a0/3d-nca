@@ -97,6 +97,7 @@ config = {
         "visible_channels": int(target.shape[-1]),
         "alive_threshold": 0.1,
         "task_channels": 0,
+        "pos_channels": 3,
     },
     "perception": {
         "kernel_radius": 1,
@@ -198,6 +199,7 @@ nca_cfg = NCAConfig(
     hidden_channels=config["cell"]["hidden_channels"],
     visible_channels=config["cell"]["visible_channels"],
     task_channels=config["cell"]["task_channels"],
+    pos_channels=config["cell"]["pos_channels"],
     alive_threshold=config["cell"]["alive_threshold"],
     perception_kernel_radius=config["perception"]["kernel_radius"],
     perception_channel_groups=config["perception"]["channel_groups"],

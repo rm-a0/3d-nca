@@ -3,7 +3,7 @@ Grid3D - 3D Neural Cellular Automata (NCA) simulator.
 
 State is a tensor of shape [B, C, X, Y, Z]:
   - B = batch size (run multiple worlds in parallel)
-  - C = total channels per cell (hidden + visible)
+    - C = total channels per cell (hidden + optional positional + optional task + visible)
   - X, Y, Z = 3D lattice size
 
 Each voxel is a cell. The update is local (3x3x3 neighborhood),
@@ -39,6 +39,9 @@ class Grid3D(torch.nn.Module):
       - Perception3D: fixed 3x3x3 depthwise filters (identity, neighbor sum, gradient)
       - UpdateRule: 1x1x1 MLP that predicts state delta
     Damage robustness via alive-mask intersection (pre & post).
+
+        Positional channels are optional read-only channels that encode normalized
+        absolute voxel coordinates and are re-injected every step.
     """
 
     def __init__(
@@ -53,6 +56,27 @@ class Grid3D(torch.nn.Module):
         self.cell = CellState(cell_cfg)
         self.perception = Perception3D(perc_cfg, cell_cfg.total_channels)
         self.update = UpdateRule(perc_cfg, cell_cfg, upd_cfg)
+
+        if cell_cfg.pos_channels > 0:
+            if cell_cfg.pos_channels > 3:
+                raise ValueError("cell.pos_channels must be in range [0, 3]")
+
+            depth, height, width = grid_cfg.size
+            xs = torch.linspace(0.0, 1.0, depth, dtype=torch.float32).view(depth, 1, 1)
+            ys = torch.linspace(0.0, 1.0, height, dtype=torch.float32).view(1, height, 1)
+            zs = torch.linspace(0.0, 1.0, width, dtype=torch.float32).view(1, 1, width)
+
+            pos = torch.stack(
+                [
+                    xs.expand(depth, height, width),
+                    ys.expand(depth, height, width),
+                    zs.expand(depth, height, width),
+                ],
+                dim=0,
+            ).unsqueeze(0)  # [1, 3, D, H, W]
+            self.register_buffer("_pos_enc", pos)
+        else:
+            self._pos_enc = None
 
     def init_empty(self, batch_size: int, device: torch.device | str) -> Tensor:
         return torch.zeros(
@@ -74,23 +98,27 @@ class Grid3D(torch.nn.Module):
 
         Visible channels: random RGB + alpha = 1.0 (alive signal).
         Hidden channels remain zero.
+        Positional channels, when enabled, are filled across the full grid.
         """
         state = self.init_empty(batch_size, device)
         center = tuple(s // 2 for s in self.cfg.size)
+        vis = self.cell.cfg.visible_channels
+        tc = self.cell.cfg.task_channels
+        pc = self.cell.cfg.pos_channels
+
         seed_vis = torch.rand(
-            batch_size, self.cell.cfg.visible_channels, 1, 1, 1, device=device
+            batch_size, vis, 1, 1, 1, device=device
         )
         seed_vis[:, -1:, ...] = 1.0
         state[
             :,
-            -self.cell.cfg.visible_channels :,
+            -vis:,
             center[0] : center[0] + 1,
             center[1] : center[1] + 1,
             center[2] : center[2] + 1,
         ] = seed_vis
 
-        if self.cell.cfg.task_channels > 0 and task_ids is not None:
-            tc = self.cell.cfg.task_channels
+        if tc > 0 and task_ids is not None:
             one_hot = (
                 torch.nn.functional.one_hot(task_ids, num_classes=tc).to(device).float()
             )
@@ -99,8 +127,14 @@ class Grid3D(torch.nn.Module):
                 .expand(-1, -1, *self.cfg.size)
                 .contiguous()
             )
-            vis = self.cell.cfg.visible_channels
             state[:, -(vis + tc) : -vis, ...] = one_hot_grid
+
+        if pc > 0 and self._pos_enc is not None:
+            pos = self._pos_enc[:, :pc, ...].expand(batch_size, -1, -1, -1, -1)
+            state[:, -(vis + tc + pc) : -(vis + tc), ...] = pos.to(
+                device=device,
+                dtype=state.dtype,
+            )
 
         return state
 
@@ -128,7 +162,19 @@ class Grid3D(torch.nn.Module):
 
         new_state = state + dx
         post_life = self.cell.update_alive_mask(new_state)
-        return new_state * post_life.float()
+        new_state = new_state * post_life.float()
+
+        pc = self.cell.cfg.pos_channels
+        if pc > 0 and self._pos_enc is not None:
+            vis = self.cell.cfg.visible_channels
+            tc = self.cell.cfg.task_channels
+            pos = self._pos_enc[:, :pc, ...].expand(new_state.shape[0], -1, -1, -1, -1)
+            new_state[:, -(vis + tc + pc) : -(vis + tc), ...] = pos.to(
+                device=new_state.device,
+                dtype=new_state.dtype,
+            )
+
+        return new_state
 
     def forward(
         self,

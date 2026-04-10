@@ -16,12 +16,14 @@ def _make_grid(
     hidden_channels: int = 2,
     visible_channels: int = 4,
     task_channels: int = 0,
+    pos_channels: int = 0,
     grid_size: tuple[int, int, int] = (4, 5, 6),
 ) -> Grid3D:
     cell_cfg = CellConfig(
         hidden_channels=hidden_channels,
         visible_channels=visible_channels,
         task_channels=task_channels,
+        pos_channels=pos_channels,
     )
     perc_cfg = PerceptionConfig()
     upd_cfg = UpdateConfig(hidden_dim=8)
@@ -56,7 +58,7 @@ def test_cell_alive_mask_is_strictly_greater_than_threshold() -> None:
 
 
 def test_perception_kernels_and_forward_shape() -> None:
-    perception = Perception3D(PerceptionConfig(), in_channels=1)
+    perception = Perception3D(PerceptionConfig(channel_groups=3), in_channels=1)
     weights = perception.depthwise.weight.detach()
 
     assert weights.shape == (3, 1, 3, 3, 3)
@@ -121,7 +123,7 @@ def test_update_rule_initializes_final_layer_to_zero() -> None:
 
 
 def test_update_rule_masks_task_channels() -> None:
-    cell_cfg = CellConfig(hidden_channels=2, visible_channels=1, task_channels=1)
+    cell_cfg = CellConfig(hidden_channels=2, visible_channels=1, task_channels=1, pos_channels=3)
     upd_cfg = UpdateConfig(hidden_dim=8)
     rule = UpdateRule(PerceptionConfig(), cell_cfg, upd_cfg)
 
@@ -142,9 +144,18 @@ def test_update_rule_masks_task_channels() -> None:
     delta = rule(perceived, alive_mask, state)
 
     expected_value = torch.tanh(torch.tensor(2.0)) * 0.1
-    assert torch.allclose(delta[:, :2], torch.full_like(delta[:, :2], expected_value))
-    assert torch.allclose(delta[:, 2:3], torch.zeros_like(delta[:, 2:3]))
-    assert torch.allclose(delta[:, 3:], torch.full_like(delta[:, 3:], expected_value))
+    vis = cell_cfg.visible_channels
+    tc = cell_cfg.task_channels
+    pc = cell_cfg.pos_channels
+
+    protected = delta[:, -(vis + tc + pc) : -vis]
+    assert torch.allclose(protected, torch.zeros_like(protected))
+
+    non_protected = torch.cat(
+        [delta[:, : cell_cfg.hidden_channels], delta[:, -vis:]],
+        dim=1,
+    )
+    assert torch.allclose(non_protected, torch.full_like(non_protected, expected_value))
 
 
 def test_grid_init_empty_and_seed_center_with_tasks() -> None:
@@ -176,6 +187,36 @@ def test_grid_seed_center_works_for_single_voxel_grid() -> None:
 
     assert state.shape == (1, grid.cell.total_channels, 1, 1, 1)
     assert torch.allclose(state[:, -1], torch.ones_like(state[:, -1]))
+
+
+def test_grid_seed_center_injects_positional_channels() -> None:
+    grid = _make_grid(task_channels=1, pos_channels=3, grid_size=(4, 5, 6))
+    state = grid.seed_center(batch_size=2, device="cpu", task_ids=torch.tensor([0, 0]))
+
+    vis = grid.cell.cfg.visible_channels
+    tc = grid.cell.cfg.task_channels
+    pc = grid.cell.cfg.pos_channels
+    pos_slice = state[:, -(vis + tc + pc) : -(vis + tc)]
+    expected = grid._pos_enc[:, :pc].expand(2, -1, -1, -1, -1)
+
+    assert torch.allclose(pos_slice, expected)
+
+
+def test_grid_step_reinjects_positional_channels() -> None:
+    grid = _make_grid(task_channels=0, pos_channels=3, grid_size=(4, 4, 4))
+    state = grid.seed_center(batch_size=1, device="cpu")
+
+    # Corrupt positional slice deliberately and verify step restores it.
+    vis = grid.cell.cfg.visible_channels
+    tc = grid.cell.cfg.task_channels
+    pc = grid.cell.cfg.pos_channels
+    state[:, -(vis + tc + pc) : -(vis + tc)] = -7.0
+
+    out = grid.step(state)
+    restored = out[:, -(vis + tc + pc) : -(vis + tc)]
+    expected = grid._pos_enc[:, :pc].expand(1, -1, -1, -1, -1)
+
+    assert torch.allclose(restored, expected)
 
 
 def test_nca_config_from_dict_and_checkpoint_round_trip(tmp_path) -> None:

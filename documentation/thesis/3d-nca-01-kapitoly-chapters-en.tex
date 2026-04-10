@@ -745,17 +745,24 @@ on multiple targets simultaneously using a one-hot encoding to distinguish betwe
 Task channels remain constant for the duration of a training phase, while
 hidden and visible channels evolve freely under the learned update rule.
 
-Task channels are optional and are disabled in the baseline configuration. They were introduced later
-as an extension for an experiment that demonstrates modularity and extensibility; single-target
-training uses only hidden and visible channels.
+For asymmetric targets, an additional optional group of positional channels can
+be included. These channels store normalised absolute coordinates
+$(x, y, z) \in [0,1]^3$ and are treated as read-only constants. They provide
+global spatial reference so cells can distinguish, for example, top from
+bottom or left from right, which is not possible from purely local symmetric
+neighbourhood statistics.
+
+Task and positional channels are optional extensions and can be enabled per
+experiment. Baseline single-target training uses hidden and visible channels
+only.
 
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=\textwidth]{obrazky-figures/fig-cell-state-vector.png}
-    \caption{Per-voxel state vector layout. The vector contains hidden channels, optional task
-             channels, and visible channels. The alpha channel, which
-             serves as the alive signal, is always the last visible channel. Task channels are an
-             optional extension and are disabled by default}
+    \caption{Per-voxel state vector layout. The vector contains hidden channels,
+             optional positional channels, optional task channels, and visible
+             channels. The alpha channel, which serves as the alive signal, is
+             always the last visible channel}
     \label{fig:cell-state-vector}
 \end{figure}
 
@@ -1141,11 +1148,12 @@ alpha   = state[:, -1:, ...]
 \end{lstlisting}
 
 Channel ordering follows the state vector layout shown in Figure~\ref{fig:cell-state-vector}.
-Hidden channels come first, optional task channels come next, and visible channels come last,
-with alpha stored in the final channel.
+Hidden channels come first, optional positional channels come next, optional
+task channels follow, and visible channels come last, with alpha stored in
+the final channel.
 
-Task channels are disabled in the baseline configuration and were introduced later as an optional
-extension used in a modularity experiment.
+Task and positional channels are disabled in the baseline configuration and
+can be enabled per experiment.
 
 Model hyperparameters are represented by small configuration dataclasses.
 Component-level parameters are stored in frozen dataclasses (\texttt{CellConfig},
@@ -1182,7 +1190,13 @@ Listing~\ref{lst:model-entrypoints} shows both patterns.
 
 \begin{lstlisting}[style=py, caption={Two entry points for constructing the NCA model: low-level \texttt{Grid3D} and the high-level \texttt{NCAModel} wrapper.}, label={lst:model-entrypoints}]
 # Low-level construction (server/runner)
-cell_cfg = CellConfig(hidden_channels=16, visible_channels=4, alive_threshold=0.1, task_channels=0)
+cell_cfg = CellConfig(
+    hidden_channels=16,
+    visible_channels=4,
+    alive_threshold=0.1,
+    task_channels=0,
+    pos_channels=3,
+)
 perc_cfg = PerceptionConfig(kernel_radius=1, channel_groups=5)  # optional directional mode
 upd_cfg  = UpdateConfig(hidden_dim=128, stochastic_update=False, fire_rate=0.5)
 grid_cfg = GridConfig(size=(32, 32, 32))
@@ -1194,7 +1208,8 @@ model = NCAModel(grid_size=(32, 32, 32), hidden_channels=16, visible_channels=4,
 
 \subsection{CellState}
 
-The per-voxel state vector layout (hidden, optional task, visible) follows
+The per-voxel state vector layout (hidden, optional positional,
+optional task, visible) follows
 Figure~\ref{fig:cell-state-vector}. In code, the layout is specified by \texttt{CellConfig}
 and \texttt{CellState.update\_alive\_mask()} computes the boolean alive mask used to gate
 updates. A voxel is considered alive if the maximum alpha value in its
@@ -1258,8 +1273,9 @@ mlp = nn.Sequential(
 dx = 0.1 * torch.tanh(mlp(perceived))
 \end{lstlisting}
 
-When task channels are present, the predicted increment for the task-channel 
-slice is forced to zero, keeping those channels constant.
+When task or positional channels are present, the predicted increment for
+those slices is forced to zero, keeping them read-only with respect to the
+learned update rule.
 
 \subsection{Grid3D}
 
@@ -1275,6 +1291,9 @@ new_state = state + dx
 
 post_life = cell.update_alive_mask(new_state)
 new_state = new_state * post_life.float()
+
+# optional positional channels are re-injected as constants
+new_state[:, pos_slice] = pos_grid
 \end{lstlisting}
 
 The multi-step \texttt{forward()} loop runs \texttt{step()} repeatedly and clamps the state
@@ -1285,7 +1304,9 @@ usage at the cost of recomputation during backpropagation.
 The module also provides \texttt{seed\_center()}, which creates an initial state
 with a single active voxel placed at the lattice centre. Visible channels are
 initialised to random colour with alpha set to 1.0, while hidden channels
-start at zero.
+start at zero. If positional channels are enabled, they are filled over the
+entire grid with normalised coordinate values and re-injected after each step,
+so they remain fixed global references.
 
 \subsection{NCAModel}
 

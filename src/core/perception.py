@@ -30,7 +30,7 @@ class PerceptionConfig:
     """Configuration for perception filters."""
 
     kernel_radius: int = 1
-    channel_groups: int = 3
+    channel_groups: int = 5
 
 
 class Perception3D(torch.nn.Module):

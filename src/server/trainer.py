@@ -303,6 +303,7 @@ class NCATrainer:
                 visible_channels=int(config["visible_channels"]),
                 alive_threshold=float(config.get("alive_threshold", 0.1)),
                 task_channels=int(config.get("task_channels", 0)),
+                pos_channels=int(config.get("pos_channels", 0)),
             )
             perc_cfg = PerceptionConfig(
                 kernel_radius=int(config.get("perception_kernel_radius", 1)),

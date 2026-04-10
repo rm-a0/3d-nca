@@ -96,8 +96,9 @@ class UpdateRule(nn.Module):
 
         delta = torch.tanh(delta) * 0.1
 
-        if self.cell_cfg.task_channels > 0:
-            tc = self.cell_cfg.task_channels
-            vc = self.cell_cfg.visible_channels
-            delta[:, -(vc + tc) : -vc, ...] = 0.0
+        tc = self.cell_cfg.task_channels
+        pc = self.cell_cfg.pos_channels
+        vc = self.cell_cfg.visible_channels
+        if (tc + pc) > 0:
+            delta[:, -(vc + tc + pc) : -vc, ...] = 0.0
         return delta

@@ -45,6 +45,7 @@ class NCAConfig:
     visible_channels: int = 4
     alive_threshold: float = 0.1
     task_channels: int = 0
+    pos_channels: int = 0
 
     # Perception (fixed 3x3x3 filters)
     perception_kernel_radius: int = 1
@@ -64,6 +65,7 @@ class NCAConfig:
             visible_channels=self.visible_channels,
             alive_threshold=self.alive_threshold,
             task_channels=self.task_channels,
+            pos_channels=self.pos_channels,
         )
         perc_cfg = PerceptionConfig(
             kernel_radius=self.perception_kernel_radius,
@@ -210,8 +212,13 @@ class NCAModel(torch.nn.Module):
 
     @property
     def total_channels(self) -> int:
-        """Total number of channels (hidden + visible)."""
-        return self.config.hidden_channels + self.config.visible_channels
+        """Total number of channels (hidden + visible + task + positional)."""
+        return (
+            self.config.hidden_channels
+            + self.config.visible_channels
+            + self.config.task_channels
+            + self.config.pos_channels
+        )
 
     @property
     def hidden_channels(self) -> int:
