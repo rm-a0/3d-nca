@@ -219,8 +219,18 @@ def voxelize_and_display(context, objs: List[bpy.types.Object]) -> Tuple[bool, s
     vis_ch = cell.visible_channels
     grid_offset = int(grid.grid_offset)
 
+    # Read color_mode from target properties (graceful fallback for older scenes)
+    color_mode = getattr(target, "color_mode", "BSDF")
+
     results = [
-        mesh_to_voxel_array(obj, grid_size, vis_ch, offset=grid_offset) for obj in objs
+        mesh_to_voxel_array(
+            obj,
+            grid_size,
+            vis_ch,
+            offset=grid_offset,
+            color_mode=color_mode,
+        )
+        for obj in objs
     ]
 
     combined_data = results[0][0].copy()

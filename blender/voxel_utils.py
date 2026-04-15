@@ -7,6 +7,11 @@ raycast-based inside-outside tests. Preserves material IDs and colors.
 Display: renders (D,H,W,C) arrays as optimized merged-cube meshes in Blender
 using vectorized geometry construction and foreach_set bulk operations for speed.
 
+Color modes:
+  - BSDF: reads Principled BSDF Base Color (fast, solid colors only)
+  - TEXTURE: samples image texture at nearest surface UV (slower, works with
+    any image-textured mesh including imports)
+
 Note: voxelization core implemented with assistance from Claude Opus 4.6.
 """
 
@@ -15,8 +20,12 @@ import numpy as np
 import colorsys
 from mathutils import Vector, Matrix
 from mathutils.bvhtree import BVHTree
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
+
+# ---------------------------------------------------------------------------
+# Collection helpers
+# ---------------------------------------------------------------------------
 
 def get_or_create_collection(name: str) -> bpy.types.Collection:
     """Get or create a named Blender collection linked to active scene.
@@ -146,23 +155,244 @@ def place_source_in_scene(
         dup.scale = obj.scale.copy()
 
 
+# ---------------------------------------------------------------------------
+# Color / material helpers
+# ---------------------------------------------------------------------------
+
+def _get_material_base_color(mat) -> np.ndarray:
+    """Extract base color from Blender Principled BSDF material.
+
+    Args:
+        mat: Blender material or None.
+
+    Returns:
+        RGB color as float32 array [R,G,B], or [1,1,1] if not found.
+    """
+    if mat and mat.use_nodes:
+        for node in mat.node_tree.nodes:
+            if node.type == "BSDF_PRINCIPLED":
+                c = node.inputs["Base Color"].default_value
+                return np.array([c[0], c[1], c[2]], dtype=np.float32)
+    return np.array([1.0, 1.0, 1.0], dtype=np.float32)
+
+
+def _get_material_image(mat) -> Optional[bpy.types.Image]:
+    """Find the primary image texture in a material's node tree.
+
+    Search order:
+    1. Image Texture node wired into Principled BSDF 'Base Color'
+    2. Any Image Texture node that has an image loaded
+
+    Args:
+        mat: Blender material or None.
+
+    Returns:
+        The first matching Image datablock, or None.
+    """
+    if mat is None or not mat.use_nodes:
+        return None
+
+    tree = mat.node_tree
+
+    # Prefer the node directly feeding BSDF Base Color
+    for node in tree.nodes:
+        if node.type == "BSDF_PRINCIPLED":
+            inp = node.inputs.get("Base Color")
+            if inp and inp.is_linked:
+                from_node = inp.links[0].from_node
+                if from_node.type == "TEX_IMAGE" and from_node.image:
+                    return from_node.image
+
+    # Fallback: any loaded image texture
+    for node in tree.nodes:
+        if node.type == "TEX_IMAGE" and node.image:
+            return node.image
+
+    return None
+
+
+def _build_image_cache(materials: list) -> Dict[int, Tuple[np.ndarray, int, int]]:
+    """Pre-load all material images into numpy pixel arrays.
+
+    Loading image pixels into numpy once avoids per-voxel Python overhead when
+    doing many texture lookups during voxelization.
+
+    Args:
+        materials: List of Blender material objects (may contain None entries).
+
+    Returns:
+        Dict mapping material index -> (pixels[H,W,4], img_width, img_height).
+        Only materials that have an image texture are included.
+    """
+    cache: Dict[int, Tuple[np.ndarray, int, int]] = {}
+    for idx, mat in enumerate(materials):
+        img = _get_material_image(mat)
+        if img is None:
+            continue
+        w, h = img.size
+        if w == 0 or h == 0:
+            continue
+        # img.pixels is a flat RGBA sequence; copy once into numpy
+        pixels = np.array(img.pixels, dtype=np.float32).reshape(h, w, 4)
+        cache[idx] = (pixels, w, h)
+    return cache
+
+
+def _barycentric_coords(
+    p: Vector, a: Vector, b: Vector, c: Vector
+) -> Tuple[float, float, float]:
+    """Compute barycentric coordinates (wa, wb, wc) for point p in triangle abc.
+
+    Uses the Möller dot-product method, which is numerically stable and fast.
+
+    Args:
+        p: Query point (should be on or very close to the triangle plane).
+        a, b, c: Triangle vertices.
+
+    Returns:
+        (wa, wb, wc) barycentric weights summing to ~1.  Falls back to
+        centroid weights (1/3, 1/3, 1/3) for degenerate triangles.
+    """
+    v0 = b - a
+    v1 = c - a
+    v2 = p - a
+
+    d00 = v0.dot(v0)
+    d01 = v0.dot(v1)
+    d11 = v1.dot(v1)
+    d20 = v2.dot(v0)
+    d21 = v2.dot(v1)
+
+    denom = d00 * d11 - d01 * d01
+    if abs(denom) < 1e-10:
+        return 1 / 3, 1 / 3, 1 / 3
+
+    wb = (d11 * d20 - d01 * d21) / denom
+    wc = (d00 * d21 - d01 * d20) / denom
+    wa = 1.0 - wb - wc
+    return wa, wb, wc
+
+
+def _sample_texture_color(
+    eval_mesh,
+    poly_idx: int,
+    surface_point: Vector,
+    materials: list,
+    img_cache: Dict[int, Tuple[np.ndarray, int, int]],
+) -> np.ndarray:
+    """Sample texture color at a surface point using UV interpolation.
+
+    Algorithm:
+    1. Determine the material index of the hit polygon.
+    2. Look up the pre-cached image pixel array for that material.
+    3. Fan-triangulate the polygon and find which triangle contains
+       the surface point using barycentric coordinates.
+    4. Interpolate UV from vertex UVs, then sample the image with wrap.
+    5. Fall back to BSDF base color or white when any step is unavailable.
+
+    Args:
+        eval_mesh: Evaluated (post-modifier) mesh data.
+        poly_idx: Index of the hit polygon.
+        surface_point: Exact surface hit position in object local space
+                       (as returned by BVHTree.find_nearest).
+        materials: List of Blender materials for the object.
+        img_cache: Pre-built image pixel cache from _build_image_cache().
+
+    Returns:
+        RGB color as float32 array [R,G,B] in linear color space.
+    """
+    poly = eval_mesh.polygons[poly_idx]
+    mat_idx = poly.material_index
+
+    # No cached image for this material -> fall back to BSDF color
+    if mat_idx not in img_cache:
+        mat = materials[mat_idx] if mat_idx < len(materials) else None
+        return _get_material_base_color(mat)
+
+    pixels, img_w, img_h = img_cache[mat_idx]
+
+    # Need a UV layer to do the lookup
+    uv_layer = eval_mesh.uv_layers.active
+    if uv_layer is None:
+        mat = materials[mat_idx] if mat_idx < len(materials) else None
+        return _get_material_base_color(mat)
+
+    loops = list(poly.loop_indices)
+    n_loops = len(loops)
+    if n_loops < 3:
+        return np.array([1.0, 1.0, 1.0], dtype=np.float32)
+
+    # Gather per-loop vertex positions and UVs
+    vert_cos = [
+        Vector(eval_mesh.vertices[eval_mesh.loops[li].vertex_index].co)
+        for li in loops
+    ]
+    vert_uvs = [uv_layer.data[li].uv for li in loops]  # mathutils.Vector(2D)
+
+    # Fan triangulation from vertex 0; find the triangle that best contains p
+    best_u, best_v = vert_uvs[0].x, vert_uvs[0].y  # sensible default
+    best_match = False
+
+    for tri_i in range(1, n_loops - 1):
+        v0, v1, v2 = vert_cos[0], vert_cos[tri_i], vert_cos[tri_i + 1]
+        uv0, uv1, uv2 = vert_uvs[0], vert_uvs[tri_i], vert_uvs[tri_i + 1]
+
+        wa, wb, wc = _barycentric_coords(surface_point, v0, v1, v2)
+
+        # Loose tolerance handles floating-point imprecision near edges
+        if -0.05 <= wa <= 1.05 and -0.05 <= wb <= 1.05 and -0.05 <= wc <= 1.05:
+            best_u = wa * uv0.x + wb * uv1.x + wc * uv2.x
+            best_v = wa * uv0.y + wb * uv1.y + wc * uv2.y
+            best_match = True
+            break
+
+    if not best_match:
+        # Point didn't land cleanly in any triangle (edge/precision issue);
+        # use the UV of the nearest vertex as a reasonable fallback.
+        best_u = vert_uvs[0].x
+        best_v = vert_uvs[0].y
+
+    # Tile/wrap UV, then nearest-pixel sample (bilinear isn't worth it at
+    # voxel resolution since each voxel maps to many texels anyway)
+    u = best_u % 1.0
+    v = best_v % 1.0
+    px = int(u * img_w) % img_w
+    py = int(v * img_h) % img_h
+
+    return pixels[py, px, :3].copy()
+
+
+# ---------------------------------------------------------------------------
+# Core voxelizer
+# ---------------------------------------------------------------------------
+
 def mesh_to_voxel_array(
     obj: bpy.types.Object,
     grid_size: Tuple[int, int, int],
     visible_channels: str = "RGBA",
     offset: int = 1,
+    color_mode: str = "BSDF",
 ) -> Tuple[np.ndarray, np.ndarray, List]:
     """Voxelize mesh object to array with material color preservation.
 
     Uses ray-casting inside-outside test to determine voxel occupancy.
     Mesh is uniformly scaled so longest axis spans (grid_axis - 2*offset) voxels,
-    then centered in grid. Extracts Principled BSDF base colors from materials.
+    then centered in grid.
+
+    Color modes (only relevant when visible_channels == 'RGBA'):
+        'BSDF'    – reads the Base Color socket of a Principled BSDF node.
+                    Fast, works for simple solid-color materials.
+        'TEXTURE' – UV-samples image textures at the nearest surface point.
+                    Slower first-time (image cache build), but handles any
+                    imported mesh that uses image-texture materials.
 
     Args:
         obj: Mesh object to voxelize.
         grid_size: Target voxel grid dimensions (D, H, W).
-        visible_channels: Output format: "ALPHA" (1 channel), "RGBA" (4 channels), or "ALPHA_MATERIAL_ID" (2 channels).
+        visible_channels: Output format: "ALPHA" (1ch), "RGBA" (4ch), or
+                          "ALPHA_MATERIAL_ID" (2ch).
         offset: Border offset in voxels (default 1).
+        color_mode: 'BSDF' or 'TEXTURE' (see above).
 
     Returns:
         Tuple (voxel_data [D,H,W,C], material_index_map [D,H,W], materials list).
@@ -200,51 +430,74 @@ def mesh_to_voxel_array(
     n_mats = max(len(materials), 1)
     mat_norm = float(max(n_mats - 1, 1))
 
-    for i in range(D):
-        tx = bb_min.x + (i - grid_origin[0] + 0.5) / scale
-        for j in range(H):
-            ty = bb_min.y + (j - grid_origin[1] + 0.5) / scale
-            for k in range(W):
-                tz = bb_min.z + (k - grid_origin[2] + 0.5) / scale
-                point = Vector((tx, ty, tz))
+    # --- Texture mode: pre-load all images into numpy arrays once ---
+    use_texture_sampling = (color_mode == "TEXTURE") and (n_ch >= 4)
+    img_cache: Dict[int, Tuple[np.ndarray, int, int]] = {}
+    if use_texture_sampling:
+        img_cache = _build_image_cache(materials)
 
-                inside, _ray_face = _is_inside_mesh_with_face(bvh, point)
-                if not inside:
-                    continue
+    # --- Progress bar (shown in Blender status bar) ---
+    wm = bpy.context.window_manager
+    wm.progress_begin(0, D)
 
-                nearest, _normal, nearest_face, _dist = bvh.find_nearest(point)
-                mi = int(poly_mat_ids[nearest_face]) if nearest_face is not None else 0
-                mat_index_map[i, j, k] = mi
+    try:
+        for i in range(D):
+            wm.progress_update(i)
+            tx = bb_min.x + (i - grid_origin[0] + 0.5) / scale
 
-                if visible_channels == "ALPHA_MATERIAL_ID":
-                    voxels[i, j, k] = [1.0, float(mi) / mat_norm]
-                elif n_ch >= 4:
-                    color = _get_material_base_color(
-                        materials[mi] if mi < len(materials) else None
+            for j in range(H):
+                ty = bb_min.y + (j - grid_origin[1] + 0.5) / scale
+
+                for k in range(W):
+                    tz = bb_min.z + (k - grid_origin[2] + 0.5) / scale
+                    point = Vector((tx, ty, tz))
+
+                    inside, _ray_face = _is_inside_mesh_with_face(bvh, point)
+                    if not inside:
+                        continue
+
+                    nearest, _normal, nearest_face, _dist = bvh.find_nearest(point)
+                    mi = (
+                        int(poly_mat_ids[nearest_face])
+                        if nearest_face is not None
+                        else 0
                     )
-                    voxels[i, j, k] = [color[0], color[1], color[2], 1.0]
-                else:
-                    voxels[i, j, k, 0] = 1.0
+                    mat_index_map[i, j, k] = mi
+
+                    if visible_channels == "ALPHA_MATERIAL_ID":
+                        voxels[i, j, k] = [1.0, float(mi) / mat_norm]
+
+                    elif n_ch >= 4:
+                        if (
+                            use_texture_sampling
+                            and nearest is not None
+                            and nearest_face is not None
+                        ):
+                            color = _sample_texture_color(
+                                eval_mesh,
+                                nearest_face,
+                                nearest,
+                                materials,
+                                img_cache,
+                            )
+                        else:
+                            color = _get_material_base_color(
+                                materials[mi] if mi < len(materials) else None
+                            )
+                        voxels[i, j, k] = [color[0], color[1], color[2], 1.0]
+
+                    else:
+                        voxels[i, j, k, 0] = 1.0
+
+    finally:
+        wm.progress_end()
 
     return voxels, mat_index_map, materials
 
 
-def _get_material_base_color(mat) -> np.ndarray:
-    """Extract base color from Blender Principled BSDF material.
-
-    Args:
-        mat: Blender material or None.
-
-    Returns:
-        RGB color as [R,G,B] float32 array, or [1,1,1] if not found.
-    """
-    if mat and mat.use_nodes:
-        for node in mat.node_tree.nodes:
-            if node.type == "BSDF_PRINCIPLED":
-                c = node.inputs["Base Color"].default_value
-                return np.array([c[0], c[1], c[2]], dtype=np.float32)
-    return np.array([1.0, 1.0, 1.0], dtype=np.float32)
-
+# ---------------------------------------------------------------------------
+# Ray-cast inside/outside test
+# ---------------------------------------------------------------------------
 
 def _is_inside_mesh_with_face(
     bvh: BVHTree, point: Vector
@@ -275,6 +528,10 @@ def _is_inside_mesh_with_face(
         origin = hit + direction * 1e-4
     return (count % 2 == 1, first_face)
 
+
+# ---------------------------------------------------------------------------
+# Blender mesh display
+# ---------------------------------------------------------------------------
 
 _FACE_DEFS = [
     (0, 1, 2, 3),
@@ -346,7 +603,6 @@ def voxel_array_to_blender(
     s = cell_size * 0.5
 
     # --- Numpy-Vectorized Geometry ---
-    # Template cube: 8 vertices relative to centre
     cube_verts = np.array(
         [
             [-s, -s, -s],
@@ -361,18 +617,14 @@ def voxel_array_to_blender(
         dtype=np.float32,
     )
 
-    # Template faces (6 quads, winding order gives outward normals)
     cube_faces = np.array(_FACE_DEFS, dtype=np.int32)
 
-    # Centres for every occupied voxel  (N, 3)
     centres = occupied.astype(np.float32) * cell_size
 
-    # Broadcast: (1,8,3) + (N,1,3) -> (N,8,3) -> (N*8, 3)
     all_verts = (cube_verts[np.newaxis, :, :] + centres[:, np.newaxis, :]).reshape(
         -1, 3
     )
 
-    # Per-voxel vertex offset applied to face indices: (N,6,4) -> (N*6, 4)
     offsets = (np.arange(N, dtype=np.int32) * 8)[:, np.newaxis, np.newaxis]
     all_faces = (cube_faces[np.newaxis, :, :] + offsets).reshape(-1, 4)
 
@@ -380,7 +632,6 @@ def voxel_array_to_blender(
     n_faces = N * 6
     n_loops = n_faces * 4
 
-    # Build Blender mesh via foreach_set (bulk C-level copy)
     mesh_data = bpy.data.meshes.new(f"{object_name}_mesh")
 
     mesh_data.vertices.add(n_verts)
@@ -393,7 +644,6 @@ def voxel_array_to_blender(
     mesh_data.polygons.foreach_set("loop_start", np.arange(n_faces, dtype=np.int32) * 4)
     mesh_data.polygons.foreach_set("loop_total", np.full(n_faces, 4, dtype=np.int32))
 
-    # Material index per polygon (6 faces share the same material per voxel)
     if use_source_mats:
         mat_ids = material_map[occupied[:, 0], occupied[:, 1], occupied[:, 2]]
         mat_ids = np.clip(mat_ids, 0, len(materials) - 1).astype(np.int32)
@@ -402,7 +652,6 @@ def voxel_array_to_blender(
     mesh_data.update()
     mesh_data.validate()
 
-    # Per-loop (face-corner) vertex colours
     if use_vcol:
         color_attr = mesh_data.color_attributes.new("Col", 'FLOAT_COLOR', 'CORNER')
         if n_ch >= 4:
@@ -414,7 +663,6 @@ def voxel_array_to_blender(
             colors = np.array(
                 [_matid_to_color(float(v)) for v in mat_vals], dtype=np.float32
             )  # (N, 4)
-        # 6 faces x 4 corners = 24 identical color entries per voxel
         loop_colors = np.repeat(colors, 24, axis=0).astype(np.float32)
         color_attr.data.foreach_set("color", loop_colors.ravel())
 
@@ -475,6 +723,10 @@ def _assign_vertex_color_material(
     obj.data.materials.clear()
     obj.data.materials.append(mat)
 
+
+# ---------------------------------------------------------------------------
+# Server state conversion
+# ---------------------------------------------------------------------------
 
 def server_state_to_voxel_array(
     raw: np.ndarray, visible_channels: int = 4

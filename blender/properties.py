@@ -130,6 +130,35 @@ class NCA_PG_TargetProperties(bpy.types.PropertyGroup):
     is_voxelized: bpy.props.BoolProperty(name="Is Voxelized", default=False)  # type: ignore
     voxel_count: bpy.props.IntProperty(name="Voxel Count", default=0)  # type: ignore
     cell_size: bpy.props.FloatProperty(name="Cell Size", default=0.1, min=0.01)  # type: ignore
+    color_mode: bpy.props.EnumProperty(
+        name="Color Mode",
+        description=(
+            "How voxel colors are extracted from the source mesh.\n"
+            "BSDF: reads the Base Color of a Principled BSDF node (fast).\n"
+            "Texture Sample: UV-samples image textures at the nearest surface "
+            "point (slower, works with imported meshes and any image texture)"
+        ),
+        items=[
+            (
+                "BSDF",
+                "BSDF Color",
+                "Read Base Color from Principled BSDF node. Fast, but only "
+                "works for solid-color or procedural materials",
+                "NODE_MATERIAL",
+                0,
+            ),
+            (
+                "TEXTURE",
+                "Texture Sample",
+                "UV-sample image textures at each voxel's nearest surface point. "
+                "Works with imported meshes, atlases, and multi-material objects. "
+                "Slower – images are cached once before the loop",
+                "IMAGE_DATA",
+                1,
+            ),
+        ],
+        default="BSDF",
+    )  # type: ignore
 
 
 def _on_source_changed(target_props, context):

@@ -112,9 +112,27 @@ class NCA_PT_TargetPanel(NCA_PT_BasePanel):
         super().draw(context)
         layout = self.layout
         target = context.scene.nca_target_props
+        cell = context.scene.nca_cell_props
         editable = not is_server_busy()
 
         layout.prop(target, "cell_size")
+
+        # Color mode only makes sense when exporting RGBA channels
+        if cell.visible_channels == "RGBA":
+            col = layout.column(align=True)
+            col.enabled = editable
+            col.prop(target, "color_mode", text="Color Mode")
+            if target.color_mode == "TEXTURE":
+                col.label(
+                    text="Tip: images are cached before the loop.",
+                    icon="INFO",
+                )
+                col.label(
+                    text="Progress shown in the status bar.",
+                    icon="INFO",
+                )
+
+        layout.separator()
 
         row = layout.row(align=True)
         row.enabled = editable
