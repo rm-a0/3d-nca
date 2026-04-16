@@ -42,6 +42,16 @@ class EventType(str, Enum):
     COLOR_WEIGHT = "COLOR_WEIGHT"
     OVERFLOW_WEIGHT = "OVERFLOW_WEIGHT"
     TARGET_CHANGE = "TARGET_CHANGE"
+    POOL_EXPAND = "POOL_EXPAND"
+
+    def __str__(self) -> str:
+        return self.value
+
+
+def _event_type_name(event_type: EventType | str) -> str:
+    if isinstance(event_type, EventType):
+        return event_type.value
+    return str(event_type)
 
 
 @dataclass
@@ -53,15 +63,27 @@ class Event:
 
     Attributes:
         epoch: Epoch when the event fires. Use NOW (-1) to fire immediately.
-        event_type: Type of parameter change.
+        event_type: Type of parameter change. Can be an EventType or custom string.
         value: Numeric value associated with the change.
         target: Voxel grid for TARGET_CHANGE events, None otherwise.
     """
 
     epoch: int
-    event_type: EventType
+    event_type: EventType | str
     value: float
     target: Optional[np.ndarray] = field(default=None, repr=False)
+
+    def __post_init__(self) -> None:
+        """Normalize built-in string event types to EventType enums.
+
+        Unknown values are kept as raw strings so custom runner events remain supported.
+        """
+        if isinstance(self.event_type, str) and not isinstance(self.event_type, EventType):
+            name = self.event_type.strip()
+            try:
+                self.event_type = EventType(name)
+            except ValueError:
+                self.event_type = name
 
     def to_dict(self) -> dict:
         """Serialise event to a JSON-compatible dict.
@@ -70,12 +92,13 @@ class Event:
             Dict with ``epoch``, ``event_type``, and ``value``.
             TARGET_CHANGE events also include base64-encoded ``target`` and ``target_shape``.
         """
+        event_type_name = _event_type_name(self.event_type)
         d: dict = {
             "epoch": self.epoch,
-            "event_type": self.event_type.value,
+            "event_type": event_type_name,
             "value": self.value,
         }
-        if self.event_type == EventType.TARGET_CHANGE and self.target is not None:
+        if event_type_name == EventType.TARGET_CHANGE.value and self.target is not None:
             d["target"] = _tensor_to_b64(self.target)
             d["target_shape"] = list(self.target.shape)
         return d
@@ -90,12 +113,19 @@ class Event:
         Returns:
             Reconstructed Event instance.
         """
+        event_type_raw = str(data["event_type"])
         target = None
-        if data.get("event_type") == EventType.TARGET_CHANGE and "target" in data:
+        if event_type_raw == EventType.TARGET_CHANGE.value and "target" in data:
             target = _b64_to_tensor(data["target"], data["target_shape"])
+
+        try:
+            event_type: EventType | str = EventType(event_type_raw)
+        except ValueError:
+            event_type = event_type_raw
+
         return cls(
             epoch=int(data["epoch"]),
-            event_type=EventType(data["event_type"]),
+            event_type=event_type,
             value=float(data["value"]),
             target=target,
         )
@@ -198,7 +228,7 @@ def _apply_event(event: Event, runner: "NCARunner") -> None:
         runner: NCARunner that handles the event via on_event().
     """
     handled = runner.on_event(event)
-    label = event.event_type.value.lower()
+    label = _event_type_name(event.event_type).lower()
     if handled:
         print(f"[Schedule] Epoch {event.epoch}: {label}")
     else:
