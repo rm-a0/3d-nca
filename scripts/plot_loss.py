@@ -2,7 +2,6 @@ import argparse
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 
 
@@ -21,13 +20,8 @@ def _phase_transitions(df: pd.DataFrame) -> pd.DataFrame:
     return transitions
 
 
-def _curriculum_steps(epochs: np.ndarray) -> np.ndarray:
-    ramp = 8.0 + (32.0 - 8.0) * (epochs / 2000.0)
-    return np.where(epochs <= 2000.0, ramp, 32.0)
-
-
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Plot NCA losses with curriculum ramp")
+    parser = argparse.ArgumentParser(description="Plot NCA losses")
     parser.add_argument("--run", default="001", help="Run id (default: 001)")
     parser.add_argument("--out", default=None, help="Output PNG path")
     parser.add_argument("--base-dir", default="runs")
@@ -51,17 +45,6 @@ def main() -> None:
     ax1.set_ylabel("loss")
     ax1.set_yscale("log")
 
-    ax2 = ax1.twinx()
-    curriculum = _curriculum_steps(epochs)
-    line_curriculum, = ax2.plot(
-        epochs,
-        curriculum,
-        "k--",
-        alpha=0.3,
-        label="curriculum steps",
-    )
-    ax2.set_ylabel("curriculum steps")
-
     transitions = _phase_transitions(df)
     for _, row in transitions.iterrows():
         ep = float(row["epoch"])
@@ -78,7 +61,7 @@ def main() -> None:
             fontsize=8,
         )
 
-    handles = [line_alpha, line_color, line_overflow, line_total, line_curriculum]
+    handles = [line_alpha, line_color, line_overflow, line_total]
     labels = [h.get_label() for h in handles]
     ax1.legend(handles, labels, loc="upper right")
 
