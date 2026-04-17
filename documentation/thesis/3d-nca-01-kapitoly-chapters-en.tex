@@ -1705,7 +1705,302 @@ and qualitative observation of training dynamics, target voxelisation, protocol 
 viewport rendering. The resulting experiments and observations are discussed in the next chapter.
 
 \chapter{Experiments}
-TODO
+This chapter presents the experimental evaluation of the framework in three tracks:
+morphogenesis, regeneration, and metamorphogenesis.
+The experiments were designed to answer three practical questions:
+
+\begin{itemize}
+    \item Can the baseline 3D NCA grow a target from a single seed in a stable way?
+    \item Can the same framework be extended toward regeneration without changing the server protocol?
+    \item Can one model learn multiple targets and switch between them through channel conditioning?
+\end{itemize}
+
+Unless stated otherwise, all experiments use a $32^3$ grid and start from a single
+alive seed at the grid centre.
+
+\section{Morphogenesis}
+Morphogenesis experiments focus on single-target growth from a seed.
+They use the default \texttt{MorphRunner} training path and serve as a baseline for the
+later regeneration and metamorphogenesis variants.
+
+\subsection{Early Exploration}
+
+Before integrating the full client--server workflow, early exploratory runs were done in
+notebooks. The notebooks \texttt{01\_basic\_functionality.ipynb},
+\texttt{02\_sphere\_training\_alpha.ipynb}, \texttt{03\_donut\_training\_alpha.ipynb}, and
+\texttt{04\_donut\_training\_rgba.ipynb} were used to validate core stepping,
+loss behaviour, and basic target reconstruction.
+
+These runs were intentionally lightweight and focused on debugging and fast iteration.
+After this phase, experiments moved to the structured runner-based setup.
+
+\subsection{Symmetrical Morphogenesis}
+
+The first full morphogenesis experiment used a symmetric target (sphere-like volumetric shape)
+with the baseline configuration:
+
+\begin{itemize}
+    \item \texttt{hidden\_channels = 16}, \texttt{visible\_channels = 4},
+    \item \texttt{task\_channels = 0}, \texttt{pos\_channels = 0},
+    \item \texttt{perception.channel\_groups = 3} (identity, neighbour sum, Laplacian),
+    \item \texttt{update.hidden\_dim = 96}, \texttt{learning\_rate = 2e-3},
+    \item \texttt{num\_epochs = 3000}, \texttt{batch\_size = 4}.
+\end{itemize}
+
+This setup corresponds to the baseline \texttt{MorphRunner} path and was also used in
+remote Colab sessions visualised from Blender through ngrok tunnelling.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.62\textwidth]{obrazky-figures/fig-exp-morph-sym-target.png}
+    \caption{Symmetric target used for baseline morphogenesis}
+    \label{fig:exp-morph-sym-target}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{obrazky-figures/fig-exp-morph-sym-dynamics.png}
+    \caption{Symmetric morphogenesis from a single seed over inference steps}
+    \label{fig:exp-morph-sym-dynamics}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{obrazky-figures/fig-exp-morph-sym-final-comparison.png}
+    \caption{Final state at epoch 3000 compared with the symmetric target}
+    \label{fig:exp-morph-sym-final}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{obrazky-figures/fig-exp-morph-sym-loss.png}
+    \caption{Loss curves for symmetric morphogenesis training}
+    \label{fig:exp-morph-sym-loss}
+\end{figure}
+
+The run converged steadily: \texttt{loss\_total} decreased from approximately
+$2.36$ at the beginning to approximately $4.5 \times 10^{-3}$ at epoch 3000.
+The generated structure remained stable in post-training inference.
+
+\subsection{Asymmetrical Morphogenesis}
+
+The second morphogenesis track targeted an asymmetric object (voxelised chess pawn)
+and exposed a failure mode in the initial setup.
+
+The first attempt reused the symmetric baseline settings
+(\texttt{pos\_channels = 0}, \texttt{perception.channel\_groups = 3}).
+With only isotropic local features, the model repeatedly drifted toward overly symmetric
+intermediate solutions and struggled to preserve directional structure.
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=\textwidth]{obrazky-figures/fig-exp-morph-asym-failure-symmetry.jpg}
+    \caption{Early asymmetric training attempt with symmetric perception features. The model is biased toward symmetric structure and fails to preserve directional detail reliably}
+    \label{fig:exp-morph-asym-failure-symmetry}
+\end{figure}
+
+To fix this, two extensions were introduced:
+
+\begin{itemize}
+    \item \texttt{perception.channel\_groups = 5}, enabling directional gradients along $x$, $y$, and $z$,
+    \item \texttt{pos\_channels = 3}, injecting normalised absolute coordinates as read-only channels.
+\end{itemize}
+
+This issue also affected framework design: positional channels were introduced to resolve
+this asymmetry problem.
+Because the core model is modular (\texttt{CellState}, \texttt{Perception3D},
+\texttt{UpdateRule}, \texttt{Grid3D}) and channel layout is configuration-driven,
+the fix required only local model/config updates and no server-protocol changes.
+The intended extensibility goal was therefore validated in practice.
+
+The final asymmetric run used:
+
+\begin{itemize}
+    \item \texttt{task\_channels = 0}, \texttt{pos\_channels = 3},
+    \item \texttt{perception.channel\_groups = 5} (directional gradients enabled),
+    \item \texttt{num\_epochs = 4000}.
+\end{itemize}
+
+Unlike the symmetric baseline, this experiment was executed notebook-first using the core
+runner directly, without a mandatory server session. Blender was still used for target
+preparation and for final qualitative inspection.
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=0.9\textwidth]{obrazky-figures/fig-exp-morph-asym-target.png}\\[0.5em]
+    \includegraphics[width=0.5\textwidth]{obrazky-figures/fig-exp-morph-asym-target-voxel.png}
+    \caption{Asymmetric target prepared in Blender (top) and voxel target used by the training loop (bottom)}
+    \label{fig:exp-morph-asym-targets}
+\end{figure}
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=\textwidth]{obrazky-figures/fig-exp-morph-asym-dynamics.png}
+    \caption{Asymmetric morphogenesis from a single seed over inference steps}
+    \label{fig:exp-morph-asym-dynamics}
+\end{figure}
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=0.62\textwidth]{obrazky-figures/fig-exp-morph-asym-final.png}
+    \caption{Final asymmetric output at epoch 4000}
+    \label{fig:exp-morph-asym-final}
+\end{figure}
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=\textwidth]{obrazky-figures/fig-exp-morph-asym-loss.png}
+    \caption{Loss curves for asymmetric morphogenesis training}
+    \label{fig:exp-morph-asym-loss}
+\end{figure}
+
+The run reached a low final error (approximately
+$2.75 \times 10^{-4}$ \texttt{loss\_total} at epoch 4000), while preserving
+the global orientation of the target.
+Compared to the symmetric baseline, convergence was slower and more sensitive to
+configuration, but the final shape fidelity was higher for this asymmetric object.
+
+\clearpage
+\section{Regeneration}
+Regeneration is implemented as a modular extension through \texttt{RegenRunner}, which reuses
+the same optimisation path as \texttt{MorphRunner} and injects random local box damage into
+pool states before each training step.
+
+The current implementation supports regeneration-specific parameters:
+
+\begin{itemize}
+    \item \texttt{training.regen\_damage\_prob},
+    \item \texttt{training.regen\_damage\_size}.
+\end{itemize}
+
+Automated tests verify runner contracts and input validation for this path
+(see \texttt{test\_runner\_validation.py}), but a full qualitative figure set for the
+thesis is still in preparation.
+
+\begin{itemize}
+    \item TODO: Add regeneration time-series figure (damage event and recovery sequence).
+    \item TODO: Add target vs regenerated-state comparison figure.
+    \item TODO: Add regeneration loss curve with marked damage intervals.
+\end{itemize}
+
+\clearpage
+\section{Metamorphogenesis}
+In this thesis, \textit{metamorphogenesis} is used as a compound term formed from
+the Latinized scientific terms \textit{metamorphosis} (change of form) and
+\textit{morphogenesis} (generation of form).
+The term denotes a multi-target setting in which one model both generates form
+and transitions between forms through task-channel conditioning.
+In this track, one model stores multiple shape-generating behaviours and selects
+between them using task-channel conditioning.
+The training loop is implemented as a custom notebook runner rather than the
+default \texttt{MorphRunner}.
+
+While this thesis was being written, Sakour~\cite{Sakour2025} published a related approach
+to conditional morphogenesis in neural cellular automata.
+That work reduced the novelty of the conditioning idea itself, but the implementation in this
+thesis remains a practical 3D contribution focused on framework extensibility,
+integration workflow, and reproducible experiments.
+
+\subsection{Synthetic Three-Target Curriculum}
+
+The first metamorphogenesis experiment used three analytic targets and a phased training schedule:
+
+\begin{itemize}
+    \item phase 1 (epochs 1--3000): seed \texorpdfstring{$\rightarrow$}{->} tetrahedron,
+    \item phase 2 (epochs 3001--6000): tetrahedron \texorpdfstring{$\rightarrow$}{->} cube,
+    \item phase 3 (epochs 6001--9000): cube \texorpdfstring{$\rightarrow$}{->} sphere.
+\end{itemize}
+
+The model used \texttt{task\_channels = 3}, \texttt{pos\_channels = 3},
+and \texttt{perception.channel\_groups = 5}.
+Pool expansion and relabeling were applied at phase boundaries so each new task
+started from states close to the previous target.
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=\textwidth]{obrazky-figures/fig-exp-meta-basic-targets.png}
+    \caption{Synthetic targets used in the metamorphogenesis proof-of-concept}
+    \label{fig:exp-meta-basic-targets}
+\end{figure}
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=\textwidth]{obrazky-figures/fig-exp-meta-basic-progression.png}
+    \caption{Phase-by-phase metamorphogenesis progression for synthetic targets}
+    \label{fig:exp-meta-basic-progression}
+\end{figure}
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=\textwidth]{obrazky-figures/fig-exp-meta-basic-comparison.png}
+    \caption{Target versus model output after phased metamorphogenesis training}
+    \label{fig:exp-meta-basic-comparison}
+\end{figure}
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=\textwidth]{obrazky-figures/fig-exp-meta-basic-loss.png}
+    \caption{Loss curves for phased synthetic metamorphogenesis training}
+    \label{fig:exp-meta-basic-loss}
+\end{figure}
+
+The main trend is visible in Figure~\ref{fig:exp-meta-basic-loss}: each new phase causes
+an immediate loss increase, followed by gradual re-convergence.
+This confirms that one model can be conditioned to switch behaviour, but also shows that each
+new task introduces a temporary stability cost.
+
+\clearpage
+\subsection{Pokemon-Inspired Creature Sequence (Round 1)}
+
+The second metamorphogenesis experiment repeated the same idea on a more complex
+three-object sequence exported from Blender.
+The implemented run uses three Pokemon-inspired creature targets
+(Creature 1 \texorpdfstring{$\rightarrow$}{->} Creature 2 \texorpdfstring{$\rightarrow$}{->} Creature 3)
+with the same phased training mechanics.
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=\textwidth]{obrazky-figures/fig-exp-meta-creature-targets.png}
+    \caption{Blender-exported targets for the Pokemon-inspired creature sequence (Round 1)}
+    \label{fig:exp-meta-creature-targets}
+\end{figure}
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=\textwidth]{obrazky-figures/fig-exp-meta-creature-progression.png}
+    \caption{Phase-by-phase metamorphogenesis progression for the creature sequence (Round 1)}
+    \label{fig:exp-meta-creature-progression}
+\end{figure}
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=\textwidth]{obrazky-figures/fig-exp-meta-creature-comparison.png}
+    \caption{Target versus model output for the creature sequence (Round 1)}
+    \label{fig:exp-meta-creature-comparison}
+\end{figure}
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=\textwidth]{obrazky-figures/fig-exp-meta-creature-loss.png}
+    \caption{Loss curves for the phased creature sequence (Round 1)}
+    \label{fig:exp-meta-creature-loss}
+\end{figure}
+
+Round 1 was conceptually successful: the model learned switching behaviour across phases.
+However, compared to the synthetic sequence, final-shape quality remained limited in thin or
+highly asymmetric regions.
+
+\subsection{Pokemon-Inspired Creature Sequence (Round 2, Planned)}
+
+A second creature-sequence run is planned to improve final-shape fidelity through targeted
+parameter tuning and schedule refinement.
+
+\begin{itemize}
+    \item TODO: Re-run training with tuned step-range schedule and longer late-phase stabilisation.
+    \item TODO: Tune pool-expansion ratios at phase boundaries to preserve source-target memory.
+    \item TODO: Rebalance loss-term weights and learning-rate schedule for thin asymmetric details.
+    \item TODO: Add final qualitative figures and quantitative comparison against Round 1.
+\end{itemize}
 
 \chapter{Conclusion}
 \label{zaver}
