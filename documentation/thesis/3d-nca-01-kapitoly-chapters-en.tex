@@ -8,12 +8,68 @@
 
 \chapter{Introduction}
 
-TODO
+Computer graphics and simulation tools have made it increasingly practical to generate
+complex three-dimensional structures that are difficult to design by hand. One
+direction in this space draws inspiration from biology: tissues and organs develop not
+from a blueprint, but through local interactions between individual cells. No cell
+knows what the final shape should look like. The shape emerges anyway. Computational
+systems built on the same principle have shown that this idea translates surprisingly
+well to learned models -- train a neural network to play the role of the local update
+rule, and the system can grow a target voxel structure from a single seed, maintain
+it over time, and recover when parts of it are removed. Three-dimensional extensions
+of this paradigm are a natural fit for volumetric modelling and procedural generation,
+where specifying a target shape and letting a model learn to grow it is a fundamentally
+different workflow from conventional geometry editing.
+
+Prior work has confirmed that three-dimensional growth of this kind is achievable.
+What it has not produced is usable tooling. Existing implementations are standalone
+training scripts with no live visualisation, no way to steer training interactively,
+and no practical path from a real mesh to a ready-to-use coloured voxel dataset. A
+researcher wanting to try a new target or a different model configuration ends up
+piecing together separate tools with no shared infrastructure between them.
+
+The goal of this thesis is to provide that infrastructure. We designed and implemented
+a modular framework consisting of three decoupled components: a Blender add-on for
+mesh voxelisation and live viewport rendering; a TCP server that exposes any training
+backend over a local or tunnelled connection; and a standalone Python core package
+providing the NCA model and training pipeline independently of both. The central
+design requirement was that adding a new experiment should require writing one class
+and nothing else. This was not just a design goal -- it was validated directly by the
+metamorphogenesis experiments described later, which required only a custom runner
+subclass with no changes to the server, protocol, or visualisation pipeline.
+
+Reaching this point required first understanding where existing implementations
+actually fall short, then designing the three-layer architecture with clear boundaries
+between components, implementing the core model along with the positional and
+task-channel extensions needed for asymmetric and multi-target settings, and finally
+running experiments to confirm the whole system works together.
+
+The rest of the thesis is structured as follows. Theoretical Foundations covers the
+background from classical and continuous cellular automata through to the neural CA
+formulation the framework builds on. Related Work reviews prior 3D NCA
+implementations and the gaps they leave. Architectural Design and Implementation
+describe the system structure and inter-component communication. Testing covers both
+the automated suite and the notebook experiments used during development. The
+Experiments chapter presents the morphogenesis and metamorphogenesis results, and the
+Conclusion summarises the outcomes and outlines directions for future work.
 
 \chapter{Abstract}
 \label{abstrakt}
 
-TODO 
+Existing 3D Neural Cellular Automata implementations are standalone training scripts
+with no interactive tooling and no integrated workflow for preparing mesh targets or
+exporting coloured voxel datasets. This thesis presents a modular framework consisting
+of a Blender add-on for mesh voxelisation and live viewport rendering, a TCP server
+that exposes any training backend over a local or tunnelled connection, and a
+standalone Python core package usable in Jupyter notebooks without Blender. The
+framework is validated through morphogenesis experiments on symmetric and asymmetric
+targets, and through multi-target metamorphogenesis, where a single model grows and
+transitions between distinct voxel shapes conditioned on task channels. Positional
+channels and directional perception filters are introduced as framework-level features
+to resolve the reflection ambiguity that arises for asymmetric targets. The primary
+contribution is a research-ready environment in which implementing a new NCA
+experiment requires subclassing one abstract class, while the server, protocol,
+logging, and visualisation pipeline require no changes.
 
 \chapter{Theoretical Foundations}
 \label{chap:theoretical-foundations}
@@ -1767,25 +1823,23 @@ in this section.
 \begin{table}[htbp]
     \centering
     \small
-    \begin{tabular}{p{0.35\textwidth}p{0.57\textwidth}}
+    \begin{tabular}{p{0.32\textwidth}p{0.24\textwidth}p{0.36\textwidth}}
         \hline
-        \textbf{Setting} & \textbf{Value}\\
+        \textbf{Category} & \textbf{Setting} & \textbf{Value}\\
         \hline
-        Optimiser & AdamW (\texttt{weight\_decay}$=10^{-5}$)\\
-        Learning-rate schedule & cosine annealing ($\eta_{\min}=10^{-5}$)\\
-        Pool size & 32\\
-        Step range & $(8,16)\rightarrow(32,64)$ over first 2000 epochs\\
-        Loss weights & $w_{\alpha}:w_{c}:w_{o}=4{:}1{:}2$\\
-        Grad clip & global norm 1.0\\
+        Optimisation & Optimiser & AdamW (\texttt{weight\_decay}$=10^{-5}$)\\
+        Optimisation & Learning-rate schedule & cosine annealing ($\eta_{\min}=10^{-5}$)\\
+        Training dynamics & Pool size & 32\\
+        Training dynamics & Step range & $(8,16)\rightarrow(32,64)$ over first 2000 epochs\\
+        Loss & Loss weights & $w_{\alpha}:w_{c}:w_{o}=4{:}1{:}2$\\
+        Stability & Gradient clip & global norm 1.0\\
         \hline
     \end{tabular}
     \caption{Default \texttt{MorphRunner} training settings.}
     \label{tab:exp-morph-runner-defaults}
 \end{table}
  
-% -------------------------------------------------------------------------
 \subsection{Early Exploration}
-% -------------------------------------------------------------------------
  
 Before integrating the full client--server workflow, early exploratory runs were
 done in notebooks.
@@ -1799,9 +1853,7 @@ These runs were intentionally lightweight and focused on debugging and fast
 iteration.
 After this phase, experiments moved to the structured runner-based setup.
  
-% -------------------------------------------------------------------------
 \subsection{Symmetrical Morphogenesis}
-% -------------------------------------------------------------------------
  
 The first full morphogenesis experiment used a symmetric target (sphere-like
 volumetric shape) with the baseline configuration in
@@ -1884,9 +1936,7 @@ The generated structure remained stable in post-training inference.
  
 \clearpage
  
-% -------------------------------------------------------------------------
 \subsection{Asymmetrical Morphogenesis}
-% -------------------------------------------------------------------------
  
 The second morphogenesis experiment targeted an asymmetric object (voxelised
 chess pawn) and exposed a failure mode in the initial setup.
@@ -2003,9 +2053,7 @@ configuration, but the final shape fidelity was higher for this asymmetric objec
  
 \clearpage
  
-% =========================================================================
 \section{Metamorphogenesis}
-% =========================================================================
  
 Multi-target conditioning has been explored in the NCA literature.
 Palm et al.~\cite{Palm2022VNCA} proposed Variational Neural Cellular Automata
@@ -2022,6 +2070,14 @@ the Latinized scientific terms \textit{metamorphosis} (change of form) and
 \textit{morphogenesis} (generation of form).
 The term denotes a multi-target setting in which one model both generates form
 and transitions between forms through task-channel conditioning.
+
+Conceptually, metamorphogenesis extends standard morphogenesis from a single
+seed-to-target mapping to guided stage-to-stage development.
+Instead of learning only ``cell state $\rightarrow$ one final target'', the model
+is trained to follow a sequence of developmental stages under explicit guidance.
+This is closer to biological development in organisms that pass through distinct
+life stages (e.g., larva $\rightarrow$ pupa $\rightarrow$ adult), and it makes
+generated transitions visually and structurally more plausible.
  
 While this thesis was being written, Sakour~\cite{Sakour2025} published a related
 approach to conditional morphogenesis in neural cellular automata.
@@ -2061,39 +2117,32 @@ implemented metamorphogenesis runs.
 \begin{table}[htbp]
     \centering
     \small
-    \begin{tabular}{p{0.28\textwidth}p{0.64\textwidth}}
+    \begin{tabular}{p{0.17\textwidth}p{0.08\textwidth}p{0.15\textwidth}p{0.10\textwidth}p{0.06\textwidth}p{0.07\textwidth}p{0.14\textwidth}p{0.13\textwidth}}
         \hline
-        \textbf{Run} & \textbf{Key settings}\\
+        \textbf{Run} & \textbf{Epochs} & \textbf{Phases} & \textbf{Boundaries} & \textbf{$h$} & \textbf{Pool} & \textbf{LR schedule} & \textbf{Loss weights}\\
         \hline
-        Synthetic (9k) &
-            9000 epochs; phases 3000/3000/3000; boundaries 3001, 6001;
-            $h=96$; pool 32; LR cosine ($2\times10^{-3}$);
-            $w_{\alpha}:w_c:w_o = 4{:}1{:}2$\\[2pt]
-        Creature R1 (9k) &
-            9000 epochs; phases 3000/3000/3000; boundaries 3001, 6001;
-            $h=96$; pool 32; LR cosine ($2\times10^{-3}$);
-            $w_{\alpha}:w_c:w_o = 4{:}1{:}2$\\[2pt]
-        Creature R2 (12k) &
-            12000 epochs; phases 2000/5000/5000; boundaries 2001, 7001;
-            $h=128$; pool 48; LR $2\times10^{-3}\rightarrow8\times10^{-4}
-            \rightarrow3\times10^{-4}$;
-            $w_{\alpha}:w_c:w_o = 3{:}2{:}3$ (+ scheduled events)\\[2pt]
-        Creature R3 (19.5k) &
-            19500 epochs; phases 1500/6000/12000; boundaries 1501, 7501;
-            $h=128$; pool 64; LR $2\times10^{-3}\rightarrow8\times10^{-4}
-            \rightarrow3\times10^{-4}\rightarrow1\times10^{-4}$;
-            $w_{\alpha}:w_c:w_o = 3{:}2{:}3$ (+ scheduled events)\\
+        Synthetic & 9000 & 3000/3000/3000 & 3001, 6001 & 96 & 32 & cosine ($2\times10^{-3}$) & $4{:}1{:}2$\\
+        Creature R1 & 9000 & 3000/3000/3000 & 3001, 6001 & 96 & 32 & cosine ($2\times10^{-3}$) & $4{:}1{:}2$\\
+        Creature R2 & 12000 & 2000/5000/5000 & 2001, 7001 & 128 & 48 & $2\times10^{-3}\rightarrow8\times10^{-4}\rightarrow3\times10^{-4}$ & $3{:}2{:}3$ (+ events)\\
+        Creature R3 & 19500 & 1500/6000/12000 & 1501, 7501 & 128 & 64 & $2\times10^{-3}\rightarrow8\times10^{-4}\rightarrow3\times10^{-4}\rightarrow1\times10^{-4}$ & $3{:}2{:}3$ (+ events)\\
         \hline
     \end{tabular}
     \caption{Metamorphogenesis runs. $h$ denotes \texttt{update.hidden\_dim}.}
     \label{tab:exp-meta-overview}
 \end{table}
+
+All metamorphogenesis runs are reproducible from the provided notebooks.
+For Colab workflows, the only required setup is uploading target volumes to the
+expected directory on Google Drive; the notebooks then run without additional
+configuration.
+For Kaggle workflows, one can either create a private dataset with the same
+target layout or directly use the linked public datasets.
+No extra setup is required in either case; for long runs, Kaggle is preferred
+because jobs can continue in the background.
  
 \clearpage
  
-% -------------------------------------------------------------------------
 \subsection{Synthetic Three-Target Curriculum}
-% -------------------------------------------------------------------------
  
 The first metamorphogenesis experiment used three analytically defined targets on
 a phased training schedule:
@@ -2113,8 +2162,9 @@ saw realistic morphing inputs rather than fresh seeds.
  
 Analytic targets were chosen to validate task conditioning without any confounding
 effects from mesh voxelisation.
-This run was executed on Google Colab; runtime was not tracked but is estimated at
-approximately 90 minutes on a T4 GPU.
+This run was executed on Kaggle and took 4 hours and 1 minute.
+A reproducible notebook version is available in
+\texttt{notebooks/kaggle\_run\_moprh.ipynb}.
  
 \begin{figure}[!htbp]
     \centering
@@ -2169,9 +2219,7 @@ complex mesh-based targets.
  
 \clearpage
  
-% -------------------------------------------------------------------------
 \subsection{Pokemon-Inspired Creature Sequence -- Round 1 (9k epochs)}
-% -------------------------------------------------------------------------
  
 The second metamorphogenesis experiment applied the same phased curriculum to a
 more complex three-object sequence exported from Blender:
@@ -2183,8 +2231,8 @@ The three targets are Pokemon-inspired character models
 This run used the same hyperparameters as the synthetic curriculum
 (Table~\ref{tab:exp-meta-overview}, Creature R1) and was executed on a Kaggle
 notebook with a T4 GPU.
-Runtime was not tracked; based on target complexity relative to the synthetic run,
-it is estimated at approximately 5 to 6 hours.
+Runtime was 4 hours and 1 minute.
+The run notebook is \texttt{notebooks/kaggle\_run\_creature.ipynb}.
  
 \begin{figure}[!htbp]
     \centering
@@ -2236,9 +2284,7 @@ per-phase weight and learning-rate events.
  
 \clearpage
  
-% -------------------------------------------------------------------------
 \subsection{Pokemon-Inspired Creature Sequence -- Rounds 2 and 3 (12k and 19.5k epochs)}
-% -------------------------------------------------------------------------
  
 Rounds 2 and 3 share the same training algorithm but differ in phase lengths
 and schedule parameters.
@@ -2268,15 +2314,21 @@ The schedule events are listed in Table~\ref{tab:exp-meta-r2-schedule}.
         \hline
         \textbf{Epoch} & \textbf{Event}\\
         \hline
-        2001 & pool expansion (task~0 $\rightarrow$ task~1); LR $\leftarrow 8\times10^{-4}$; $w_c \leftarrow 3.0$\\
+        2001 & pool expansion (task~0 $\rightarrow$ task~1)\\
+        2001 & LR $\leftarrow 8\times10^{-4}$\\
+        2001 & $w_c \leftarrow 3.0$\\
         3501 & $w_o \leftarrow 4.0$\\
-        7001 & pool expansion (task~1 $\rightarrow$ task~2); LR $\leftarrow 3\times10^{-4}$; $w_c \leftarrow 5.0$\\
+        7001 & pool expansion (task~1 $\rightarrow$ task~2)\\
+        7001 & LR $\leftarrow 3\times10^{-4}$\\
+        7001 & $w_c \leftarrow 5.0$\\
         9001 & $w_o \leftarrow 6.0$\\
         \hline
     \end{tabular}
     \caption{Round 2 schedule events.}
     \label{tab:exp-meta-r2-schedule}
 \end{table}
+
+The run notebook is \texttt{notebooks/kaggle\_run\_creature\_final.ipynb}.
  
 Round 2 ran for 8 hours and 46 minutes on a Kaggle T4 GPU.
  
@@ -2294,15 +2346,22 @@ The schedule events are listed in Table~\ref{tab:exp-meta-r3-schedule}.
         \hline
         \textbf{Epoch} & \textbf{Event}\\
         \hline
-        1501 & pool expansion (task~0 $\rightarrow$ task~1); LR $\leftarrow 8\times10^{-4}$; $w_c \leftarrow 3.0$\\
+        1501 & pool expansion (task~0 $\rightarrow$ task~1)\\
+        1501 & LR $\leftarrow 8\times10^{-4}$\\
+        1501 & $w_c \leftarrow 3.0$\\
         3501 & $w_o \leftarrow 4.0$\\
-        7501 & pool expansion (task~1 $\rightarrow$ task~2); LR $\leftarrow 3\times10^{-4}$; $w_c \leftarrow 5.0$\\
-        15000 & LR $\leftarrow 1\times10^{-4}$; $w_o \leftarrow 8.0$\\
+        7501 & pool expansion (task~1 $\rightarrow$ task~2)\\
+        7501 & LR $\leftarrow 3\times10^{-4}$\\
+        7501 & $w_c \leftarrow 5.0$\\
+        15000 & LR $\leftarrow 1\times10^{-4}$\\
+        15000 & $w_o \leftarrow 8.0$\\
         \hline
     \end{tabular}
     \caption{Round 3 schedule events.}
     \label{tab:exp-meta-r3-schedule}
 \end{table}
+
+The run notebook is \texttt{notebooks/kaggle\_run\_creature\_final.ipynb}.
  
 Round 3 ran for 11 hours and 43 minutes on a Kaggle T4 GPU.
  
@@ -2372,9 +2431,7 @@ switch, which is the intended behaviour.
  
 \clearpage
  
-% -------------------------------------------------------------------------
 \subsection{Summary}
-% -------------------------------------------------------------------------
  
 Table~\ref{tab:exp-meta-summary} compares the four metamorphogenesis runs across
 the key dimensions.
@@ -2386,15 +2443,13 @@ the key dimensions.
         \hline
         \textbf{Run} & \textbf{Epochs} & \textbf{$h$} & \textbf{Pool} & \textbf{Runtime} & \textbf{Main outcome}\\
         \hline
-        Synthetic & 9000 & 96 & 32 & $\approx$90 min & Conditioning validated on analytic targets\\
-        Creature R1 & 9000 & 96 & 32 & $\approx$5--6 h & Conditioning transfers to mesh targets; colour quality limited\\
+        Synthetic & 9000 & 96 & 32 & 4 h 01 min & Conditioning validated on analytic targets\\
+        Creature R1 & 9000 & 96 & 32 & 4 h 01 min & Conditioning transfers to mesh targets; colour quality limited\\
         Creature R2 & 12000 & 128 & 48 & 8 h 46 min & Colour improved; phase 3 not fully converged\\
         Creature R3 & 19500 & 128 & 64 & 11 h 43 min & Best overall fidelity; thin structures remain challenging\\
         \hline
     \end{tabular}
-    \caption{Metamorphogenesis run summary. Runtime for Colab runs (Synthetic,
-             R1) was not tracked; the synthetic estimate is based on epoch count
-             and target complexity.}
+    \caption{Metamorphogenesis run summary.}
     \label{tab:exp-meta-summary}
 \end{table}
  
@@ -2408,7 +2463,42 @@ achievable level of detail.
 \chapter{Conclusion}
 \label{zaver}
 
-TODO
+The goal of this thesis was to design and implement a modular framework for
+interactive experimentation with three-dimensional neural cellular automata. The
+framework connects mesh-based dataset preparation, TCP-mediated GPU training, and
+live Blender viewport rendering into a single coherent workflow. All components of
+the formal specification were delivered: the Blender add-on provides mesh
+voxelisation with per-voxel colour sampling from Blender materials and supports
+direct transmission of targets to the training server; the TCP server exposes any
+conforming backend over a local or tunnelled connection, including remote services
+via ngrok; and the standalone Python core package is usable from scripts and Jupyter
+notebooks without Blender.
+
+The framework was validated through four categories of experiments. Symmetric
+morphogenesis confirmed stable growth from a single seed, with total loss converging
+from $2.36$ to $4.5 \times 10^{-3}$ over 3\,000 epochs. Asymmetric morphogenesis
+exposed a reflection ambiguity failure in the baseline configuration, which was
+resolved by enabling directional gradient filters and positional channels; the
+corrected run reached a total loss of $2.75 \times 10^{-4}$ at epoch 4\,000.
+Multi-target metamorphogenesis confirmed that a single model can grow and transition
+between three distinct voxel targets through task-channel conditioning without
+re-seeding, with the best creature run training for 19\,500 epochs. The
+extensibility claim was validated directly: the metamorphogenesis experiment required
+only a custom \texttt{NCARunner} subclass with no changes to the server, protocol,
+or visualisation pipeline.
+
+Several directions are open for future development. In the short term, the framework
+could be extended with additional training regimes -- specifically persistence and
+full regeneration -- exposed through the existing runner interface and demonstrated
+interactively through Blender add-on tools such as a voxel eraser that lets the user
+remove parts of the grown structure and observe live recovery in the viewport. The
+voxelisation pipeline could also be extended to encode additional Blender data into
+training targets, such as armature rigs or shape keys, with the goal of producing
+models whose grown voxel output retains rig information and supports
+animation-compatible workflows. In the longer term, scaling the framework to higher
+grid resolutions such as $64^3$ or $128^3$ would require replacing the current dense
+tensor representation with sparse data structures, making the approach practical for
+large volumetric domains where most voxels are empty.
 
 %=========================================================================
 
