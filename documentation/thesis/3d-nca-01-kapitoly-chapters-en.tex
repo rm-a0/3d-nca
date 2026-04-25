@@ -8,55 +8,57 @@
 
 \chapter{Introduction}
 
-Computer graphics and simulation tools have made it increasingly practical to generate
-complex three-dimensional structures that are difficult to design by hand. One
-direction in this space draws inspiration from biology: tissues and organs develop not
-from a blueprint, but through local interactions between individual cells. No cell
-knows what the final shape should look like. The shape emerges anyway. Computational
-systems built on the same principle have shown that this idea translates surprisingly
-well to learned models -- train a neural network to play the role of the local update
-rule, and the system can grow a target voxel structure from a single seed, maintain
-it over time, and recover when parts of it are removed. Three-dimensional extensions
-of this paradigm are a natural fit for volumetric modelling and procedural generation,
-where specifying a target shape and letting a model learn to grow it is a fundamentally
-different workflow from conventional geometry editing.
+Neural cellular automata are a class of generative models in which a small shared
+neural network replaces the hand-crafted transition rule of a classical cellular
+automaton. Each cell updates its state based only on its local neighbourhood, yet
+complex global structure -- growth, pattern formation, regeneration -- emerges from
+these repeated local interactions without any centralised coordination. Extending this
+paradigm to three-dimensional voxel grids is conceptually straightforward and opens
+practical applications in volumetric modelling and procedural content generation.
 
 Prior work has confirmed that three-dimensional growth of this kind is achievable.
-What it has not produced is usable tooling. Existing implementations are standalone
-training scripts with no live visualisation, no way to steer training interactively,
-and no practical path from a real mesh to a ready-to-use coloured voxel dataset. A
-researcher wanting to try a new target or a different model configuration ends up
-piecing together separate tools with no shared infrastructure between them.
+What it has not produced is usable tooling. Existing implementations are mostly 
+standalone training scripts with no live visualisation, no way of interacting 
+with the model during training, and no practical path from a real mesh to a ready-to-use 
+coloured voxel dataset. A researcher wanting to try a new target or a different model 
+configuration ends up piecing together separate tools with no shared infrastructure 
+between them.
 
-The goal of this thesis is to provide that infrastructure. We designed and implemented
-a modular framework consisting of three decoupled components: a Blender add-on for
-mesh voxelisation and live viewport rendering; a TCP server that exposes any training
+The goal of this thesis is to provide the infrastructure that would enable researchers
+or people interested in NCA to easily experiment with different configurations and targets. 
+We designed and implemented a modular framework consisting of three decoupled 
+components: a Blender add-on for mesh voxelisation and live viewport rendering; a TCP 
+server that exposes any training
 backend over a local or tunnelled connection; and a standalone Python core package
 providing the NCA model and training pipeline independently of both. The central
-design requirement was that adding a new experiment should require writing one class
-and nothing else. This was not just a design goal -- it was validated directly by the
-metamorphogenesis experiments described later, which required only a custom runner
-subclass with no changes to the server, protocol, or visualisation pipeline.
+design requirement was that adding a new experiment should require writing one class,
+with the server, protocol, logging, and visualisation pipeline requiring no changes.
+The metamorphogenesis experiments described later confirm this in practice -- they
+required only a custom runner subclass, minimal changes to the core module and no
+changes to the server or visualisation components.
 
-Reaching this point required first understanding where existing implementations
-actually fall short, then designing the three-layer architecture with clear boundaries
-between components, implementing the core model along with the positional and
-task-channel extensions needed for asymmetric and multi-target settings, and finally
-running experiments to confirm the whole system works together.
+To reach this goal, the work proceeded through four steps: reviewing existing
+implementations to understand where the tooling gaps actually were; designing the
+three-layer architecture with well-defined boundaries between components; implementing
+the core model with the positional and task-channel extensions needed for asymmetric
+and multi-target settings; and running morphogenesis and metamorphogenesis experiments
+to validate the complete system.
 
-The rest of the thesis is structured as follows. Theoretical Foundations covers the
-background from classical and continuous cellular automata through to the neural CA
-formulation the framework builds on. Related Work reviews prior 3D NCA
-implementations and the gaps they leave. Architectural Design and Implementation
-describe the system structure and inter-component communication. Testing covers both
-the automated suite and the notebook experiments used during development. The
-Experiments chapter presents the morphogenesis and metamorphogenesis results, and the
-Conclusion summarises the outcomes and outlines directions for future work.
+The rest of the thesis is organised as follows. The Theoretical Foundations chapter
+covers the background from classical and continuous cellular automata through to the
+neural CA formulation the framework builds on. The Related Work chapter examines the
+original 2D Growing NCA and its subsequent three-dimensional extensions, identifying
+the limitations that motivated this project. Architectural Design and Implementation
+describe the system structure and how its components communicate. Testing covers the
+automated unit and integration suite. The Experiments chapter presents the
+morphogenesis and metamorphogenesis results and serves as the primary end-to-end
+validation of the framework. The Conclusion summarises the outcomes and outlines
+directions for future work.
 
 \chapter{Abstract}
 \label{abstrakt}
 
-Existing 3D Neural Cellular Automata implementations are standalone training scripts
+Existing 3D Neural Cellular Automata implementations are mostly standalone training scripts
 with no interactive tooling and no integrated workflow for preparing mesh targets or
 exporting coloured voxel datasets. This thesis presents a modular framework consisting
 of a Blender add-on for mesh voxelisation and live viewport rendering, a TCP server
@@ -64,24 +66,21 @@ that exposes any training backend over a local or tunnelled connection, and a
 standalone Python core package usable in Jupyter notebooks without Blender. The
 framework is validated through morphogenesis experiments on symmetric and asymmetric
 targets, and through multi-target metamorphogenesis, where a single model grows and
-transitions between distinct voxel shapes conditioned on task channels. Positional
-channels and directional perception filters are introduced as framework-level features
-to resolve the reflection ambiguity that arises for asymmetric targets. The primary
-contribution is a research-ready environment in which implementing a new NCA
-experiment requires subclassing one abstract class, while the server, protocol,
-logging, and visualisation pipeline require no changes.
+transitions between distinct voxel shapes conditioned on task channels. The primary
+contributions are the modular framework itself, in which implementing a new experiment
+requires subclassing one abstract class with no changes to the server, protocol,
+logging, or visualisation pipeline, and the metamorphogenesis training regime, which
+demonstrates task-conditioned multi-target growth in 3D in a way not previously
+explored in the literature.
 
 \chapter{Theoretical Foundations}
 \label{chap:theoretical-foundations}
 
 \section{Prerequisites}
 
-This thesis assumes familiarity with convolutional neural networks, gradient-based optimisation, 
-and automatic differentiation. Goodfellow et al.~\cite{GoodfellowDeepLearning} and the official 
-PyTorch documentation~\cite{PyTorchDocs} cover these topics in depth.
-
-Everything relating to cellular automata and their neural extensions is introduced from scratch in 
-the sections that follow.
+This chapter introduces all concepts relating to cellular automata and their neural
+extensions from scratch, starting from classical discrete systems and working up
+to the fully differentiable neural CA formulation the framework is built on.
 
 \section{Cellular Automata}
 
@@ -102,56 +101,72 @@ self-replicating machines~\cite{VonNeumann1966}. Von Neumann's original construc
 lattice with 29 distinct cell states and demonstrated that a sufficiently complex local rule can produce 
 a system capable of constructing copies of itself without any centralised coordination.
 
-Wolfram later proposed a behavioural classification of CA into four qualitative classes based on their 
-long-term dynamics~\cite{Wolfram1983, Wolfram2002}. Class~1 systems converge to a uniform state regardless 
-of initial conditions. Class~2 systems settle into static or periodic patterns. Class~3 systems produce 
-chaotic, seemingly random output sensitive to initial conditions. Class~4 systems generate complex dynamics 
-with long-lived interacting structures capable of computation. This classification provides a useful 
-reference for characterising the dynamics of both classical and neural CA.
+Wolfram later classified CA dynamics into four behavioural
+classes~\cite{Wolfram1983, Wolfram2002}:
+
+\begin{itemize}
+    \item \textbf{Class 1} -- the system converges to a uniform state regardless of
+          initial conditions,
+    \item \textbf{Class 2} -- activity settles into static or periodic patterns,
+    \item \textbf{Class 3} -- evolution is chaotic and sensitive to initial conditions,
+    \item \textbf{Class 4} -- the system produces complex, long-lived interacting
+          structures capable of supporting computation.
+\end{itemize}
+
+This classification reappears throughout the chapter as a reference point for
+characterising the dynamics of both classical and neural CA.
 
 \subsection{One-Dimensional Cellular Automata}
 
-The simplest non-trivial CA operate on a one-dimensional array of cells. In the elementary CA family, 
-each cell reads its own state and its two immediate neighbours (radius~1, neighbourhood size~3). With 
-binary states, $2^{3} = 8$ neighbourhood configurations are possible, giving $2^{8} = 256$ distinct 
-rules in Wolfram's enumeration~\cite{Wolfram1983}.
+The simplest non-trivial CA operate on a one-dimensional array of cells. In the
+elementary CA family, each cell reads its own state and its two immediate neighbours
+(radius~1, neighbourhood size~3). With binary states, $2^{3} = 8$ neighbourhood
+configurations are possible, giving $2^{8} = 256$ distinct rules in Wolfram's
+enumeration~\cite{Wolfram1983}.
 
-Each rule number encodes a next-state lookup table in binary. For example, Rule~90 assigns the next state 
-of a cell based on the exclusive-or (XOR) of its two neighbours, producing the Sierpi\'{n}ski triangle 
-from a single active seed. This pattern is fractal and self-similar, placing Rule~90 in Wolfram's Class~3 
-(chaotic behaviour). Rule~30 also belongs to Class~3 and produces irregular, aperiodic evolution that has 
-been used as a source of pseudorandomness~\cite{Wolfram2002}.
+Each rule number encodes a next-state lookup table in binary. \textbf{Rule~90}
+assigns the next state of a cell based on the exclusive-or (XOR) of its two
+neighbours, producing the Sierpi\'{n}ski triangle from a single active seed --
+a fractal, self-similar pattern that places Rule~90 in Wolfram's \textbf{Class~3}.
+\textbf{Rule~30} also belongs to Class~3 and produces irregular, aperiodic evolution
+that has been used as a source of pseudorandomness~\cite{Wolfram2002}.
 
-Rule~110 (Class~4) is the smallest known Turing-complete one-dimensional CA. Cook~\cite{Cook2004} proved 
-that it supports gliders and glider collisions that can simulate any Turing machine, showing that 
-computational universality can arise from a simple local rule on a one-dimensional lattice.
+\textbf{Rule~110} (Class~4) is the smallest known Turing-complete one-dimensional
+CA. Cook~\cite{Cook2004} proved that it supports gliders and glider collisions
+capable of simulating any Turing machine, showing that computational universality
+can arise from a simple local rule on a one-dimensional lattice.
 
-Despite their simplicity, elementary CA exhibit all four classes of Wolfram's classification — a minimal 
-demonstration of how local rules can produce qualitatively different global behaviour. The same question 
-extends directly to the neural CA models discussed later in this chapter.
+Despite their simplicity, elementary CA exhibit all four classes of Wolfram's
+classification -- a minimal demonstration of how local rules can produce
+fundamentally different global behaviour. The same question extends directly to
+the neural CA models discussed later in this chapter.
 
 \subsection{Two-Dimensional Cellular Automata}
 
-In two dimensions, the Moore neighbourhood ($3 \times 3$ block surrounding each cell) is the most common 
-choice. With binary states and a Moore neighbourhood, the update rule must handle $2^9 = 512$ possible 
-input configurations. Because the full lookup table is large, 2D rules are typically expressed using 
-birth/survival notation. A rule written as B$n$/S$m$ specifies that a dead cell becomes alive (is ``born'') 
-when it has exactly $n$ live neighbours, and a living cell survives when it has exactly $m$ live neighbours. 
-All other cells die or remain dead.
+In two dimensions, the Moore neighbourhood ($3 \times 3$ block surrounding each cell)
+is the most common choice. With binary states and a Moore neighbourhood, the update
+rule must handle $2^9 = 512$ possible input configurations. Because the full lookup
+table is large, 2D rules are typically expressed using birth/survival notation. A rule
+written as B$n$/S$m$ specifies that a dead cell becomes alive (is ``born'') when it
+has exactly $n$ live neighbours, and a living cell survives when it has exactly $m$
+live neighbours. All other cells die or remain dead.
 
-Conway's Game of Life~\cite{Gardner1970} uses the rule B3/S23: a dead cell becomes alive with exactly three 
-live neighbours, and a living cell survives with two or three live neighbours. Despite the simplicity of this 
-rule, Life produces a wide variety of emergent structures. Still lifes (such as the block and beehive) are 
-stable configurations that do not change between steps. Oscillators (such as the blinker and toad) cycle 
-through a fixed sequence of states. Spaceships (such as the glider and lightweight spaceship) translate 
-across the grid while cycling through their phases. More complex constructions include glider guns, which 
-periodically emit spaceships, and computational structures that perform logic operations.
+Conway's Game of Life~\cite{Gardner1970} uses the rule B3/S23: a dead cell becomes
+alive with exactly three live neighbours, and a living cell survives with two or
+three. Despite this simplicity, Life produces a wide variety of emergent structures:
+stable \textbf{still lifes} such as the block and beehive; \textbf{oscillators} such
+as the blinker and toad, which cycle through a fixed sequence of states;
+\textbf{spaceships} such as the glider, which translate across the grid while cycling
+through their phases; and more complex constructions such as glider guns and
+computational logic structures.
 
-Berlekamp, Conway, and Guy~\cite{Berlekamp1982} showed that Life is Turing-complete: any computation that 
-can be expressed as a Turing machine can, in principle, be carried out within a sufficiently large Life grid. 
-This highlights the defining property of cellular automata -- complex, globally coordinated behaviour 
-emerging from a homogeneous local rule. The same property later motivated the development of neural cellular 
-automata, where the local rule is learned rather than hand-designed.
+Berlekamp, Conway, and Guy~\cite{Berlekamp1982} showed that Life is Turing-complete:
+any computation expressible as a Turing machine can, in principle, be carried out
+within a sufficiently large Life grid. This is a clear illustration of the defining
+property of cellular automata -- complex, globally coordinated behaviour emerging
+from a homogeneous local rule -- and the same property later motivated the
+development of neural cellular automata, where the local rule is learned rather than
+hand-designed.
 
 \subsection{Three-Dimensional Cellular Automata}
 
@@ -956,6 +971,12 @@ custom runner can keep additional experiment parameters hardcoded in notebook
 code and treat \texttt{init(config, target)} primarily as a server handshake.
 This is practical for non-standard loops, where changing notebook code is
 often faster than repeatedly extending Blender UI properties.
+
+In this project, task channels are treated as a framework-level extension used
+in notebook experiments and custom runners, not as a default Blender add-on
+configuration option. For such experiments, the runner-level
+\texttt{on\_event} methods should be implemented explicitly to avoid
+protocol-default behaviour interfering with specialised training logic.
 
 In this setup, sending a minimal or dummy \texttt{config}/\texttt{target}
 pair from Blender can still be valid for visualisation-only sessions, provided
