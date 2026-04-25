@@ -202,6 +202,7 @@ class NCA_PT_CellSettings(NCA_PT_BasePanel):
         layout.prop(cell, "hidden_channels", text="Hidden Channels")
         layout.prop(cell, "visible_channels", text="Visible Channels")
         layout.prop(cell, "alive_threshold", text="Alive Threshold")
+        layout.prop(cell, "pos_channels", text="Position Channels")
 
 
 class NCA_PT_PerceptionSettings(NCA_PT_BasePanel):

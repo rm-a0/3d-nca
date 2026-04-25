@@ -55,6 +55,16 @@ class NCA_PG_CellProperties(bpy.types.PropertyGroup):
         default=0.02,
         min=0.0,
     )  # type: ignore
+    pos_channels: bpy.props.IntProperty(
+        name="Position Channels",
+        description=(
+            "Number of positional channels appended to each cell state. "
+            "Use 3 for XYZ positional encoding"
+        ),
+        default=0,
+        min=0,
+        max=3,
+    )  # type: ignore
 
 
 class NCA_PG_PerceptionProperties(bpy.types.PropertyGroup):
@@ -237,7 +247,7 @@ class NCA_PG_InferenceProperties(bpy.types.PropertyGroup):
     )  # type: ignore
     steps_per_phase: bpy.props.IntProperty(
         name="Steps per Phase",
-        description="NCA steps to run per growth phase (or total steps if no task channels)",
+        description="NCA steps to run during inference",
         default=32,
         min=1,
         max=256,

@@ -11,8 +11,6 @@ Color modes:
   - BSDF: reads Principled BSDF Base Color (fast, solid colors only)
   - TEXTURE: samples image texture at nearest surface UV (slower, works with
     any image-textured mesh including imports)
-
-Note: voxelization core implemented with assistance from Claude Opus 4.6.
 """
 
 import bpy

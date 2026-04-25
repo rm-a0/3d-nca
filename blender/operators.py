@@ -166,6 +166,7 @@ def setup_configs(context) -> dict:
             "hidden_channels": int(cell.hidden_channels),
             "visible_channels": VISIBLE_CHANNELS_MAP.get(cell.visible_channels, 4),
             "alive_threshold": float(cell.alive_threshold),
+            "pos_channels": int(cell.pos_channels),
         },
         "perception": {
             "kernel_radius": int(perc.kernel_radius),
