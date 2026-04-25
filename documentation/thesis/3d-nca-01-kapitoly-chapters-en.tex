@@ -235,7 +235,7 @@ and the update rule is trained end-to-end by gradient descent.
 Let the lattice be $\Omega \subset \mathbb{Z}^d$, where $d$ is the spatial dimension.
 Each cell $x \in \Omega$ holds a state vector
 \[
-\mathbf{s}_t(x) \in \mathbb{R}^{C},
+\mathbf{s}_t\,(x) \in \mathbb{R}^{C},
 \]
 where $C$ is the number of channels. The full grid state at time $t$ is a tensor over
 all cell states.
@@ -246,7 +246,7 @@ to the full multi-channel grid, producing a perception vector at each cell locat
 Second, a shared neural network maps this perception vector to a state increment
 $\Delta \mathbf{s}$ added to the current state:
 \[
-\mathbf{s}_{t+1}(x) = \mathbf{s}_t(x) + \Delta \mathbf{s}(x).
+\mathbf{s}_{t+1}\,(x) = \mathbf{s}_t\,(x) + \Delta \mathbf{s}\,(x).
 \]
 This residual formulation preserves the defining CA property -- strict locality --
 while replacing the hand-crafted transition function with a learnable model. Because
@@ -545,7 +545,7 @@ Two mechanisms are critical for robust long-term dynamics:
     growth outside the intended pattern.
     \item \textbf{Stochastic update masking} applies updates to a random subset of cells at each 
     step. At each time step, each cell independently decides (with some probability, e.g., 0.5) 
-    whether to apply its computed update or skip it. This breaks synchronisation artefacts - patterns 
+    whether to apply its computed update or skip it. This breaks synchronisation artefacts -- patterns 
     that form only because all cells update in lockstep -- and produces dynamics that are robust to 
     asynchronous perturbations.
 \end{itemize}
