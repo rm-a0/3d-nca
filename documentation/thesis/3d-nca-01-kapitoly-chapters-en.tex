@@ -447,274 +447,181 @@ trading roughly twice the computation for substantially reduced memory usage.
 %=========================================================================
 \chapter{Related Work}
 
-This chapter reviews the research most directly related to neural cellular automata and their 
-three-dimensional extensions. The focus is on architectures, training procedures, and experimental 
-results. Each section identifies limitations or open questions that motivate the framework developed 
-in this work.
-
-Several of the works discussed here were already introduced in Chapter~\ref{chap:theoretical-foundations} 
-to establish formal background. Here, the focus shifts to their concrete design decisions, findings, and the 
-specific choices that inform the approach taken in this work.
+This chapter reviews the research most directly related to neural cellular automata
+and their three-dimensional extensions, focusing on architectures, training
+procedures, and experimental results. The core NCA components described in
+Section~\ref{sec:core-components} -- state representation, perception, update rule,
+and training -- were drawn directly from Mordvintsev et al.~\cite{Mordvintsev2020}
+and are not repeated here. Each section instead focuses on the concrete design
+decisions, experimental findings, and limitations of the reviewed work, and on what
+they mean for the framework developed in this thesis.
 
 \section{Growing Neural Cellular Automata}
 
-Mordvintsev, Randazzo, Niklasson, and Levin~\cite{Mordvintsev2020} introduced the Growing Neural
-Cellular Automata paradigm that is the methodological basis for this work. They replaced the discrete
-lookup-table rules of classical CA with a small shared neural network trained end-to-end by gradient
-descent. The model preserves strict spatial locality while learning to grow and maintain target patterns
-from simple initial conditions -- typically a single live cell.
+Mordvintsev, Randazzo, Niklasson, and Levin~\cite{Mordvintsev2020} introduced the
+Growing Neural Cellular Automata paradigm that serves as the methodological basis for
+this work. Unlike continuous CA such as Lenia~\cite{Chan2019}, which rely on manual
+parameter exploration, neural CA use supervised optimisation: the transition function
+is trained end-to-end to produce a specific target pattern.
 
-Unlike earlier continuous CA such as Lenia~\cite{Chan2019}, which rely on manual parameter exploration
-to discover interesting behaviours, neural CA use supervised optimisation: the transition function is
-trained to produce a specific target pattern. This work extends that task-driven optimisation approach
-to three dimensions.
-
-Chapter~\ref{chap:theoretical-foundations} covered the general NCA principles. The focus here is on the 
-concrete design and empirical properties of the 2020 implementation: its architecture, stabilisation 
-mechanisms, training procedure, and experimental results.
-
-\subsection{State Representation}
-
-Each cell in the 2D model holds a 16-channel real-valued state vector. Four channels encode RGBA colour 
-values compared against a target image. The remaining twelve channels serve as hidden memory.
-
-The hidden channels work as a distributed memory system embedded in the lattice. Because updates are
-strictly local, long-range coordination must emerge through repeated short-range interactions. A cell 
-cannot observe the state of a distant cell directly; it can only receive information that has been
-relayed through intermediate cells over multiple steps. The hidden channels provide the capacity for
-this relay process.
-
-This design is central to the stability and regenerative behaviour observed in later experiments. 
-Reducing the number of hidden channels degrades pattern quality and stability, while increasing it 
-beyond a certain point yields diminishing returns~\cite{Mordvintsev2020}. The balance between enough
-memory for coordination and a compact state for efficient training directly informs the channel
-configurations used in subsequent 3D extensions.
-
-\subsection{Perception Mechanism}
-
-Perception uses a fixed set of non-learnable convolutional filters applied to the full multi-channel grid:
-
-\begin{itemize}
-    \item An identity filter, returning each cell's own state,
-    \item Sobel filters approximating spatial derivatives in the $x$ and $y$ directions,
-    \item A Laplacian filter capturing local curvature.
-\end{itemize}
-
-Applied across all 16 channels, these three filter types produce a $3 \times 16 = 48$-dimensional 
-perception vector at each spatial location. The Sobel filters detect directional gradients in the 
-neighbourhood, for example where a pattern transitions from occupied to empty, while the Laplacian 
-identifies edges and boundaries by measuring how much a cell's state differs from its neighbours' average.
-
-A small MLP operating independently at each cell transforms this perception vector into a state increment. 
-The perception step introduces no learnable parameters; all learning occurs in the MLP.
-
-Fixed perception filters are used to ensure locality and translation invariance by design, while also stabilising 
-optimisation by limiting the spatial information available to the update rule. This choice becomes particularly 
-important in volumetric extensions, where the neighbourhood expands from 9 to 27 cells and the perception 
-vector grows correspondingly in dimensionality.
-
-\subsection{Update Rule and Parameter Sharing}
-
-The update rule is a lightweight neural network shared across all cells. It produces a state 
-increment added residually to the current state:
-\[
-\mathbf{s}_{t+1} = \mathbf{s}_t + \Delta \mathbf{s}.
-\]
-
-Residual updates encourage incremental modifications rather than abrupt transitions, contributing 
-to dynamical stability. Because the same parameters apply at every spatial location, the learned 
-rule defines a homogeneous dynamical system over the entire grid. No cell has a special role by 
-construction, this means that any differentiation in cell behaviour must emerge from the spatial 
-context encoded in the perception vector.
-
-The full architecture has approximately 8\,000 trainable parameters. This small scale is deliberate: 
-it shows that the complexity of the resulting structures comes from iterative local interaction, not 
-from model capacity. By contrast, a standard convolutional neural network for image generation may 
-have millions of parameters. The NCA achieves comparable visual complexity through temporal depth 
-(running many update steps) rather than through network width.
-
-\subsubsection{Stabilisation Mechanisms}
-
-Two mechanisms are critical for robust long-term dynamics:
-
-\begin{itemize}
-    \item \textbf{Alive gating} conditions state updates on whether the designated alpha channel 
-    exceeds a threshold in the local neighbourhood. This creates a soft alive/dead boundary and 
-    prevents inactive regions from destabilising active structures. Without alive gating, empty 
-    regions can spontaneously develop non-zero states due to numerical noise, leading to spurious 
-    growth outside the intended pattern.
-    \item \textbf{Stochastic update masking} applies updates to a random subset of cells at each 
-    step. At each time step, each cell independently decides (with some probability, e.g., 0.5) 
-    whether to apply its computed update or skip it. This breaks synchronisation artefacts -- patterns 
-    that form only because all cells update in lockstep -- and produces dynamics that are robust to 
-    asynchronous perturbations.
-\end{itemize}
-
-Both mechanisms improve long-term stability and regenerative capacity. Horvath and Levin~\cite{Horvath2021} 
-later demonstrated that stochastic masking also encourages the emergence of distinct cell types within the 
-same NCA, as cells must develop local strategies that work regardless of which neighbours updated in the 
-current step.
+The 2020 implementation uses a 16-channel state vector per cell -- four visible RGBA
+channels supervised against a target image and twelve hidden channels acting as
+distributed memory. Perception is handled by three fixed filter groups (identity,
+Sobel in $x$ and $y$, Laplacian) applied across all channels, producing a
+48-dimensional perception vector at each location. A small shared MLP with
+approximately 8\,000 trainable parameters maps this vector to a residual state
+increment. Alive gating and stochastic update masking, both introduced in
+Section~\ref{sec:core-components}, are applied throughout. The result is a
+homogeneous system where all behavioural differences between cells emerge from their
+local spatial context rather than from any privileged role in the architecture.
 
 \subsection{Training Regimes}
 
-Mordvintsev et al.~\cite{Mordvintsev2020} introduced three training regimes: growing, persistent, 
-and regenerating. Each regime targets a different aspect of the learned dynamics. The choice of regime 
-determines the balance between initial pattern formation, long-term stability, and robustness to damage. 
-These regimes define the training methodology adopted and extended in this work.
+Mordvintsev et al.~\cite{Mordvintsev2020} introduced three training regimes that
+target different aspects of the learned dynamics. The choice of regime determines
+the balance between initial growth, long-term stability, and robustness to damage.
 
 \subsubsection{Growing Regime}
 
-The model is trained to produce a target image from a single active seed. Loss is computed after 
-a fixed number of update steps $T$, and the model learns to expand outward and approximate the 
-target pattern within that horizon.
-
-No constraint is imposed beyond step $T$. Patterns may drift, decay, or diverge if simulation 
-continues past the trained step count. In practice, growing-only models commonly exhibit instability 
-within 100--200 steps beyond their training horizon~\cite{Mordvintsev2020}.    
+The model is trained to produce a target from a single seed, with loss computed after
+a fixed number of steps $T$. No constraint is imposed beyond $T$ -- patterns may
+drift or diverge if simulation continues past the training horizon. In practice,
+growing-only models commonly become unstable within 100--200 steps beyond
+$T$~\cite{Mordvintsev2020}.
 
 \subsubsection{Persistent Regime}
 
-The persistent regime evaluates loss at multiple time steps beyond initial convergence. Rather than 
-stopping at step $T$, training continues to evaluate the model at steps $T$, $T + \delta$, $T + 2\delta$, 
-and so on, penalising any drift away from the target.
-
-This produces more stable dynamics. Mordvintsev et al. observed that persistent models also exhibit 
-limited regenerative behaviour even without explicit damage training, suggesting that the stability 
-mechanisms learned for persistence partially generalise to perturbation recovery.
-
-Randazzo et al.~\cite{Randazzo2021} later extended this idea by training NCA with persistent memory, 
-showing that models trained for stability over very long horizons develop increasingly robust internal 
-representations in their hidden channels.
+Loss is evaluated at multiple steps beyond initial convergence -- at $T$,
+$T + \delta$, $T + 2\delta$, and so on -- penalising any drift from the target.
+This produces more stable dynamics. Persistent models also showed limited regenerative 
+behaviour without any explicit damage training -- a side effect of the stability 
+objective that Randazzo et al.~\cite{Randazzo2021} later explored further, finding 
+that long-horizon training leads to increasingly robust hidden channel representations.
 
 \subsubsection{Regenerating Regime}
 
-During training, random damage is applied by zeroing out contiguous rectangular regions of the grid. 
-The model must reconstruct the target from the damaged configuration.
-
-This explicit objective produces the most robust dynamics. Regenerating models recover from substantial 
-perturbations and maintain structural integrity over long simulation horizons. The regenerative capacity 
-is qualitatively reminiscent of biological organisms that can regrow damaged tissue from partial 
-structure~\cite{Mordvintsev2020}.
+Random damage is applied during training by zeroing out rectangular regions of the
+grid, requiring the model to reconstruct the target from the damaged state. This
+produces the most robust dynamics, with models recovering from substantial
+perturbations and maintaining structural integrity over extended
+horizons~\cite{Mordvintsev2020}. Horvath and Levin~\cite{Horvath2021} later showed
+that stochastic update masking -- one of the stabilisation mechanisms used throughout
+training -- also encourages distinct functional cell types to emerge within a single
+NCA, as cells must develop local strategies that hold regardless of which neighbours
+updated in the previous step.
 
 \subsection{Relevance to This Work}
 
-This work adopts the architecture, training regimes, and optimisation strategy of Mordvintsev 
-et al.~\cite{Mordvintsev2020} as its baseline and extends the framework to three-dimensional voxel 
-lattices. The transition from 2D to 3D increases neighbourhood size from 9 to 27 cells, increases 
-computational cost cubically, and extends the information propagation distance required for global 
-coordination. Whether the stability and regenerative behaviours observed in planar domains carry over 
-to volumetric grids is a central question motivating the experiments in this work.
+This work adopts the architecture, training regimes, and optimisation strategy of
+Mordvintsev et al.~\cite{Mordvintsev2020} as its baseline and extends them to
+three-dimensional voxel lattices. The transition from 2D to 3D increases neighbourhood
+size from 9 to 27 cells, raises computational cost cubically, and extends the
+propagation distances required for global coordination. Whether the stability and
+regenerative behaviours observed in 2D carry over to volumetric grids is one of the
+central questions motivating the experiments in this thesis.
 
-\section{Three-Dimensional Neural Cellular Automata in Interactive Environments}
+\section{Volumetric NCA in Interactive Environments}
 
-Sudhakaran et al.~\cite{Sudhakaran2021} extended NCA to three dimensions within the sandbox game 
-\emph{Minecraft}, evaluating volumetric growth of structures and functional machines under real-time 
-constraints and user interaction.
+Sudhakaran et al.~\cite{Sudhakaran2021} extended NCA to three dimensions in the
+sandbox game \emph{Minecraft}, evaluating volumetric growth of structures and
+functional machines under real-time constraints and user interaction.
 
-Their model extends the 2D growing NCA paradigm to a 3D voxel grid. Each voxel stores a state 
-vector with visible and hidden channels. Perception uses local $3 \times 3 \times 3$ neighbourhoods 
-with identity and gradient features, processed by a small neural network applied identically at every 
-voxel. The system is trained by gradient descent to grow a target structure from a single seed.
+The model follows the 2D growing NCA paradigm directly. Each voxel stores a state
+vector with visible and hidden channels; perception uses $3 \times 3 \times 3$
+neighbourhoods with identity and gradient features processed by a small shared
+network. The system is trained by gradient descent to grow a target structure from
+a single seed.
 
-The authors showed that neural CA can produce coherent volumetric structures in a dynamic,
-interactive environment. The learned rules stay local and homogeneous, preserving the CA paradigm while 
-enabling complex global structure formation. Their experiments showed convergence toward target voxel 
-configurations and partial regenerative behaviour under perturbation: when parts of a Minecraft
-structure were manually destroyed, the NCA could partially rebuild the damaged region.
+The experiments confirmed that neural CA can produce coherent volumetric structures
+in a dynamic, interactive environment. The learned rules remain local and homogeneous
+throughout, with complex global structure emerging from repeated local updates. The
+authors also observed partial regenerative behaviour: when parts of a built structure
+were manually destroyed, the NCA could partially rebuild the damaged region.
 
-An interesting aspect of this work is its evaluation in a constrained real-time environment. The
-Minecraft platform imposes fixed block types, a specific rendering pipeline, and interaction mechanisms 
-that differ from the unconstrained continuous-valued grids used in purely computational experiments. 
-Despite these constraints, the NCA paradigm produced recognisable structures, showing that the
-approach is not limited to idealised simulation environments.
+An interesting aspect of this work is its evaluation under real-world constraints.
+The Minecraft platform fixes the available block types, rendering pipeline, and
+interaction tools -- all of which differ from the unconstrained continuous-valued
+grids used in purely computational settings. That the NCA paradigm still produced
+recognisable structures under these conditions shows the approach is not limited to
+idealised simulation environments.
 
 \subsection{Experimental Scope and Constraints}
 
-The evaluation focuses on proof-of-concept demonstrations: successful growth toward predefined targets 
-and qualitative assessment of structural coherence. Quantitative metrics for long-term stability, 
-systematic regeneration under controlled damage patterns, or comparison with other 3D generative 
-methods are limited.
-
-The \emph{Minecraft} environment also constrains the experimental setup. Voxel states are mapped to 
-a discrete set of block types, the rendering pipeline is fixed, and interaction occurs through the 
-game's built-in tools. While this provides a real-time testbed accessible to a broad audience, it 
-limits geometric complexity, material expressiveness, and the precision of experimental measurements 
-available for systematic investigation.
+The evaluation is primarily a proof of concept: the experiments demonstrate successful
+growth toward predefined targets but stop short of systematic analysis. There are no
+measurements of long-term stability, no controlled damage experiments, and no
+comparison against other 3D generative methods. The Minecraft environment contributes 
+to this limitation. Discrete block types, a fixed renderer, and game-based interaction 
+tools all constrain how precisely experiments can be set up and measured.
 
 \subsection{Relation to This Work}
 
-Sudhakaran et al.~\cite{Sudhakaran2021} provide the methodological basis for extending neural CA
-from planar grids to volumetric $3 \times 3 \times 3$ perception neighbourhoods. Strict locality,
-parameter sharing, and gradient-based optimisation form the conceptual foundation adopted here.
+Sudhakaran et al.~\cite{Sudhakaran2021} provide the primary basis for extending
+neural CA from planar grids to volumetric $3 \times 3 \times 3$ perception
+neighbourhoods. The core principles -- strict locality, parameter sharing, and
+gradient-based optimisation -- carry over directly into the framework developed here.
 
-The framework developed in this work embeds the 3D neural CA within Blender instead of a game engine. 
-Blender provides programmatic access to volumetric grids, mesh representations, rendering pipelines, 
-and Python scripting through its built-in API. This gives precise control over lattice resolution, 
-boundary conditions, material properties, and intermediate-state inspection.
+The main difference is the environment. This work uses Blender rather than a game
+engine, which gives direct programmatic access to the voxel grid, mesh
+representations, rendering pipelines, and the Python scripting API. This makes it
+practical to vary grid resolution, boundary conditions, and material properties
+systematically -- aspects that the Minecraft setting does not expose to the
+researcher. It also opens the door to future extensions that would be difficult in
+a game environment, such as integrating more complex mesh targets, alternative
+voxelisation strategies, or new training regimes. Where Sudhakaran et al. showed
+that 3D NCA works in an interactive environment, the goal here is to provide the
+tooling for controlled experimentation and to build a foundation that can be
+extended further.
 
-The goal is not only to demonstrate 3D feasibility, but to provide a research-oriented framework 
-for controlled investigation of stability, persistence, and regeneration in volumetric neural CA. 
-Where the Minecraft work showed that 3D NCA can produce visually convincing results in a game 
-environment, this work aims to provide the tools for systematic experimentation and analysis.
+\section{Prior Open-Source Implementations}
 
-\section{Open-Source and Applied Three-Dimensional Neural Cellular Automata}
+Beyond the work of Mordvintsev et al.~\cite{Mordvintsev2020} and Sudhakaran et
+al.~\cite{Sudhakaran2021}, several open-source projects have explored
+three-dimensional neural CA. This section reviews two implementations whose design
+decisions are relevant to the framework developed in this thesis.
 
-Beyond the work of Mordvintsev et al.~\cite{Mordvintsev2020} and the interactive extension
-by Sudhakaran et al.~\cite{Sudhakaran2021}, several open-source projects have explored 
-three-dimensional neural CA. This section reviews implementations whose design decisions are 
-directly relevant to the framework developed in this thesis.
+\subsection{Single-Target 3D Reconstruction}
 
-\subsection{Standard 3D Reconstruction Baseline}
+The repository of Aadityaza~\cite{Aadityaza2024} implements a direct extension of
+the Growing NCA paradigm to three-dimensional space using a Jupyter Notebook
+environment and PyTorch, reconstructing voxel shapes from a single seed.
 
-The repository of Aadityaza~\cite{Aadityaza2024} implements a direct extension of the Growing NCA 
-paradigm to three-dimensional space. It uses a Jupyter Notebook environment and PyTorch to 
-reconstruct voxel shapes from a single seed.
+The project confirms that the convolution-based perception approach from 2D NCA
+transfers directly to volumetric tensors -- specifically, that Sobel-type filters
+extend cleanly to all three spatial axes without losing locality. For this work it
+served as an early reference point for validating the feasibility of the 3D
+extension.
 
-This project provides a clean verification of 3D perception operators, specifically the expansion 
-of Sobel-type filters into tri-axial gradient kernels for the $x$, $y$, and $z$ axes. The 
-implementation confirms that the convolution-based perception approach used in 2D NCA applies 
-directly to volumetric tensors without losing spatial locality. For this work, the project served 
-as an early reference point for validating the feasibility of the 3D extension.
+The implementation covers single-target reconstruction only. There is no training
+server, no interactive visualisation, and no modular structure for swapping model
+components. These are gaps the framework developed in this thesis addresses directly.
 
-The implementation is focused on single-target reconstruction and does not include a training server, 
-interactive visualisation, or modular architecture for experimenting with different configurations. 
-These are gaps that the framework developed in this work addresses.
+\subsection{Voxel-Based Morphogenesis}
 
-\subsection{Voxel-Based Morphogenetic Experiments}
+Rossi and collaborators~\cite{Rossi2021} extended the 2D growing NCA to volumetric
+grids with $3 \times 3 \times 3$ perception filters and hidden channel
+representations, training the system to approximate 3D voxel targets from simple
+seeds.
 
-Rossi and collaborators~\cite{Rossi2021} explored voxel-based neural CA for three-dimensional 
-morphogenesis. Their implementation extends the 2D growing NCA to volumetric grids with 
-$3 \times 3 \times 3$ perception filters and hidden channel representations.
+The architecture follows the 2D formulation closely -- fixed perception filters,
+residual updates, shared parameters, gradient-based optimisation -- and the
+experiments confirm that volumetric growth works under strict locality constraints.
+The evaluation is limited to demonstrating successful growth toward targets, with no
+analysis of long-term stability, regeneration, or behaviour at higher resolutions.
 
-The system trains to approximate 3D voxel targets from simple seeds. Its architecture follows 
-the 2D formulation closely: fixed perception filters, residual updates, shared parameters, and 
-gradient-based optimisation. The experiments confirm that volumetric growth works under strict 
-locality constraints. However, the evaluation is limited to demonstrating successful growth toward 
-targets. Systematic analysis of long-term persistence, regeneration capacity, or scaling behaviour 
-under increasing resolution is not provided.
-
-Both open-source projects provide proof-of-concept validation for 3D morphogenetic NCA but leave
-open questions about stability and robustness in larger volumetric domains. They also lack integration
-with a 3D modelling environment that would allow researchers to interactively visualise
-and manipulate the NCA during training.
+Neither project integrates with a 3D modelling environment, which means there is no
+practical workflow for preparing real mesh targets or observing training interactively.
 
 \section{Chapter Conclusion}
 
-The works reviewed in this chapter established the architectural principles -- local perception,
-shared neural update rules, residual dynamics, and gradient-based optimisation -- that form the
-methodological basis for this work. The original 2D Growing NCA demonstrated that a small neural 
-network with fewer than 10\,000 parameters can learn to grow, maintain, and regenerate complex 
-patterns through purely local interactions. Subsequent three-dimensional extensions confirmed that 
-these principles transfer to volumetric grids and interactive environments, though systematic 
-evaluation in 3D remains limited.
-
-The framework developed in this work builds on these foundations. It integrates volumetric 
-perception, shared update networks, and structured training regimes within a controlled 3D 
-setting. Unlike prior implementations, it is designed to be modular and extensible, providing a 
-general experimental environment where different architectures, training strategies, and evaluation 
-procedures can be compared systematically. The integration with Blender provides interactive 
-visualisation and mesh-based target specification, addressing the tooling limitations identified 
-in existing open-source 3D NCA projects.
+The works reviewed in this chapter share a common foundation -- local perception,
+shared update rules, residual dynamics, and gradient-based optimisation -- but none
+provide the tooling needed for systematic 3D experimentation. The original 2D Growing
+NCA established that a network with fewer than 10\,000 parameters can learn to grow,
+maintain, and regenerate complex patterns through purely local interactions.
+Subsequent 3D extensions confirmed that these principles transfer to volumetric grids,
+but left open questions about stability, persistence, and regeneration that the
+experiments in this thesis aim to address.
 
 \chapter{Architectural Design}
 
