@@ -625,121 +625,131 @@ experiments in this thesis aim to address.
 
 \chapter{Architectural Design}
 
-This chapter presents the design of the 3D NCA framework and its overall architecture.
-It introduces the key components that form the framework and describes how these components interact
-with each other. The aim is to provide a clear conceptual overview of the system and explain the
-roles of its individual parts. To maintain focus on design, implementation-specific details such as
-the libraries and frameworks chosen are intentionally omitted here and discussed separately in the
-Implementation chapter.
+This chapter presents the design of the 3D NCA framework and its overall
+architecture. It introduces the key components that form the framework and
+describes how they interact. The aim is to provide a clear conceptual overview
+of the system and explain the role of each part. Implementation-specific
+details, such as the libraries and frameworks chosen, are intentionally omitted
+here and discussed separately in the Implementation chapter.
 
 \section{Design Goals and Requirements}
 
-The purpose of the framework is to provide an environment for experimenting with neural cellular automata
-operating on three-dimensional voxel grids. To support experimentation and future extensions, the
-architecture requires a clear structure and well-defined interactions between its components.
+The purpose of the framework is to provide an environment for experimenting
+with neural cellular automata operating on three-dimensional voxel grids. To
+support experimentation and future extensions, the architecture requires a clear
+structure and well-defined interactions between components.
 
-The primary design goal is to enable simulation and training of 3D neural cellular automata
-while maintaining a modular architecture. The system should allow individual components, such as the
-simulation grid, update mechanism, and training pipeline, to be developed and modified independently.
-This simplifies experimentation with different models and update rules.
+The primary design goal is to enable simulation and training of 3D neural
+cellular automata within a modular architecture. Components such as the
+simulation grid, update mechanism, and training pipeline can be developed and
+modified independently, which allows different models and update rules to be
+tested without touching unrelated parts of the system.
 
-A second objective was to keep the core functionality independent from visualisation tools and external
-applications. The framework is therefore designed as a standalone module that provides the core
-functionality required for initialising and training neural cellular automata.
-Other systems can build on this module and reuse its computational components.
+A second goal was to keep the core functionality independent from
+visualisation tools and external applications. The framework is therefore
+designed as a standalone module that provides everything needed to initialise
+and train neural cellular automata. Other systems can build on this module and
+reuse its computational components without inheriting unnecessary dependencies.
 
-During development, practical constraints related to visualisation and execution environments
-influenced the design. Combining interactive visualisation with computationally intensive training
-within a single environment proved difficult. These limitations motivated a separation between
-computation and visualisation.
-
-As a result, the system evolved toward an architecture where the core framework provides the
-underlying simulation and training functionality, while additional components use this functionality
-to provide visualisation and interaction. This approach preserves the independence of the framework
-while allowing it to be integrated into different workflows.
+During development, practical constraints influenced the design. Combining
+interactive visualisation with computationally intensive training within a
+single process proved difficult, as the two place conflicting demands on
+execution environments. This motivated a clean separation between computation
+and visualisation. The core framework provides the underlying simulation and
+training functionality, while additional components use it to offer
+visualisation and interaction. This approach preserves the independence of the
+core while allowing it to be integrated into different workflows.
 
 \section{System Overview}
 
-The framework is organised into three layers that work together to provide an
-interactive environment for training and visualising three-dimensional neural cellular automata.
-Figure~\ref{fig:system-overview} shows the high-level structure and the communication paths between
-these layers.
+The framework is organised into three layers that together provide an
+interactive environment for training and visualising three-dimensional neural
+cellular automata. Figure~\ref{fig:system-overview} shows the high-level
+structure and the communication paths between these layers.
 
-The innermost layer is the \textbf{core framework}. It contains the NCA model and the training
-pipeline and has no dependency on any server or graphical environment. It can be used directly from
-Python scripts or Jupyter notebooks, as the accompanying experiment notebooks demonstrate.
+The innermost layer is the \textbf{core framework}. It contains the NCA model
+and the training pipeline and has no dependency on any server or graphical
+environment. It can be used directly from Python scripts or Jupyter notebooks,
+as the accompanying experiment notebooks demonstrate.
 
-The second layer is the \textbf{server}, which exposes the core framework over a TCP connection.
-A running server accepts a client connection, receives training configuration and target data,
-delegates execution to the core training pipeline, and streams state snapshots after each epoch 
-back to the client as training progresses.
+The second layer is the \textbf{server}, which exposes the core framework over
+a TCP connection. A running server accepts a single client connection, receives
+training configuration and target data, delegates execution to the core
+training pipeline, and streams state snapshots back to the client as training
+progresses.
 
-The third layer is the \textbf{Blender add-on}, which acts as graphical interface and a client. It connects to
-the server over TCP, provides a panel-based interface for configuation and control over training
-sessions, and renders incoming state broadcasts as three-dimensional voxel meshes in the Blender
+The third layer is the \textbf{Blender add-on}, which acts as the graphical
+interface and TCP client. It connects to the server, provides a panel-based
+interface for configuring and controlling training sessions, and renders
+incoming state broadcasts as three-dimensional voxel meshes in the Blender
 viewport.
 
-This separation serves two purposes. Training can run on a remote GPU machine or a Jupyter notebook while the user
-interacts with Blender on a local workstation, with a tunnelling service bridging the two. At the
-same time, the core framework remains independent of both the server and the graphical environment,
-so researchers who do not need interactive visualisation or want to use their own training algorithms can 
-import and use it directly in their own scripts or notebooks.
+This separation serves two purposes. First, training can run on a remote GPU
+machine or a Jupyter notebook while the user interacts with Blender on a local
+workstation, with a tunnelling service bridging the two. Second, the core
+framework remains independent of both the server and the graphical environment,
+so researchers who do not need interactive visualisation can import and use it
+directly in their own scripts or notebooks.
 
-Alongside the main client--server workflow, the repository also contains lightweight notebook utilities
-for basic mesh-to-voxel conversion and offline visualisation. These helpers were used during early
-exploration and intentionally cover only simple targets. They do not preserve Blender materials and
-do not provide per-voxel colour sampling.
-The Blender add-on replaces them for practical target preparation and interactive visualisation.
+The repository also contains lightweight notebook utilities for basic
+mesh-to-voxel conversion and offline visualisation. These were used during
+early exploration and cover only simple targets: they do not preserve Blender
+materials and do not perform per-voxel colour sampling. The Blender add-on
+replaces them for practical target preparation and interactive visualisation.
 
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=\textwidth]{obrazky-figures/fig-system-overview.png}
-    \caption{High-level system architecture. Arrows indicate dependency direction.
-             The dashed TCP boundary marks the network separation between the
-             server and the Blender client}
+    \caption{High-level system architecture. Arrows indicate dependency
+             direction. The dashed TCP boundary marks the network separation
+             between the server and the Blender client.}
     \label{fig:system-overview}
 \end{figure}
 
 \section{Core NCA Model}
 \label{sec:arch-core-model}
 
-The core NCA model is composed of four components: \texttt{CellState}, \texttt{Perception3D},
-\texttt{UpdateRule}, and \texttt{Grid3D}. Each component has its own configuration and can be
-instantiated independently. \texttt{Grid3D} acts as the composition root, wiring the other three
-together and exposing a single-step forward pass. A higher-level wrapper, \texttt{NCAModel},
-bundles all configurations into one object and delegates to \texttt{Grid3D} internally, providing
-a simpler entry point for common use cases.
+The core NCA model is composed of four different components: \texttt{CellState},
+\texttt{Perception3D}, \texttt{UpdateRule}, and \texttt{Grid3D}. Each
+component has its own configuration and can be instantiated independently.
+\texttt{Grid3D} acts as the composition root, wiring the other three together
+and exposing a single-step forward pass. A higher-level wrapper,
+\texttt{NCAModel}, bundles all configurations into one object and delegates to
+\texttt{Grid3D} internally, providing a simpler entry point for common use
+cases.
 
-Keeping configurations and components separate means that a researcher who wants
-to experiment with a custom update rule or a different perception kernel can
-replace just that component while leaving the rest of the pipeline unchanged.
-The experiment notebooks included with this thesis illustrate this directly:
-they use the model components without the runner or the server.
+Keeping configurations and components separate means that experimenting with a
+custom update rule or a different perception kernel requires replacing only that
+component, leaving the rest of the pipeline unchanged. The experiment notebooks
+included with the thesis use the model components directly, without the runner
+or the server.
 
 \subsection{Cell}
 
-The cell component defines the structure of the per-voxel state vector and is responsible for
-computing the alive mask that gates cell updates. It is configured by specifying the number of
-hidden channels, the number of visible channels, and the alive threshold.
+The cell component defines the structure of the per-voxel state vector and
+computes the alive mask that gates cell updates. It is configured by the number
+of hidden channels, the number of visible channels, and the alive threshold.
 
-The state vector of each voxel contains three groups of channels, as shown
-in Figure~\ref{fig:cell-state-vector}. Hidden channels carry internal memory
-that is not directly supervised and is not compared against the target during
-training. Visible channels represent the quantities compared against
-the target, such as RGBA colour values or a single occupancy channel. An
-optional third group, task channels, allows a single model to be trained
-on multiple targets simultaneously using a one-hot encoding to distinguish between them. 
-Task channels remain constant for the duration of a training phase, while
-hidden and visible channels evolve freely under the learned update rule.
+The state vector of each voxel contains four groups of channels, as shown in
+Figure~\ref{fig:cell-state-vector}. Hidden channels carry internal memory that
+is not directly supervised and is not compared against the target during
+training. Visible channels represent the quantities compared against the
+target, such as RGBA colour values or a single occupancy channel. An optional
+third group, task channels, allows a single model to be trained on multiple
+targets simultaneously using a one-hot encoding to identify the active target.
+Task channels remain constant throughout training: the update rule explicitly
+zeroes their contribution to the state increment, so the MLP cannot modify
+them.
 
 For asymmetric targets, an additional optional group of positional channels can
 be included. These channels store normalised absolute coordinates
-$(x, y, z) \in [0,1]^3$ and are treated as read-only constants. They provide
-global spatial reference so cells can distinguish, for example, top from
-bottom or left from right, which is not possible from purely local symmetric
-neighbourhood statistics.
+$(x, y, z) \in [0,1]^3$ and serve as read-only constants. They are re-injected
+after every step and their increment is likewise zeroed, providing each cell
+with a stable global spatial reference. This allows cells to distinguish, for
+example, top from bottom or left from right, which is not possible from purely
+local neighbourhood statistics alone.
 
-Task and positional channels are optional extensions and can be enabled per
+Task and positional channels are optional extensions that can be enabled per
 experiment. Baseline single-target training uses hidden and visible channels
 only.
 
@@ -749,68 +759,65 @@ only.
     \caption{Per-voxel state vector layout. The vector contains hidden channels,
              optional positional channels, optional task channels, and visible
              channels. The alpha channel, which serves as the alive signal, is
-             always the last visible channel}
+             always the last visible channel.}
     \label{fig:cell-state-vector}
 \end{figure}
 
-The alive mask controls which regions of the grid are active. It is computed by pooling the alive
-channel over the local neighbourhood of each voxel and comparing the result against the configured
-threshold. A cell is considered potentially
-alive if either it or at least one of its immediate neighbours carries a
-value above the threshold. This neighbourhood pooling has an important
-consequence for growth: a dead cell adjacent to an alive cell is included by
-the mask, which allows it to receive nonzero updates and transition to an
-active state over time~\cite{Mordvintsev2020}.
+The alive mask controls which regions of the grid are active. It is computed by
+applying a $3{\times}3{\times}3$ max-pool over the alpha channel and comparing
+the result against the configured threshold. A cell is considered potentially
+alive if it or any of its 26 neighbours carries an alpha value above the
+threshold. A dead cell adjacent to a live one therefore falls within the mask
+and can receive nonzero updates, which is what allows new cells to grow at the
+boundary of the developing structure~\cite{Mordvintsev2020}.
 
 \subsection{Perception}
 
-The perception component converts the current grid state into a per-cell representation by
-applying a fixed set of three-dimensional convolutional filters over the local neighbourhood.
+The perception component converts the current grid state into a per-cell
+representation by applying a fixed set of $3{\times}3{\times}3$ convolutional
+filters over the local neighbourhood. The filters are non-learnable: their
+weights are set at initialisation and held constant throughout training.
 
-The filters are non-learnable; their weights are fixed at initialisation and
-do not change during training. In the baseline model, three filter groups
-are applied across all channels (identity, six-neighbour sum, Laplacian).
-For asymmetric targets, an optional directional mode uses five groups by
-replacing the Laplacian with three signed directional gradients ($x$, $y$,
-$z$). This retains strict locality while introducing orientation-sensitive
-features that reduce reflection ambiguity.
+In the baseline configuration, three filter groups are applied per channel:
+identity, six-neighbour sum, and Laplacian. For asymmetric targets, a
+directional mode replaces the Laplacian with three signed gradients along the
+$x$, $y$, and $z$ axes, giving five groups in total. The signed gradients
+introduce orientation-sensitive features that break reflection ambiguity,
+which arises when a purely symmetric neighbourhood representation cannot
+distinguish a structure from its mirror image. Without these directional cues,
+the learned rule may converge to mirrored solutions that match occupancy
+statistics but not global orientation.
 
-This directional design helps break reflection ambiguity for asymmetric
-targets (for example, chess pieces). Without signed directional cues, the
-local rule can converge to mirrored solutions that match occupancy statistics
-but not global orientation.
-
-Keeping the filters fixed follows the original design of Mordvintsev et
-al.~\cite{Mordvintsev2020}. In practical terms, this means the perception
-stage has no trainable weights and cannot overfit on its own. Translation
-invariance is built in by construction through the filter layout, not learned
-implicitly from data. The only trainable part of this stage is therefore the
-update rule.
+Following Mordvintsev et al.~\cite{Mordvintsev2020}, keeping the filters
+fixed means the perception stage has no trainable parameters and cannot
+overfit independently. Translation invariance is built into the filter layout
+rather than learned from data. All trainable capacity resides in the update
+rule.
 
 \subsection{Update Rule}
 
-The update rule maps each cell's perception vector to a state increment.
-Its configuration controls the capacity of the underlying network and whether
+The update rule maps each cell's perception vector to a state increment. Its
+configuration controls the width of the underlying network and whether
 stochastic update masking is active.
 
-As in Mordvintsev et al.~\cite{Mordvintsev2020}, the increment is added
-residually instead of replacing the previous state:
+The increment is added residually to the current state:
 \[
     \mathbf{s}_{t+1} = \mathbf{s}_t + \Delta \mathbf{s}.
 \]
-This tends to produce gradual local adjustments rather than abrupt jumps,
-which is important when the model is unrolled for many simulation steps.
+The increment is bounded by passing the network output through
+$\tanh(\cdot) \times 0.1$, which limits the magnitude of each update. This
+prevents large state jumps when the model is unrolled over many steps and
+contributes to stable long-horizon dynamics~\cite{Mordvintsev2020}.
 
-The same update network is applied independently at every cell. This preserves
-the locality constraint, because each increment depends only on local
-perception. It also keeps the dynamics spatially homogeneous: no cell has a
-privileged role by design. Any functional differences between cells must
-emerge from their local context in the grid.
+The same update network is applied independently at every cell via
+$1{\times}1{\times}1$ convolutions, preserving the locality constraint. No
+cell has a privileged role by architecture; any functional differentiation
+must emerge from local context accumulated across steps.
 
-When stochastic masking is enabled, each step updates only a random subset of
-cells. Stochastic masking avoids lockstep synchronisation artefacts and produces
-dynamics that tolerate asynchronous perturbations, which proves essential for
-long-horizon persistence and regeneration experiments~\cite{Mordvintsev2020}.
+When stochastic masking is enabled, each step randomly selects which cells
+apply their computed increment. This avoids lockstep synchronisation
+artefacts and makes the dynamics more tolerant of asynchronous perturbations,
+as discussed in the Theoretical Foundations chapter.
 
 \subsection{Grid and Model Composition}
 \label{sec:arch-grid}
@@ -822,30 +829,26 @@ shows the data flow through a single step.
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=\textwidth]{obrazky-figures/fig-nca-step-abstract.png}
-    \caption{Data flow through a single NCA update step. The state passes through the fixed 3D
-             perception filters, is transformed by the shared update rule, and is then gated by
-             the alive masking mechanism before producing the updated state}
+    \caption{Data flow through a single NCA update step.}
     \label{fig:nca-step-abstract}
 \end{figure}
 
-A single step proceeds as follows. The current state is passed to the
-perception component, which applies the fixed filters and produces a
-perception vector at every cell location. The update network produces a state
-increment, which is added residually to the current state. A post-step alive
-mask is then computed from the updated state, and any cell that falls below
-the alive threshold has its state zeroed out.
-
-At the architectural level, masking keeps activity close to the part of the
-structure that is developing and helps avoid random activation in empty
-regions. As a result, growth stays more controlled and the dynamics remain
-more stable over longer runs.
+A single step proceeds as follows. A pre-step alive mask is computed from the
+current state. The state then passes through the perception filters, producing
+a perception vector at every cell location. The update network takes the
+perception vectors and the pre-step mask, producing a bounded state increment.
+This increment is added residually to produce a candidate new state. A
+post-step alive mask is then computed from that candidate state, and cells
+whose alpha falls below the threshold have their state zeroed out. The
+post-step mask is what allows growth: dead cells adjacent to live ones receive
+nonzero increments and, if their resulting alpha crosses the threshold, are
+retained in the new state.
 
 \texttt{NCAModel} is a higher-level entry point that bundles all component
-configurations and delegates to \texttt{Grid3D} internally. It additionally
-handles model persistence: a saved checkpoint stores the configuration
-alongside the learned weights, making the checkpoint fully self-describing and
-loadable for inference without access to the original training setup.
-
+configurations and delegates to \texttt{Grid3D} internally. A saved checkpoint
+stores the full configuration alongside the learned weights, making it
+self-describing and loadable for inference without access to the original
+training setup.
 
 \section{Training Pipeline}
 \label{sec:arch-training}
@@ -854,113 +857,107 @@ The training pipeline sits above the core NCA model and provides the
 infrastructure needed to optimise the model parameters toward a target voxel
 configuration. It consists of two components: a training runner, which
 implements the training loop, and a schedule manager, which handles dynamic
-parameter changes during training. In the current implementation, the runner
-boundary is defined by an abstract \texttt{NCARunner} interface. The
-default implementation is \texttt{MorphRunner}, but the server can inject a
-custom runner backend without changing protocol or Blender code.
+parameter changes during training. The runner boundary is defined by an
+abstract \texttt{NCARunner} interface, so the server can accept a custom
+backend without any changes to the protocol or the Blender add-on.
 
-Alongside this baseline, the core package now includes a regeneration-focused
-implementation, \texttt{RegenRunner}. It applies random local damage to
-pooled states during training so recovery behaviour can be learned through the
-same server and protocol path. More channel-centric variants (for example
-metamorphogenesis with explicit task-channel switching) are kept as
+Alongside the default implementation, the core package includes a
+regeneration-focused variant, \texttt{RegenRunner}, which applies random local
+box damage to pooled states during training so the model can learn recovery
+behaviour through the same server and protocol path. More specialised variants,
+such as metamorphogenesis with explicit task-channel switching, are kept as
 notebook-level runners rather than fixed core classes.
 
 \subsection{Runner Interface and Default Implementation}
 
 The default \texttt{MorphRunner} implements pool-based training. Rather than
-restarting from a fresh seed on every iteration, it maintains a fixed-size
-pool of persistent states
-representing the grid at various stages of development. Each training iteration
-samples a batch from the pool, runs it forward for a randomly chosen number of steps,
-evaluates the result against the target, and writes the updated states back. The
-sample with the highest loss is replaced with a fresh seed, maintaining pool diversity and
-preventing convergence to a single developmental stage~\cite{Mordvintsev2020}.
+restarting from a fresh seed at every iteration, it maintains a fixed-size
+pool of persistent states covering various stages of development. Each
+training iteration samples a batch from the pool, runs it forward for a
+randomly chosen number of steps, computes the loss against the target, and
+writes the updated states back into the pool. The state with the highest loss
+is replaced by a fresh seed at each iteration, preserving diversity across
+developmental stages and preventing the pool from collapsing to a single
+end-state~\cite{Mordvintsev2020}.
 
-From the server perspective, any backend that implements
-\texttt{NCARunner.init()}, \texttt{train()}, \texttt{snapshot()},
-\texttt{set\_target()}, and \texttt{on\_event()} can be used as a drop-in
-replacement.
+Any backend that implements \texttt{NCARunner.init()}, \texttt{train()},
+\texttt{snapshot()}, \texttt{on\_event()}, and \texttt{set\_target()} serves
+as a drop-in replacement. For experimental work, this interface supports a
+notebook-first workflow: a custom runner can keep additional parameters
+hardcoded and treat \texttt{init(config, target)} primarily as a server
+handshake. Sending a minimal or dummy \texttt{config}/\texttt{target} pair
+from Blender remains valid for visualisation-only sessions, provided the
+custom runner ignores those values and emits correct snapshots. The only hard
+requirement is that \texttt{snapshot().state} uses the internal
+\texttt{[B,\,C,\,D,\,H,\,W]} format and reports a consistent
+\texttt{visible\_channels} value, so that server broadcasting and Blender
+rendering stay compatible.
 
-For experimental work, this interface supports a notebook-first workflow: a
-custom runner can keep additional experiment parameters hardcoded in notebook
-code and treat \texttt{init(config, target)} primarily as a server handshake.
-This is practical for non-standard loops, where changing notebook code is
-often faster than repeatedly extending Blender UI properties.
+Task channels are a framework-level extension intended for notebook experiments
+and custom runners, not for the default Blender add-on configuration. When
+implementing such runners, the \texttt{on\_event} method should handle all
+relevant event types explicitly to avoid protocol defaults interfering with
+specialised training logic.
 
-In this project, task channels are treated as a framework-level extension used
-in notebook experiments and custom runners, not as a default Blender add-on
-configuration option. For such experiments, the runner-level
-\texttt{on\_event} methods should be implemented explicitly to avoid
-protocol-default behaviour interfering with specialised training logic.
+The training objective combines three weighted terms. Alpha loss compares the
+predicted and target occupancy channels across the full grid. Colour loss
+compares RGB values only where the target contains alive voxels, keeping the
+colour gradient signal focused on occupied regions. Overflow loss penalises
+alpha values in regions where the target is empty, limiting unwanted growth
+outside the target boundary. All three weights can be adjusted at runtime
+through the schedule system.
 
-In this setup, sending a minimal or dummy \texttt{config}/\texttt{target}
-pair from Blender can still be valid for visualisation-only sessions, provided
-the custom runner intentionally ignores these values and emits proper
-snapshots. The key requirement is that \texttt{snapshot().state} remains in
-the expected internal format \texttt{[B, C, D, H, W]} and reports a consistent
-\texttt{visible\_channels} value so server broadcasting and Blender rendering
-remain compatible.
-
-The training objective has three weighted parts. Alpha loss compares the
-predicted and target alive channels. Colour loss compares RGB values only in
-areas where the target is present, so shape and colour are learned together.
-Overflow loss penalises activity outside the target, which helps limit
-unwanted growth. All three weights are configurable and can be changed at
-runtime through the schedule system.
-
-The number of forward steps applied per training iteration increases over
-the course of training according to a linear curriculum. Early iterations
-use short unrolls, which keep gradient paths manageable and allow the model
-to learn coarse shape quickly. Later iterations use longer unrolls, which
-test whether the learned rule maintains the target configuration over
-extended simulation horizons. Both the minimum and maximum step counts
-increase linearly over a fixed number of epochs and then stabilise at their
-final values.
+The number of forward steps per training iteration increases linearly over the
+first phase of training. Early iterations use short unrolls, keeping gradient
+paths manageable and allowing the model to learn coarse structure quickly.
+Later iterations use longer unrolls, testing whether the learned rule holds the 
+target configuration stable over longer runs. Both the minimum and maximum step 
+counts increase linearly over a fixed number of epochs and then stabilise at 
+their final values.
 
 \subsection{Schedule}
 
 The schedule component manages one-shot events that fire at specified training
-epochs. Supported events include learning rate changes, batch size adjustments,
-individual loss weight updates, and target replacements (changing the objective
-mid-session) in the default runner implementation. Events are thread-safe: the
-training loop and server message handler access them via a lock. A special
-epoch value (NOW = -1) fires an event immediately rather than waiting, allowing
-users to adjust parameters during live training without restarting.
+epochs. Supported event types in the default runner include learning rate
+changes, batch size adjustments, individual loss weight updates, and target
+replacements that swap the training objective mid-session. Events are
+thread-safe: the training loop and the server message handler share access
+through a lock. A special epoch value (\texttt{NOW}\,=\,$-1$) fires an event
+immediately on the next training step, allowing parameter adjustments during
+live training without restarting the session.
 
-At execution time, the schedule forwards each due event to the runner via
-\texttt{on\_event(event)}. The event is one-shot and removed from the queue
-after the attempt; if a custom runner does not handle a given event type,
-the event is reported as not handled.
-
+At execution time, the schedule delegates to the runner to handle events using the \texttt{on\_event} method. 
+The event is one-shot and removed from the queue regardless of the outcome. 
+If a custom runner does not handle a given event type, the attempt is logged 
+and the event is discarded.
 
 \section{Server and Networking}
 \label{sec:arch-server}
 
 The server layer exposes the training pipeline over a TCP connection. It
-consists of three main components: a connection manager, which handles
-clients and dispatches messages; a session runner, which executes training and
-inference; and a logger, which persists run metadata and artefacts to disk. A
-shared protocol module defines the message format used across the boundary
-between the server and the Blender client.
+consists of three components: \texttt{NCAServer}, which handles client
+connections and dispatches messages; \texttt{NCATrainer}, which executes
+training and inference in a background thread; and \texttt{NCALogger}, which
+persists run metadata and artefacts to disk. A shared protocol module defines
+the message format used across the boundary between the server and the Blender
+client.
 
 \subsection{Connection Architecture}
 
 The server binds to a configurable host and port and accepts one client at a
-time. For each connection, it enters a message dispatch loop: route incoming
-messages to the appropriate session operation and send responses back. When the
-client disconnects or sends stop, any active session is terminated and the server returns to
-listening. The design separates command handling from continuous state
-delivery, following the same general idea as RTSP/RTP systems,
-where session control and streamed data have different roles~\cite{RFC7826,RFC3550}.
+time. For each connection, it enters a message dispatch loop that routes
+incoming messages to the appropriate handler and sends responses back. When the
+client disconnects or sends a \texttt{stop} message, any active session is
+terminated and the server returns to listening.
 
-The session runner executes training or inference independently of socket I/O.
-This keeps protocol handling responsive and maintains clear session lifecycle
-boundaries.
+\texttt{NCATrainer} runs the training or inference loop in a background thread,
+keeping protocol handling independent of the computationally intensive session
+work. This separation maintains clear session lifecycle boundaries and keeps
+the dispatch loop responsive regardless of training load.
 
 Figure~\ref{fig:client-server-sequence} shows the full sequence of messages
-exchanged during a typical session, from connection through training,
-schedule update, pause and resume, to inference and final disconnect.
+exchanged during a typical session, from connection through training, schedule
+update, pause and resume, to inference and final disconnect.
 
 \begin{figure}[htbp]
     \centering
@@ -968,17 +965,18 @@ schedule update, pause and resume, to inference and final disconnect.
     \caption{Client-server message sequence for a complete session. The
              client drives all state transitions; the server responds with
              acknowledgements and streams state broadcasts during active
-             training or inference}
+             training or inference.}
     \label{fig:client-server-sequence}
 \end{figure}
 
-Figure~\ref{fig:protocol-fsm} shows the session state machine from the
-server perspective. A session begins when the client sends an \texttt{init}
-message for training or a \texttt{run\_model} message for inference, and
-ends when the client sends \texttt{stop} or disconnects. Training sessions
-additionally support \texttt{pause} and \texttt{resume} transitions. Inference
-does not support pause: once started, it runs until
-stopped or until the configured number of forward steps is complete.
+Figure~\ref{fig:protocol-fsm} shows the session state machine from the server
+perspective. A session begins when the client sends an \texttt{init} message
+for training or a \texttt{run\_model} message for inference, and ends when the
+client sends \texttt{stop} or disconnects. Training sessions support
+\texttt{pause} and \texttt{resume} transitions. Inference sessions run the
+background loop with the same pause mechanism, but the Blender add-on does not
+expose pause controls during inference, so in practice inference runs to
+completion or until stopped.
 
 \begin{figure}[htbp]
     \centering
@@ -986,110 +984,106 @@ stopped or until the configured number of forward steps is complete.
     \caption{Session state machine. The server transitions between
              disconnected, idle, training, paused, and inference states in
              response to client messages. All active states return to
-             disconnected if the client closes the connection}
+             disconnected if the client closes the connection.}
     \label{fig:protocol-fsm}
 \end{figure}
 
 \subsection{Protocol}
 
-Transport uses TCP, which provides an ordered, reliable byte stream but does not preserve message 
-boundaries~\cite{RFC9293}. For this reason, the protocol uses explicit framing: each message consists 
-of a fixed-size length header followed by a UTF-8 JSON payload. Binary artefacts (for example 
-state snapshots and checkpoints) are carried as encoded byte strings inside the JSON object, keeping 
-a single self-describing message format that remains readable during debugging.
+TCP provides an ordered, reliable byte stream but does not preserve message
+boundaries~\cite{RFC9293}. The protocol therefore uses explicit framing: each
+message consists of a four-byte big-endian length header followed by a UTF-8
+JSON payload. Binary data, such as state snapshots and model checkpoints, are
+base64-encoded and carried as fields within the JSON object. This keeps a
+single message format across all message types and avoids a separate binary
+framing layer.
 
-The protocol supports two communication directions. Clients send control
-messages: \texttt{init} (start training), \texttt{run\_model} (start inference),
+The protocol supports two directions. Clients send control messages:
+\texttt{init} (start training), \texttt{run\_model} (start inference),
 \texttt{stop}, \texttt{pause}, \texttt{resume}, and \texttt{update\_schedule}.
-Servers respond with \texttt{ack} confirmations or \texttt{error}. During training,
-the server streams \texttt{state} messages containing the current grid snapshot,
-epoch number, and loss value. The client drives all state transitions; the
-server only streams state and responds to requests.
-
-Although the message vocabulary is domain-specific, the interaction pattern
-follows established streaming-control designs: client-driven session
-transitions, periodic state delivery while active, and explicit
-acknowledgement or error responses to control requests~\cite{RFC7826,RFC3550}.
+The server responds with \texttt{ack} confirmations or \texttt{error} messages.
+During an active session, the server additionally streams \texttt{state}
+messages containing the current grid snapshot, epoch number, and loss value.
+The client drives all state transitions; the server streams state and responds
+to control requests.
 
 \subsection{Logging}
 
-The logger saves training metadata and results to a structured
-directory. Each training run occupies its own directory identified by an
-automatically assigned run ID, so concurrent or sequential
-runs never collide. The stored artefacts support reproducibility, analysis,
-and reuse. Metadata captures full run configuration and timing information,
-loss files and schedule-event logs record training progress, and checkpoints
-store serialised models for later use.
+The logger saves training metadata and results to a structured directory
+layout. Each training run occupies its own directory with an automatically
+assigned run ID, so concurrent or sequential runs never collide. Within a run
+directory, a metadata file records the full configuration and start timestamp,
+a CSV file records per-epoch losses, and an event log records fired schedule
+events. Model checkpoints are written at a configurable interval and a final
+checkpoint is always saved when training completes, regardless of interval
+setting.
 
-Each checkpoint stores the model configuration alongside the learned weights,
-making it self-describing: it can be loaded and used for inference without
-access to the original training configuration. The checkpoint interval is
-configurable, and a final checkpoint is always saved when training completes
-regardless of the interval setting.
+Each checkpoint stores the model configuration alongside the learned weights.
+This makes it self-describing: it can be loaded for inference without access to
+the original training setup.
 
 \section{Blender Integration}
 \label{sec:arch-blender}
 
-The Blender add-on is the primary graphical interface for the framework. 
-It is responsible for three concerns: voxelization of mesh targets, user-facing 
-configuration and control panels, and viewport visualisation of training progress.
+The Blender add-on is the primary graphical interface for the framework. It
+covers three concerns: mesh voxelization for target preparation, configuration
+and control panels, and viewport visualisation of training progress and inference.
 
 \subsection{Voxelization}
 
 The add-on converts Blender mesh objects into voxel arrays that serve as
 training targets. A mesh selected in the viewport is sampled onto a
 three-dimensional grid whose dimensions are set by the user. The voxelized
-result is displayed in the viewport alongside the original mesh so the
-user can inspect the discretization before starting training.
+result is displayed in the viewport alongside the original mesh so the user can
+inspect the discretization before starting training.
 
-Material colour information is preserved during voxelization. Each occupied
-voxel is assigned the base colour of the material covering the nearest
-surface point, so a voxelized target retains the colour properties of the
-source mesh.
+Colour information is extracted from mesh materials during voxelization. Two
+modes are available. In BSDF mode, each occupied voxel takes the base colour
+from the Principled BSDF node of the nearest material. In texture mode, the
+colour is sampled from an image texture via UV coordinates at the nearest
+surface point, which handles imported meshes with image-based materials that
+BSDF mode cannot read. The mode is configurable per session.
 
-Voxelized targets can be exported to disk for use in external training scripts
-or notebooks. This allows users who cannot or prefer not to use the Blender 
-add-on to still benefit from its voxelization capabilities.
+Voxelized targets can be exported to disk for use in external training scripts 
+or notebooks, giving users access to the voxelization pipeline without requiring 
+the full server workflow.
 
 \subsection{User Interface}
 
 The add-on provides a hierarchical panel layout in the Blender sidebar,
 organised under a single root panel. The panels cover connection settings,
-training control, target configuration, inference parameters, individual
-model component settings, and schedule management.
+training control, target configuration, inference parameters, model component
+settings, and schedule management.
 
-Connection state determines which controls are active. Configuration panels
-are disabled during an active session so that the user cannot modify settings
-that cannot be changed mid-training. Starting training requires a voxelized
-target and a connected server. Starting inference requires a connected server
-and a path to a saved model checkpoint. The two modes are mutually exclusive
-and both return the server to an idle state when stopped.
+Connection state and session state determine which controls are active.
+Configuration panels are disabled during an active session so settings that
+cannot be changed mid-training remain read-only. Starting training requires
+a voxelized target and a connected server. Starting inference requires a
+connected server and a path to a saved model checkpoint. The two modes are
+mutually exclusive and both return the server to idle when stopped.
 
 \subsection{Visualisation}
 
-State broadcasts received from the server are rendered as voxel meshes in
-the Blender viewport. The add-on maintains three spatial slots arranged side
-by side along one axis: the original source mesh, the voxelized target, and
-the current NCA state received from the server. Placing all three in the
-same scene lets the user compare the source, the discretized target, and the
-evolving model output simultaneously.
+State broadcasts received from the server are rendered as voxel meshes in the
+Blender viewport. The add-on maintains three spatial slots arranged side by
+side: the original source mesh, the voxelized target, and the current NCA state
+received from the server. Placing all three in the same scene lets the user
+compare the source, the discretized target, and the evolving model output at
+the same time.
 
-The state mesh is rebuilt from each received broadcast. A voxel cap
-prevents rendering from overwhelming the GPU when the grid contains an
-unusually large number of active cells; in that case only the
-highest-alpha voxels are retained for display.
+The state mesh is rebuilt from each received broadcast. A cap of 50,000 voxels
+prevents display from overwhelming the GPU on dense grids; when the active cell
+count exceeds this limit, only the highest-alpha voxels are retained.
 
-Before rendering, a dedicated conversion step maps received state tensors to
-the display voxel format used by Blender. Treating this as an explicit adapter
-keeps visualisation agnostic to internal experiment details and makes it
-straightforward to support alternative state layouts by changing conversion
-logic rather than rewriting protocol framing.
+Received state tensors are converted to the display format in a dedicated
+adapter step before rendering. This keeps the visualisation code independent of
+internal tensor layouts, so alternative state formats can be supported by
+updating the conversion logic rather than the rendering or protocol code.
 
-The network listener and the Blender main thread, which owns all scene data,
-run separately. The listener receives incoming states and passes them to the
-main thread, which handles all viewport updates. This keeps the listener
-responsive and ensures that scene data is only ever modified from the correct
-thread.
+The network listener and the Blender main thread run separately. The listener
+stores incoming states in a shared buffer, and a timer registered on the main
+thread drains that buffer and performs all viewport updates. This ensures scene
+data is only ever modified from the thread that owns it, which Blender requires.
 
 \chapter{Implementation}
 
