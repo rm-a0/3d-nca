@@ -693,7 +693,7 @@ directly in their own scripts or notebooks.
 
 The repository also contains lightweight notebook utilities for basic
 mesh-to-voxel conversion and offline visualisation. These were used during
-early exploration and cover only simple targets: they do not preserve Blender
+early exploration and cover only simple targets: they do not preserve mesh
 materials and do not perform per-voxel colour sampling. The Blender add-on
 replaces them for practical target preparation and interactive visualisation.
 
@@ -738,16 +738,15 @@ target, such as RGBA colour values or a single occupancy channel. An optional
 third group, task channels, allows a single model to be trained on multiple
 targets simultaneously using a one-hot encoding to identify the active target.
 Task channels remain constant throughout training: the update rule explicitly
-zeroes their contribution to the state increment, so the MLP cannot modify
-them.
+zeroes their contribution to the state increment so they cannot be modified
+by the learned dynamics.
 
 For asymmetric targets, an additional optional group of positional channels can
 be included. These channels store normalised absolute coordinates
-$(x, y, z) \in [0,1]^3$ and serve as read-only constants. They are re-injected
-after every step and their increment is likewise zeroed, providing each cell
-with a stable global spatial reference. This allows cells to distinguish, for
-example, top from bottom or left from right, which is not possible from purely
-local neighbourhood statistics alone.
+$(x, y, z) \in [0,1]^3$ and serve as read-only constants, re-injected after
+every step to provide each cell with a stable global spatial reference. This
+allows cells to distinguish, for example, top from bottom or left from right,
+which is not possible from purely local neighbourhood statistics alone.
 
 Task and positional channels are optional extensions that can be enabled per
 experiment. Baseline single-target training uses hidden and visible channels
@@ -788,36 +787,34 @@ distinguish a structure from its mirror image. Without these directional cues,
 the learned rule may converge to mirrored solutions that match occupancy
 statistics but not global orientation.
 
-Following Mordvintsev et al.~\cite{Mordvintsev2020}, keeping the filters
-fixed means the perception stage has no trainable parameters and cannot
-overfit independently. Translation invariance is built into the filter layout
-rather than learned from data. All trainable capacity resides in the update
-rule.
+Following Mordvintsev et al.~\cite{Mordvintsev2020}, keeping the filters fixed
+means the perception stage has no trainable parameters and cannot overfit
+independently. Translation invariance is built into the filter layout rather
+than learned from data. All trainable capacity resides in the update rule.
 
 \subsection{Update Rule}
 
 The update rule maps each cell's perception vector to a state increment. Its
-configuration controls the width of the underlying network and whether
+configuration controls the capacity of the underlying network and whether
 stochastic update masking is active.
 
 The increment is added residually to the current state:
 \[
     \mathbf{s}_{t+1} = \mathbf{s}_t + \Delta \mathbf{s}.
 \]
-The increment is bounded by passing the network output through
-$\tanh(\cdot) \times 0.1$, which limits the magnitude of each update. This
-prevents large state jumps when the model is unrolled over many steps and
-contributes to stable long-horizon dynamics~\cite{Mordvintsev2020}.
+A bounded output activation limits the magnitude of each per-step update,
+preventing large state jumps when the model is unrolled over many steps and
+contributing to stable long-horizon dynamics~\cite{Mordvintsev2020}.
 
-The same update network is applied independently at every cell via
-$1{\times}1{\times}1$ convolutions, preserving the locality constraint. No
-cell has a privileged role by architecture; any functional differentiation
-must emerge from local context accumulated across steps.
+The same update network is applied independently at every cell position,
+preserving the locality constraint. No cell has a privileged role by
+architecture; any functional differentiation must emerge from local context
+accumulated across steps.
 
 When stochastic masking is enabled, each step randomly selects which cells
-apply their computed increment. This avoids lockstep synchronisation
-artefacts and makes the dynamics more tolerant of asynchronous perturbations,
-as discussed in the Theoretical Foundations chapter.
+apply their computed increment. This avoids lockstep synchronisation artefacts
+and makes the dynamics more tolerant of asynchronous perturbations, as
+discussed in the Theoretical Foundations chapter.
 
 \subsection{Grid and Model Composition}
 \label{sec:arch-grid}
@@ -833,16 +830,14 @@ shows the data flow through a single step.
     \label{fig:nca-step-abstract}
 \end{figure}
 
-A single step proceeds as follows. A pre-step alive mask is computed from the
-current state. The state then passes through the perception filters, producing
-a perception vector at every cell location. The update network takes the
-perception vectors and the pre-step mask, producing a bounded state increment.
-This increment is added residually to produce a candidate new state. A
-post-step alive mask is then computed from that candidate state, and cells
-whose alpha falls below the threshold have their state zeroed out. The
-post-step mask is what allows growth: dead cells adjacent to live ones receive
-nonzero increments and, if their resulting alpha crosses the threshold, are
-retained in the new state.
+Each step passes the current state through the perception filters to produce a
+neighbourhood representation at every cell location. The update network maps
+these representations to bounded state increments, which are added residually.
+An alive mask is then computed from the updated state and applied to zero out
+any cell whose alpha falls below the threshold. This final masking step is what
+enables growth: dead cells adjacent to live ones receive nonzero increments
+and, if their resulting alpha crosses the threshold, become part of the active
+structure.
 
 \texttt{NCAModel} is a higher-level entry point that bundles all component
 configurations and delegates to \texttt{Grid3D} internally. A saved checkpoint
@@ -863,7 +858,7 @@ backend without any changes to the protocol or the Blender add-on.
 
 Alongside the default implementation, the core package includes a
 regeneration-focused variant, \texttt{RegenRunner}, which applies random local
-box damage to pooled states during training so the model can learn recovery
+damage to pooled states during training so the model can learn recovery
 behaviour through the same server and protocol path. More specialised variants,
 such as metamorphogenesis with explicit task-channel switching, are kept as
 notebook-level runners rather than fixed core classes.
@@ -880,24 +875,18 @@ is replaced by a fresh seed at each iteration, preserving diversity across
 developmental stages and preventing the pool from collapsing to a single
 end-state~\cite{Mordvintsev2020}.
 
-Any backend that implements \texttt{NCARunner.init()}, \texttt{train()},
-\texttt{snapshot()}, \texttt{on\_event()}, and \texttt{set\_target()} serves
-as a drop-in replacement. For experimental work, this interface supports a
-notebook-first workflow: a custom runner can keep additional parameters
-hardcoded and treat \texttt{init(config, target)} primarily as a server
-handshake. Sending a minimal or dummy \texttt{config}/\texttt{target} pair
-from Blender remains valid for visualisation-only sessions, provided the
-custom runner ignores those values and emits correct snapshots. The only hard
-requirement is that \texttt{snapshot().state} uses the internal
-\texttt{[B,\,C,\,D,\,H,\,W]} format and reports a consistent
-\texttt{visible\_channels} value, so that server broadcasting and Blender
-rendering stay compatible.
+Any backend that satisfies the \texttt{NCARunner} interface serves as a
+drop-in replacement. For experimental work, this supports a notebook-first
+workflow: a custom runner can keep additional parameters hardcoded and treat
+the initialisation call primarily as a server handshake. Sending a minimal
+configuration from Blender remains valid for visualisation-only sessions,
+provided the custom runner emits snapshots in the format the server expects.
 
 Task channels are a framework-level extension intended for notebook experiments
 and custom runners, not for the default Blender add-on configuration. When
-implementing such runners, the \texttt{on\_event} method should handle all
-relevant event types explicitly to avoid protocol defaults interfering with
-specialised training logic.
+implementing such runners, the event handler should cover all relevant event
+types explicitly to avoid protocol defaults interfering with specialised
+training logic.
 
 The training objective combines three weighted terms. Alpha loss compares the
 predicted and target occupancy channels across the full grid. Colour loss
@@ -910,9 +899,9 @@ through the schedule system.
 The number of forward steps per training iteration increases linearly over the
 first phase of training. Early iterations use short unrolls, keeping gradient
 paths manageable and allowing the model to learn coarse structure quickly.
-Later iterations use longer unrolls, testing whether the learned rule holds the 
-target configuration stable over longer runs. Both the minimum and maximum step 
-counts increase linearly over a fixed number of epochs and then stabilise at 
+Later iterations use longer unrolls, testing whether the learned rule holds the
+target configuration stable over longer runs. Both the minimum and maximum step
+counts increase linearly over a fixed number of epochs and then stabilise at
 their final values.
 
 \subsection{Schedule}
@@ -922,14 +911,14 @@ epochs. Supported event types in the default runner include learning rate
 changes, batch size adjustments, individual loss weight updates, and target
 replacements that swap the training objective mid-session. Events are
 thread-safe: the training loop and the server message handler share access
-through a lock. A special epoch value (\texttt{NOW}\,=\,$-1$) fires an event
-immediately on the next training step, allowing parameter adjustments during
-live training without restarting the session.
+through a lock. A special epoch value fires an event immediately on the next
+training step, allowing parameter adjustments during live training without
+restarting the session.
 
-At execution time, the schedule delegates to the runner to handle events using the \texttt{on\_event} method. 
-The event is one-shot and removed from the queue regardless of the outcome. 
-If a custom runner does not handle a given event type, the attempt is logged 
-and the event is discarded.
+At execution time, the schedule delivers each due event to the runner. The
+event is one-shot and removed from the queue regardless of outcome. If a
+custom runner does not handle a given event type, the attempt is logged and
+the event is discarded.
 
 \section{Server and Networking}
 \label{sec:arch-server}
@@ -973,9 +962,9 @@ Figure~\ref{fig:protocol-fsm} shows the session state machine from the server
 perspective. A session begins when the client sends an \texttt{init} message
 for training or a \texttt{run\_model} message for inference, and ends when the
 client sends \texttt{stop} or disconnects. Training sessions support
-\texttt{pause} and \texttt{resume} transitions. Inference sessions run the
-background loop with the same pause mechanism, but the Blender add-on does not
-expose pause controls during inference, so in practice inference runs to
+\texttt{pause} and \texttt{resume} transitions. Inference sessions share the
+same pause mechanism at the implementation level, but the Blender add-on does
+not expose pause controls during inference, so in practice inference runs to
 completion or until stopped.
 
 \begin{figure}[htbp]
@@ -992,9 +981,9 @@ completion or until stopped.
 
 TCP provides an ordered, reliable byte stream but does not preserve message
 boundaries~\cite{RFC9293}. The protocol therefore uses explicit framing: each
-message consists of a four-byte big-endian length header followed by a UTF-8
-JSON payload. Binary data, such as state snapshots and model checkpoints, are
-base64-encoded and carried as fields within the JSON object. This keeps a
+message consists of a fixed-size length header followed by a structured text
+payload. Binary data, such as state snapshots and model checkpoints, are
+encoded as byte strings and carried as fields within the payload. This keeps a
 single message format across all message types and avoids a separate binary
 framing layer.
 
@@ -1013,21 +1002,22 @@ The logger saves training metadata and results to a structured directory
 layout. Each training run occupies its own directory with an automatically
 assigned run ID, so concurrent or sequential runs never collide. Within a run
 directory, a metadata file records the full configuration and start timestamp,
-a CSV file records per-epoch losses, and an event log records fired schedule
+a loss log records per-epoch metrics, and an event log records fired schedule
 events. Model checkpoints are written at a configurable interval and a final
 checkpoint is always saved when training completes, regardless of interval
 setting.
 
-Each checkpoint stores the model configuration alongside the learned weights.
-This makes it self-describing: it can be loaded for inference without access to
-the original training setup.
+Each checkpoint stores the model configuration alongside the learned weights,
+making it self-describing: it can be loaded for inference without access to the
+original training setup.
 
 \section{Blender Integration}
 \label{sec:arch-blender}
 
 The Blender add-on is the primary graphical interface for the framework. It
 covers three concerns: mesh voxelization for target preparation, configuration
-and control panels, and viewport visualisation of training progress and inference.
+and control panels, and viewport visualisation of training progress and
+inference.
 
 \subsection{Voxelization}
 
@@ -1039,14 +1029,14 @@ inspect the discretization before starting training.
 
 Colour information is extracted from mesh materials during voxelization. Two
 modes are available. In BSDF mode, each occupied voxel takes the base colour
-from the Principled BSDF node of the nearest material. In texture mode, the
-colour is sampled from an image texture via UV coordinates at the nearest
-surface point, which handles imported meshes with image-based materials that
-BSDF mode cannot read. The mode is configurable per session.
+directly from the nearest surface material. In texture mode, the colour is
+sampled from an image texture at the nearest surface point, which handles
+imported meshes with image-based materials that BSDF mode cannot read. The
+mode is configurable per session.
 
-Voxelized targets can be exported to disk for use in external training scripts 
-or notebooks, giving users access to the voxelization pipeline without requiring 
-the full server workflow.
+Voxelized targets can be exported to disk for use in external training scripts
+or notebooks, giving users access to the voxelization pipeline without
+requiring the full server workflow.
 
 \subsection{User Interface}
 
@@ -1057,8 +1047,8 @@ settings, and schedule management.
 
 Connection state and session state determine which controls are active.
 Configuration panels are disabled during an active session so settings that
-cannot be changed mid-training remain read-only. Starting training requires
-a voxelized target and a connected server. Starting inference requires a
+cannot be changed mid-training remain read-only. Starting training requires a
+voxelized target and a connected server. Starting inference requires a
 connected server and a path to a saved model checkpoint. The two modes are
 mutually exclusive and both return the server to idle when stopped.
 
@@ -1071,9 +1061,9 @@ received from the server. Placing all three in the same scene lets the user
 compare the source, the discretized target, and the evolving model output at
 the same time.
 
-The state mesh is rebuilt from each received broadcast. A cap of 50,000 voxels
-prevents display from overwhelming the GPU on dense grids; when the active cell
-count exceeds this limit, only the highest-alpha voxels are retained.
+The state mesh is rebuilt from each received broadcast. A voxel cap prevents
+display from overwhelming the GPU on dense grids; when the active cell count
+exceeds this limit, only the highest-alpha voxels are retained.
 
 Received state tensors are converted to the display format in a dedicated
 adapter step before rendering. This keeps the visualisation code independent of
@@ -1081,9 +1071,9 @@ internal tensor layouts, so alternative state formats can be supported by
 updating the conversion logic rather than the rendering or protocol code.
 
 The network listener and the Blender main thread run separately. The listener
-stores incoming states in a shared buffer, and a timer registered on the main
-thread drains that buffer and performs all viewport updates. This ensures scene
-data is only ever modified from the thread that owns it, which Blender requires.
+passes incoming states through a shared buffer, and the main thread drains that
+buffer and performs all viewport updates. This ensures scene data is only ever
+modified from the thread that owns it.
 
 \chapter{Implementation}
 
