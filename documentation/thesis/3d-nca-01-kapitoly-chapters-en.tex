@@ -1102,22 +1102,22 @@ training scripts, the TCP server, and the Blender add-on.
 The implementation is organised into the following Python packages:
 
 \begin{itemize}
-    \item \texttt{src/core/} -- NCA model, stepping logic, and training
+    \item \path{src/core/} -- NCA model, stepping logic, and training
           utilities,
-    \item \texttt{src/server/} -- TCP server, protocol handling, and the
+    \item \path{src/server/} -- TCP server, protocol handling, and the
           training runner,
-    \item \texttt{src/io/} -- legacy import/export and mesh conversion
+    \item \path{src/io/} -- legacy import/export and mesh conversion
           utilities used in early notebooks,
-    \item \texttt{src/viz/} -- notebook visualisation helpers for offline
+    \item \path{src/viz/} -- notebook visualisation helpers for offline
           inspection,
-    \item \texttt{blender/} -- Blender add-on for voxelisation, UI, and
+    \item \path{blender/} -- Blender add-on for voxelisation, UI, and
           viewport rendering.
 \end{itemize}
 
 Voxel targets for training are prepared and exported through the add-on, which
 samples colour from Blender materials and provides a single place to adjust
-grid size and training presets. The notebook utilities in \texttt{src/io/} and
-\texttt{src/viz/} cover only simple cases and are not part of the interactive
+grid size and training presets. The notebook utilities in \path{src/io/} and
+\path{src/viz/} cover only simple cases and are not part of the interactive
 workflow.
 
 PyTorch provides tensor operations, 3D convolutions, and automatic
@@ -1134,7 +1134,8 @@ operations and avoids redundant transpositions inside the perception and update
 steps. Listing~\ref{lst:state-layout} shows the two channel slices used most
 often across the codebase.
 
-\begin{lstlisting}[style=py, caption={Common channel slices into the state tensor.}, label={lst:state-layout}]
+\begin{lstlisting}[style=py, caption={Common channel slices into the state
+tensor.}, label={lst:state-layout}]
 # state: [B, C, D, H, W]
 # V: number of visible channels (e.g. 4 for RGBA)
 visible = state[:, -V:, ...]
@@ -1149,7 +1150,8 @@ baseline configuration and can be enabled per experiment.
 
 Model hyperparameters are grouped into small configuration dataclasses.
 The four component-level configs -- \texttt{CellConfig},
-\texttt{PerceptionConfig}, \texttt{UpdateConfig}, and \texttt{GridConfig} --
+\texttt{Perception\allowbreak Config}, \texttt{Update\allowbreak Config}, and
+\texttt{Grid\allowbreak Config} --
 are frozen, so they can be passed around safely and used as serialisation
 inputs for logs and checkpoints. \texttt{NCAConfig} collects the most commonly
 adjusted parameters into a single object for use with the high-level
@@ -1240,9 +1242,7 @@ alive  = pooled > alive_threshold
 channel produce \texttt{3C} output features. In the directional configuration,
 five groups produce \texttt{5C} features by replacing the Laplacian with signed
 gradients along each axis. Weights are initialised once and remain fixed during
-training.
-
-Listing~\ref{lst:perception-kernels} shows the kernel patterns in a compact,
+training. Listing~\ref{lst:perception-kernels} shows the kernel patterns in
 conceptual form.
 
 \begin{lstlisting}[style=py, caption={Perception kernels applied per input
@@ -1346,8 +1346,7 @@ torch.save(
 
 Figure~\ref{fig:nca-step-detailed} shows the full layer sequence through a
 single update step. The diagram reflects the default three-group perception
-configuration; the directional five-group variant introduced later follows 
-the same structure.
+configuration; the directional five-group variant follows the same structure.
 
 \begin{figure}[htbp]
     \centering
@@ -1356,8 +1355,7 @@ the same structure.
              full layer sequence within the update MLP, the optional stochastic
              fire mask, and the bounded output. The diagram uses the default
              three-group perception configuration; the directional five-group
-             variant follows the same structure with additional gradient
-             filter outputs.}
+             variant follows the same structure.}
     \label{fig:nca-step-detailed}
 \end{figure}
 
@@ -1370,19 +1368,19 @@ Section~\ref{sec:arch-training}. This section focuses on the code-level
 composition and the data formats used at the training boundary.
 
 Training backends are defined by the abstract \texttt{NCARunner} interface in
-\texttt{src/core/runners/base.py}. The default implementation,
+\path{src/core/runners/base.py}. The default implementation,
 \texttt{MorphRunner}, owns the model instance (\texttt{Grid3D}), the
 optimiser, the current target tensor, and a pool of intermediate states used
 as training samples. The main entry point is the generator method
-\texttt{train()}, which provides per-epoch metrics and allows the server to
+\texttt{train()}, which yields per-epoch metrics and allows the server to
 stream progress without blocking on GPU work.
 
 The second core backend, \texttt{RegenRunner}
-(\texttt{src/core/runners/regeneration.py}), reuses the same optimisation
+(\path{src/core/runners/regeneration.py}), reuses the same optimisation
 path but injects random local box damage into pooled states before each
 update, enabling regeneration experiments without changes to the server or
 protocol. The damage behaviour is controlled by
-\texttt{training.regen\_damage\_prob} and \texttt{training.regen\_damage\_size}.
+\path{training.regen_damage_prob} and \path{training.regen_damage_size}.
 
 Runner initialisation accepts voxel targets in the channels-last format
 \texttt{[D,\,H,\,W,\,C]}, which is convenient for Blender and for protocol
@@ -1404,15 +1402,13 @@ rather than always restarting from a clean seed, which exposes the model to
 different partial solutions and stabilises long-horizon behaviour. The step
 count per epoch is drawn randomly from a range that widens over training:
 early epochs use short unrolls to learn coarse structure, while later epochs
-use longer ones. Both mechanisms are covered in
-Section~\ref{sec:arch-training}.
+use longer ones. Both mechanisms are covered in Section~\ref{sec:arch-training}.
 
 Visible channels are supervised directly against the target; hidden channels
-remain unsupervised. The total loss is a weighted sum of three terms: an
-alpha occupancy term, an RGB colour term (when colour channels are present),
-and an overflow penalty that discourages activity outside the intended volume.
-Listing~\ref{lst:runner-epoch} summarises one epoch at the level relevant for
-understanding the training behaviour.
+remain unsupervised. The total loss is a weighted sum of three terms: an alpha
+occupancy term, an RGB colour term (when colour channels are present), and an
+overflow penalty that discourages activity outside the intended volume.
+Listing~\ref{lst:runner-epoch} summarises one training epoch.
 
 \begin{lstlisting}[style=py, caption={One training epoch in the pool-based
 runner (pseudocode).}, label={lst:runner-epoch}]
@@ -1421,8 +1417,8 @@ steps = randint(step_min(epoch), step_max(epoch))
 
 pred = model(batch, steps=steps)
 loss = (
-    w_alpha    * loss_alpha(pred, target)
-    + w_color  * loss_color(pred, target)
+    w_alpha      * loss_alpha(pred, target)
+    + w_color    * loss_color(pred, target)
     + w_overflow * loss_overflow(pred)
 )
 
@@ -1476,14 +1472,14 @@ grid_cfg = GridConfig(**config["grid"])
 \end{lstlisting}
 
 \texttt{NCAServer} handles the TCP socket lifecycle and dispatches incoming
-messages. Computationaly heavy work is delegated to \texttt{NCATrainer}, which runs in a
-background thread and exposes a control API: \texttt{pause}, \texttt{resume},
-\texttt{stop}, and \texttt{update\_schedule}. During training, the trainer
-drives the selected \texttt{NCARunner.train()} generator and broadcasts state
-snapshots to the client with rate limiting, keeping viewport updates smooth
-when the training loop runs faster than the network link. During inference,
-the trainer loads a checkpoint from raw bytes and runs forward steps without
-gradient checkpointing.
+messages. Computationally intensive work is delegated to \texttt{NCATrainer},
+which runs in a background thread and exposes a control API: \texttt{pause},
+\texttt{resume}, \texttt{stop}, and \texttt{update\_schedule}. During
+training, the trainer drives the selected \texttt{NCARunner.train()} generator
+and broadcasts state snapshots to the client with rate limiting, keeping
+viewport updates smooth when the training loop runs faster than the network
+link. During inference, the trainer loads a checkpoint from raw bytes and runs
+forward steps without gradient checkpointing.
 
 Listing~\ref{lst:server-dispatch} shows the message dispatch loop in
 simplified form.
@@ -1541,8 +1537,8 @@ class NotebookRunner(NCARunner):
         self.base.init(config, target)
     def train(self, schedule=None):
         yield from self.base.train(schedule=schedule)
-    def snapshot(self):    return self.base.snapshot()
-    def set_target(self, t): self.base.set_target(t)
+    def snapshot(self):      return self.base.snapshot()
+    def set_target(self, t): return self.base.set_target(t)
     def on_event(self, ev):  return self.base.on_event(ev)
 
 trainer = NCATrainer(runner_factory=NotebookRunner, verbose=False)
@@ -1586,7 +1582,8 @@ message types.
         \hline
         \textbf{Field} & \textbf{Value}\\
         \hline
-        Header  & 4 bytes; \texttt{uint32} (big-endian); $N$ (payload length)\\
+        Header  & 4 bytes; \texttt{uint32} (big-endian); $N$ (payload
+                  length)\\
         Payload & $N$ bytes; UTF-8 JSON object (\texttt{type} + message
                   fields)\\
         \hline
@@ -1613,7 +1610,8 @@ message types.
         \texttt{resume} & \texttt{type}\\
         \hline
         \multicolumn{2}{l}{\textit{Server $\rightarrow$ Client}}\\
-        \texttt{state} & \texttt{type, data (base64), shape[], epoch, loss}\\
+        \texttt{state} & \texttt{type, data (base64), shape[], epoch,
+                          loss}\\
         \texttt{ack}   & \texttt{type, message}\\
         \texttt{error} & \texttt{type, message}\\
         \hline
@@ -1626,17 +1624,17 @@ message types.
 
 The role of logging and stored artefacts is described in
 Section~\ref{sec:arch-server}. In the implementation, run outputs are written
-by \texttt{NCALogger} (\texttt{src/server/logger.py}). Each training run
-claims the next available \texttt{runs/run\_NNN/} directory and writes the
+by \texttt{NCALogger} (\path{src/server/logger.py}). Each training run
+claims the next available \path{runs/run_NNN/} directory and writes the
 following files:
 
 \begin{itemize}
-    \item \texttt{meta.json} --- configuration snapshot, timestamp, and
+    \item \texttt{meta.json} -- configuration snapshot, timestamp, and
           optional git hash,
-    \item \texttt{loss.csv} --- per-epoch loss components,
-    \item \texttt{events.jsonl} --- applied schedule events, one JSON record
+    \item \texttt{loss.csv} -- per-epoch loss components,
+    \item \texttt{events.jsonl} -- applied schedule events, one JSON record
           per line,
-    \item \texttt{checkpoints/} --- periodic \texttt{.pt} checkpoints, each
+        \item \path{checkpoints/} -- periodic \texttt{.pt} checkpoints, each
           containing \texttt{config} and \texttt{state\_dict}.
 \end{itemize}
 
@@ -1664,7 +1662,7 @@ The add-on architecture is described in Section~\ref{sec:arch-blender}. This
 section covers the implementation structure and the threading pattern required
 for interactive visualisation.
 
-The add-on is implemented in the self-contained \texttt{blender/} package 
+The add-on is implemented in the self-contained \path{blender/} package 
 following the standard Blender add-on structure. UI properties are
 stored in scene-level property groups and exposed through sidebar panels.
 Actions are implemented as Blender operators that connect to the server and
@@ -1703,7 +1701,7 @@ suite is intentionally small and focuses on core tensor invariants, runner and
 trainer API behaviour, and client/server command flow rather than comprehensive
 coverage.
 
-Automated tests are implemented using \texttt{pytest} in the \texttt{tests/} directory:
+Automated tests are implemented using \texttt{pytest} in the \path{tests/} directory:
 \begin{itemize}
     \item\texttt{test\_core.py} Unit tests for the core model components. The suite verifies the
     alive-mask computation in \texttt{CellState}, the fixed perception kernels and frozen weights in
@@ -1736,7 +1734,7 @@ and the server, inspect the framed JSON messages on the wire, and validate
 message framing and broadcast cadence during interactive sessions.
 
 During early development, Jupyter notebooks were used as an exploratory testbed for the core model
-and training behaviour. These notebooks rely on the lightweight \texttt{src/viz/} and \texttt{src/io/}
+and training behaviour. These notebooks rely on the lightweight \path{src/viz/} and \path{src/io/}
 helpers, which is the primary reason these modules exist despite not being part of the main
 core--server--Blender workflow.
 Each notebook focuses on a different aspect:
@@ -2135,7 +2133,7 @@ Analytic targets were chosen to validate task conditioning without any confoundi
 effects from mesh voxelisation.
 This run was executed on Kaggle and took 4 hours and 1 minute.
 A reproducible notebook version is available in
-\texttt{notebooks/kaggle\_run\_moprh.ipynb}.
+\path{notebooks/kaggle_run_moprh.ipynb}.
  
 \begin{figure}[!htbp]
     \centering
@@ -2203,7 +2201,7 @@ This run used the same hyperparameters as the synthetic curriculum
 (Table~\ref{tab:exp-meta-overview}, Creature R1) and was executed on a Kaggle
 notebook with a T4 GPU.
 Runtime was 4 hours and 1 minute.
-The run notebook is \texttt{notebooks/kaggle\_run\_creature.ipynb}.
+The run notebook is \path{notebooks/kaggle_run_creature.ipynb}.
  
 \begin{figure}[!htbp]
     \centering
@@ -2299,7 +2297,7 @@ The schedule events are listed in Table~\ref{tab:exp-meta-r2-schedule}.
     \label{tab:exp-meta-r2-schedule}
 \end{table}
 
-The run notebook is \texttt{notebooks/kaggle\_run\_creature\_final.ipynb}.
+The run notebook is \path{notebooks/kaggle_run_creature_final.ipynb}.
  
 Round 2 ran for 8 hours and 46 minutes on a Kaggle T4 GPU.
  
@@ -2332,7 +2330,7 @@ The schedule events are listed in Table~\ref{tab:exp-meta-r3-schedule}.
     \label{tab:exp-meta-r3-schedule}
 \end{table}
 
-The run notebook is \texttt{notebooks/kaggle\_run\_creature\_final.ipynb}.
+The run notebook is \path{notebooks/kaggle_run_creature_final.ipynb}.
  
 Round 3 ran for 11 hours and 43 minutes on a Kaggle T4 GPU.
  
