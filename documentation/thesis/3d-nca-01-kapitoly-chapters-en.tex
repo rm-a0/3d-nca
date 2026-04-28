@@ -19,7 +19,7 @@ practical applications in volumetric modelling and procedural content generation
 Prior work has confirmed that three-dimensional growth of this kind is achievable.
 What it has not produced is usable tooling. Existing implementations are mostly 
 standalone training scripts with no live visualisation, no way of interacting 
-with the model during training, and no practical path from a real mesh to a ready-to-use 
+with the model during training and no practical path from a real mesh to a ready-to-use 
 coloured voxel dataset. A researcher wanting to try a new target or a different model 
 configuration ends up piecing together separate tools with no shared infrastructure 
 between them.
@@ -65,7 +65,7 @@ of a Blender add-on for mesh voxelisation and live viewport rendering, a TCP ser
 that exposes any training backend over a local or tunnelled connection and a
 standalone Python core package usable in Jupyter notebooks without Blender. The
 framework is validated through morphogenesis experiments on symmetric and asymmetric
-targets, and through multi-target metamorphogenesis, where a single model grows and
+targets and through multi-target metamorphogenesis, where a single model grows and
 transitions between distinct voxel shapes conditioned on task channels. The primary
 contributions are the modular framework itself, in which implementing a new experiment
 requires subclassing one abstract class with no changes to the server, protocol,
@@ -146,11 +146,11 @@ is the most common choice. With binary states and a Moore neighbourhood, the upd
 rule must handle $2^9 = 512$ possible input configurations. Because the full lookup
 table is large, 2D rules are typically expressed using birth/survival notation. A rule
 written as B$n$/S$m$ specifies that a dead cell becomes alive (is ``born'') when it
-has exactly $n$ live neighbours, and a living cell survives when it has exactly $m$
+has exactly $n$ live neighbours and a living cell survives when it has exactly $m$
 live neighbours. All other cells die or remain dead.
 
 Conway's Game of Life~\cite{Gardner1970} uses the rule B3/S23: a dead cell becomes
-alive with exactly three live neighbours, and a living cell survives with two or
+alive with exactly three live neighbours and a living cell survives with two or
 three. Despite this simplicity, Life produces a wide variety of emergent structures:
 stable \textbf{still lifes} such as the block and beehive; \textbf{oscillators} such
 as the blinker and toad, which cycle through a fixed sequence of states;
@@ -202,7 +202,7 @@ reaction-diffusion model of morphogenesis describes how spatial patterns arise f
 the interaction of locally diffusing chemical substances. Turing's model uses partial
 differential equations rather than a discrete lattice, but the underlying principle --
 local interactions producing global spatial structure -- is shared with cellular
-automata, and it has since motivated much of the work on continuous and neural CA.
+automata and it has since motivated much of the work on continuous and neural CA.
 
 \textbf{SmoothLife}~\cite{Rafler2011} generalises Conway's Game of Life to continuous
 space and time. It replaces the discrete neighbour count with continuous averaging
@@ -399,7 +399,7 @@ The primary practical challenge of 3D grids is cubic memory scaling. A grid of s
 $N^3$ with $C$ channels per cell stored at 32-bit precision requires
 $N^3 \times C \times 4$ bytes per state. For a $32^3$ grid with 20 channels this is
 approximately 2.5~MB; during training, multiple states are held simultaneously for
-batching and pool-based sampling, and gradient storage adds further overhead.
+batching and pool-based sampling and gradient storage adds further overhead.
 
 Sparse data structures address this at larger scales. Sparse Voxel
 Octrees~\cite{Laine2010} store only occupied regions in a hierarchical tree.
@@ -675,12 +675,12 @@ as the accompanying experiment notebooks demonstrate.
 The second layer is the \textbf{server}, which exposes the core framework over
 a TCP connection. A running server accepts a single client connection, receives
 training configuration and target data, delegates execution to the core
-training pipeline, and streams state snapshots back to the client as training
+training pipeline and streams state snapshots back to the client as training
 progresses.
 
 The third layer is the \textbf{Blender add-on}, which acts as the graphical
 interface and TCP client. It connects to the server, provides a panel-based
-interface for configuring and controlling training sessions, and renders
+interface for configuring and controlling training sessions and renders
 incoming state broadcasts as three-dimensional voxel meshes in the Blender
 viewport.
 
@@ -851,7 +851,7 @@ training setup.
 The training pipeline sits above the core NCA model and provides the
 infrastructure needed to optimise the model parameters toward a target voxel
 configuration. It consists of two components: a training runner, which
-implements the training loop, and a schedule manager, which handles dynamic
+implements the training loop and a schedule manager, which handles dynamic
 parameter changes during training. The runner boundary is defined by an
 abstract \texttt{NCARunner} interface, so the server can accept a custom
 backend without any changes to the protocol or the Blender add-on.
@@ -908,7 +908,7 @@ their final values.
 
 The schedule component manages one-shot events that fire at specified training
 epochs. Supported event types in the default runner include learning rate
-changes, batch size adjustments, individual loss weight updates, and target
+changes, batch size adjustments, individual loss weight updates and target
 replacements that swap the training objective mid-session. Events are
 thread-safe: the training loop and the server message handler share access
 through a lock. A special epoch value fires an event immediately on the next
@@ -960,7 +960,7 @@ update, pause and resume, to inference and final disconnect.
 
 Figure~\ref{fig:protocol-fsm} shows the session state machine from the server
 perspective. A session begins when the client sends an \texttt{init} message
-for training or a \texttt{run\_model} message for inference, and ends when the
+for training or a \texttt{run\_model} message for inference and ends when the
 client sends \texttt{stop} or disconnects. Training sessions support
 \texttt{pause} and \texttt{resume} transitions. Inference sessions share the
 same pause mechanism at the implementation level, but the Blender add-on does
@@ -971,7 +971,7 @@ completion or until stopped.
     \centering
     \includegraphics[width=0.85\textwidth]{obrazky-figures/fig-protocol-fsm.png}
     \caption{Session state machine. The server transitions between
-             disconnected, idle, training, paused, and inference states in
+             disconnected, idle, training, paused and inference states in
              response to client messages. All active states return to
              disconnected if the client closes the connection.}
     \label{fig:protocol-fsm}
@@ -989,10 +989,10 @@ framing layer.
 
 The protocol supports two directions. Clients send control messages:
 \texttt{init} (start training), \texttt{run\_model} (start inference),
-\texttt{stop}, \texttt{pause}, \texttt{resume}, and \texttt{update\_schedule}.
+\texttt{stop}, \texttt{pause}, \texttt{resume} and \texttt{update\_schedule}.
 The server responds with \texttt{ack} confirmations or \texttt{error} messages.
 During an active session, the server additionally streams \texttt{state}
-messages containing the current grid snapshot, epoch number, and loss value.
+messages containing the current grid snapshot, epoch number and loss value.
 The client drives all state transitions; the server streams state and responds
 to control requests.
 
@@ -1002,7 +1002,7 @@ The logger saves training metadata and results to a structured directory
 layout. Each training run occupies its own directory with an automatically
 assigned run ID, so concurrent or sequential runs never collide. Within a run
 directory, a metadata file records the full configuration and start timestamp,
-a loss log records per-epoch metrics, and an event log records fired schedule
+a loss log records per-epoch metrics and an event log records fired schedule
 events. Model checkpoints are written at a configurable interval and a final
 checkpoint is always saved when training completes, regardless of interval
 setting.
@@ -1016,7 +1016,7 @@ original training setup.
 
 The Blender add-on is the primary graphical interface for the framework. It
 covers three concerns: mesh voxelization for target preparation, configuration
-and control panels, and viewport visualisation of training progress and
+and control panels and viewport visualisation of training progress and
 inference.
 
 \subsection{Voxelization}
@@ -1043,7 +1043,7 @@ requiring the full server workflow.
 The add-on provides a hierarchical panel layout in the Blender sidebar,
 organised under a single root panel. The panels cover connection settings,
 training control, target configuration, inference parameters, model component
-settings, and schedule management.
+settings and schedule management.
 
 Connection state and session state determine which controls are active.
 Configuration panels are disabled during an active session so settings that
@@ -1056,7 +1056,7 @@ mutually exclusive and both return the server to idle when stopped.
 
 State broadcasts received from the server are rendered as voxel meshes in the
 Blender viewport. The add-on maintains three spatial slots arranged side by
-side: the original source mesh, the voxelized target, and the current NCA state
+side: the original source mesh, the voxelized target and the current NCA state
 received from the server. Placing all three in the same scene lets the user
 compare the source, the discretized target and the evolving model output at
 the same time.
@@ -1071,7 +1071,7 @@ internal tensor layouts, so alternative state formats can be supported by
 updating the conversion logic rather than the rendering or protocol code.
 
 The network listener and the Blender main thread run separately. The listener
-passes incoming states through a shared buffer, and the main thread drains that
+passes incoming states through a shared buffer and the main thread drains that
 buffer and performs all viewport updates. This ensures scene data is only ever
 modified from the thread that owns it.
 
@@ -1166,7 +1166,7 @@ Sections~\ref{sec:impl-training} and~\ref{sec:impl-server}.
 
 The architectural roles of the NCA components are described in
 Section~\ref{sec:arch-core-model}. This section focuses on how that design
-maps to Python modules, configuration objects, and entry points.
+maps to Python modules, configuration objects and entry points.
 
 The NCA model follows the standard two-stage structure: a fixed perception
 operator extracts local features and a learned update rule predicts a
@@ -1222,7 +1222,7 @@ model = NCAModel(
 \subsection{CellState}
 
 The per-voxel state vector layout follows Figure~\ref{fig:cell-state-vector}.
-\texttt{CellConfig} specifies the channel counts, and
+\texttt{CellConfig} specifies the channel counts and
 \texttt{CellState.update\_alive\_mask()} computes the boolean alive mask used
 to gate updates. A voxel is considered alive if the maximum alpha value in its
 $3{\times}3{\times}3$ neighbourhood exceeds \texttt{alive\_threshold}.
@@ -1293,7 +1293,7 @@ learned update.
 
 \subsection{Grid3D}
 
-\texttt{Grid3D} composes \texttt{CellState}, \texttt{Perception3D}, and
+\texttt{Grid3D} composes \texttt{CellState}, \texttt{Perception3D} and
 \texttt{UpdateRule} into a complete simulator. Each step applies a residual
 update and then masks out voxels that fall below the alive threshold.
 Listing~\ref{lst:grid-step} summarises the logic.
@@ -1319,7 +1319,7 @@ the cost of recomputation during backpropagation.
 
 \texttt{Grid3D} also provides \texttt{seed\_center()}, which creates an
 initial state with a single active voxel at the lattice centre. Visible
-channels are initialised to random colour values with alpha set to 1.0, and
+channels are initialised to random colour values with alpha set to 1.0 and
 hidden channels start at zero. When positional channels are enabled, they are
 filled with normalised coordinate values across the full grid and re-injected
 after each step.
@@ -1353,7 +1353,7 @@ configuration; the directional five-group variant follows the same structure.
     \includegraphics[width=\textwidth]{obrazky-figures/fig-nca-step-detailed.png}
     \caption{Detailed data flow through a single NCA update step, showing the
              full layer sequence within the update MLP, the optional stochastic
-             fire mask, and the bounded output. The diagram uses the default
+             fire mask and the bounded output. The diagram uses the default
              three-group perception configuration; the directional five-group
              variant follows the same structure.}
     \label{fig:nca-step-detailed}
@@ -1362,7 +1362,7 @@ configuration; the directional five-group variant follows the same structure.
 \section{Training Pipeline}
 \label{sec:impl-training}
 
-The conceptual structure of pool-based training, curriculum stepping, and
+The conceptual structure of pool-based training, curriculum stepping and
 schedule-driven parameter updates is described in
 Section~\ref{sec:arch-training}. This section focuses on the code-level
 composition and the data formats used at the training boundary.
@@ -1370,7 +1370,7 @@ composition and the data formats used at the training boundary.
 Training backends are defined by the abstract \texttt{NCARunner} interface.
 The interface is defined in \path{src/core/runners/base.py}. The default implementation,
 \texttt{MorphRunner}, owns the model instance (\texttt{Grid3D}), the
-optimiser, the current target tensor, and a pool of intermediate states used
+optimiser, the current target tensor and a pool of intermediate states used
 as training samples. The main entry point is the generator method
 \texttt{train()}, which yields per-epoch metrics and allows the server to
 stream progress without blocking on GPU work.
@@ -1406,7 +1406,7 @@ use longer ones. Both mechanisms are covered in Section~\ref{sec:arch-training}.
 
 Visible channels are supervised directly against the target; hidden channels
 remain unsupervised. The total loss is a weighted sum of three terms: an alpha
-occupancy term, an RGB colour term (when colour channels are present), and an
+occupancy term, an RGB colour term (when colour channels are present) and an
 overflow penalty that discourages activity outside the intended volume.
 Listing~\ref{lst:runner-epoch} summarises one training epoch.
 
@@ -1430,7 +1430,7 @@ pool.update(batch, pred)
 Task channels are available at the model level but are not used by either core
 runner. The notebook-level metamorphogenesis experiment demonstrates them via
 a custom runner that manipulates channel slices before broadcasting snapshots.
-Schedule events -- learning rate, batch size, loss weights, and target
+Schedule events -- learning rate, batch size, loss weights and target
 changes -- are applied through the thread-safe \texttt{Schedule} class.
 
 \section{Server}
@@ -1445,7 +1445,7 @@ the TCP server and the background training thread.
 Training sessions start with an \texttt{init} message that carries a
 configuration dictionary and the voxel target.
 Listing~\ref{lst:config-structure} shows the top-level structure exchanged
-between Blender, the server, and the core runner.
+between Blender, the server and the core runner.
 
 \begin{lstlisting}[style=py, caption={Top-level configuration structure
 exchanged between Blender and the training server.},
@@ -1474,7 +1474,7 @@ grid_cfg = GridConfig(**config["grid"])
 \texttt{NCAServer} handles the TCP socket lifecycle and dispatches incoming
 messages. Computationally intensive work is delegated to \texttt{NCATrainer},
 which runs in a background thread and exposes a control API: \texttt{pause},
-\texttt{resume}, \texttt{stop}, and \texttt{update\_schedule}. During
+\texttt{resume}, \texttt{stop} and \texttt{update\_schedule}. During
 training, the trainer drives the selected \texttt{NCARunner.train()} generator
 and broadcasts state snapshots to the client with rate limiting, keeping
 viewport updates smooth when the training loop runs faster than the network
@@ -1629,7 +1629,7 @@ claims the next available \path{runs/run_NNN/} directory and writes the
 following files:
 
 \begin{itemize}
-    \item \texttt{meta.json} -- configuration snapshot, timestamp, and
+    \item \texttt{meta.json} -- configuration snapshot, timestamp and
           optional git hash,
     \item \texttt{loss.csv} -- per-epoch loss components,
     \item \texttt{events.jsonl} -- applied schedule events, one JSON record
@@ -1698,7 +1698,7 @@ def poll_state():
 Testing combined lightweight automated checks with exploratory evaluation in
 notebooks and interactive end-to-end runs through Blender. The automated test
 suite is intentionally small and focuses on core tensor invariants, runner and
-trainer API behaviour, and client/server command flow rather than comprehensive
+trainer API behaviour and client/server command flow rather than comprehensive
 coverage.
 
 Automated tests are implemented using \texttt{pytest} in the \path{tests/} directory:
@@ -1706,7 +1706,7 @@ Automated tests are implemented using \texttt{pytest} in the \path{tests/} direc
     \item\texttt{test\_core.py} Unit tests for the core model components. The suite verifies the
     alive-mask computation in \texttt{CellState}, the fixed perception kernels and frozen weights in
     \texttt{Perception3D}, basic invariants of \texttt{UpdateRule} (zero-initialised final layer and
-    masking of task-channel increments), and seed initialisation in \texttt{Grid3D} including the
+    masking of task-channel increments) and seed initialisation in \texttt{Grid3D} including the
     optional task-channel one-hot slice. It also checks configuration and checkpoint
     round-trips for \texttt{NCAModel}.
 
@@ -1719,7 +1719,7 @@ Automated tests are implemented using \texttt{pytest} in the \path{tests/} direc
     \texttt{MorphRunner} and \texttt{RegenRunner}: initialisation,
     one-epoch training metrics, snapshot
     contract, event handling through \texttt{on\_event()}, abstract-interface
-    compliance, and input-shape validation.
+    compliance and input-shape validation.
 
     \item\texttt{test\_server\_client.py} Integration-style checks for server--client interaction
     at the API boundary. The Blender client is exercised with a fake socket and monkeypatched send
@@ -1730,7 +1730,7 @@ Automated tests are implemented using \texttt{pytest} in the \path{tests/} direc
 
 Automated tests are complemented by practical protocol verification using
 Wireshark. This was used to monitor the TCP traffic between the Blender client
-and the server, inspect the framed JSON messages on the wire, and validate
+and the server, inspect the framed JSON messages on the wire and validate
 message framing and broadcast cadence during interactive sessions.
 
 During early development, Jupyter notebooks were used as an exploratory testbed for the core model
@@ -1750,7 +1750,7 @@ Each notebook focuses on a different aspect:
 \end{itemize}
 
 After the Blender add-on was implemented, it became the primary environment for end-to-end testing
-and qualitative observation of training dynamics, target voxelisation, protocol responsiveness, and
+and qualitative observation of training dynamics, target voxelisation, protocol responsiveness and
 viewport rendering. The resulting experiments and observations are discussed in the next chapter.
 
 \chapter{Experiments}
@@ -1814,9 +1814,9 @@ Before integrating the full client--server workflow, early exploratory runs were
 done in notebooks.
 The notebooks \texttt{01\_basic\_functionality.ipynb},
 \texttt{02\_sphere\_training\_alpha.ipynb},
-\texttt{03\_donut\_training\_alpha.ipynb}, and
+\texttt{03\_donut\_training\_alpha.ipynb} and
 \texttt{04\_donut\_training\_rgba.ipynb} were used to validate core stepping,
-loss behaviour, and basic target reconstruction.
+loss behaviour and basic target reconstruction.
  
 These runs were intentionally lightweight and focused on debugging and fast
 iteration.
@@ -1866,7 +1866,7 @@ used in remote Colab sessions visualised from Blender through ngrok tunnelling.
  
 Figure~\ref{fig:exp-morph-sym-target} shows the supervised target for RGBA
 reconstruction.
-The alpha channel acts as the alive signal, and the RGB loss is masked by the
+The alpha channel acts as the alive signal and the RGB loss is masked by the
 target alpha so only voxels above the alive threshold contribute to colour error.
  
 \begin{figure}[htbp]
@@ -1933,7 +1933,7 @@ signed cue for global orientation.
 To resolve this, two extensions were introduced:
 \begin{itemize}
     \item \texttt{perception.channel\_groups = 5}, enabling directional gradients
-          along $x$, $y$, and $z$,
+          along $x$, $y$ and $z$,
     \item \texttt{pos\_channels = 3}, injecting normalised absolute coordinates
           as read-only channels.
 \end{itemize}
@@ -2031,7 +2031,7 @@ attractors conditioned by a latent code and demonstrates recovery from significa
 damage.
 While their conditioning mechanism is continuous and probabilistic, the core
 observation is aligned with the goal of this section: a single local update rule
-can encode multiple behaviours, and the selected behaviour can be controlled
+can encode multiple behaviours and the selected behaviour can be controlled
 through additional channels.
  
 In this thesis, \textit{metamorphogenesis} is used as a compound term formed from
@@ -2045,19 +2045,19 @@ seed-to-target mapping to guided stage-to-stage development.
 Instead of learning only ``cell state $\rightarrow$ one final target'', the model
 is trained to follow a sequence of developmental stages under explicit guidance.
 This is closer to biological development in organisms that pass through distinct
-life stages (e.g., larva $\rightarrow$ pupa $\rightarrow$ adult), and it makes
+life stages (e.g., larva $\rightarrow$ pupa $\rightarrow$ adult) and it makes
 generated transitions visually and structurally more plausible.
  
 While this thesis was being written, Sakour~\cite{Sakour2025} published a related
 approach to conditional morphogenesis in neural cellular automata.
 That work reduced the novelty of the conditioning idea itself, but the
 implementation here remains a practical 3D contribution focused on framework
-extensibility, integration workflow, and reproducible experiments.
+extensibility, integration workflow and reproducible experiments.
  
 \textbf{Training algorithm.}
 The key idea behind metamorphogenesis training is a shared replay pool that holds
 states from all active tasks simultaneously.
-Each training batch is sampled uniformly from the pool, and each element is
+Each training batch is sampled uniformly from the pool and each element is
 supervised against the target corresponding to its stored task ID.
 At phase boundaries, the pool is \textit{expanded}: a subset of the
 best-converged predecessor states (lowest MSE against the predecessor target)
@@ -2124,7 +2124,7 @@ a phased training schedule:
           \texorpdfstring{$\rightarrow$}{->} sphere.
 \end{itemize}
  
-The model used \texttt{task\_channels = 3}, \texttt{pos\_channels = 3}, and
+The model used \texttt{task\_channels = 3}, \texttt{pos\_channels = 3} and
 \texttt{perception.channel\_groups = 5}.
 Pool expansion and relabeling were applied at phase boundaries so each new task
 saw realistic morphing inputs rather than fresh seeds.
@@ -2139,7 +2139,7 @@ A reproducible notebook version is available in
     \centering
     \includegraphics[width=\textwidth]{obrazky-figures/fig-exp-meta-basic-targets.png}
     \caption{Synthetic targets used in the metamorphogenesis proof-of-concept:
-             tetrahedron, cube, and sphere.}
+             tetrahedron, cube and sphere.}
     \label{fig:exp-meta-basic-targets}
 \end{figure}
  
@@ -2153,7 +2153,7 @@ A reproducible notebook version is available in
  
 The main trend visible in Figure~\ref{fig:exp-meta-basic-loss} is that each new
 phase causes an immediate loss increase followed by gradual re-convergence.
-This confirms that one model can be conditioned to switch behaviour, and also shows
+This confirms that one model can be conditioned to switch behaviour and also shows
 that each new task introduces a temporary stability cost.
 Within each phase the loss curve falls steeply before levelling off, following
 the same pattern seen in single-target morphogenesis.
@@ -2195,7 +2195,7 @@ more complex three-object sequence exported from Blender:
 Creature~1 \texorpdfstring{$\rightarrow$}{->}
 Creature~2 \texorpdfstring{$\rightarrow$}{->} Creature~3.
 The three targets are Pokemon-inspired character models
-(Charmander, Charmeleon, and Charizard) voxelised to the same $32^3$ grid.
+(Charmander, Charmeleon and Charizard) voxelised to the same $32^3$ grid.
  
 This run used the same hyperparameters as the synthetic curriculum
 (Table~\ref{tab:exp-meta-overview}, Creature R1) and was executed on a Kaggle
@@ -2212,7 +2212,7 @@ The run notebook is \path{notebooks/kaggle_run_creature.ipynb}.
 \end{figure}
  
 Compared to the synthetic targets, the creature models contain thinner limbs,
-asymmetric silhouettes, and stronger colour discontinuities
+asymmetric silhouettes and stronger colour discontinuities
 (Figure~\ref{fig:exp-meta-creature-targets}).
 These properties make them more sensitive to stability issues during training and
 inference.
@@ -2248,7 +2248,7 @@ In particular, colour accuracy in the late-phase targets was worse than expected
 and some limb voxels were unstable during inference.
  
 These observations led directly to two changes tested in Rounds 2 and 3: a higher
-MLP capacity (\texttt{update.hidden\_dim = 128}), a larger pool, and explicit
+MLP capacity (\texttt{update.hidden\_dim = 128}), a larger pool and explicit
 per-phase weight and learning-rate events.
  
 \clearpage
@@ -2273,7 +2273,7 @@ colour and overflow weighting relative to Round 1 -- based on the observation th
 the colour loss plateau was the main failure mode in Round 1.
  
 \textbf{Round 2 (12k epochs).}
-Phase lengths are 2000, 5000, and 5000 epochs (boundaries at epochs 2001 and 7001).
+Phase lengths are 2000, 5000 and 5000 epochs (boundaries at epochs 2001 and 7001).
 The schedule events are listed in Table~\ref{tab:exp-meta-r2-schedule}.
  
 \begin{table}[htbp]
@@ -2302,7 +2302,7 @@ The run notebook is \path{notebooks/kaggle_run_creature_final.ipynb}.
 Round 2 ran for 8 hours and 46 minutes on a Kaggle T4 GPU.
  
 \textbf{Round 3 (19.5k epochs).}
-Phase lengths are 1500, 6000, and 12000 epochs (boundaries at epochs 1501 and 7501).
+Phase lengths are 1500, 6000 and 12000 epochs (boundaries at epochs 1501 and 7501).
 Extending phase 2 and especially phase 3 was the primary change from Round 2,
 motivated by the observation that the final-phase colour loss had not fully
 converged within Round 2's 5000-epoch phase 3.
@@ -2394,7 +2394,7 @@ part to reconstruct at the $32^3$ grid resolution.
  
 Figure~\ref{fig:exp-meta-creature-progression-r3} shows the inference trajectory
 for Round 3.
-The model transitions continuously between creatures without re-seeding, and the
+The model transitions continuously between creatures without re-seeding and the
 intermediate states show a gradual morphological change rather than an abrupt
 switch, which is the intended behaviour.
  
@@ -2423,7 +2423,7 @@ the key dimensions.
 \end{table}
  
 The progression from Round 1 to Round 3 on the creature sequence shows a clear
-trend: increased model capacity, a larger pool, and explicit per-phase scheduling
+trend: increased model capacity, a larger pool and explicit per-phase scheduling
 consistently improved reconstruction quality.
 The most persistent difficulty across all runs was thin or highly asymmetric
 voxel regions, where the $32^3$ grid resolution is a hard constraint on the
@@ -2434,7 +2434,7 @@ achievable level of detail.
 
 The goal of this thesis was to design and implement a modular framework for
 interactive experimentation with three-dimensional neural cellular automata. The
-framework connects mesh-based dataset preparation, TCP-mediated GPU training, and
+framework connects mesh-based dataset preparation, TCP-mediated GPU training and
 live Blender viewport rendering into a single coherent workflow. All components of
 the formal specification were delivered: the Blender add-on provides mesh
 voxelisation with per-voxel colour sampling from Blender materials and supports
