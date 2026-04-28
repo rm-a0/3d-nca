@@ -1367,8 +1367,8 @@ schedule-driven parameter updates is described in
 Section~\ref{sec:arch-training}. This section focuses on the code-level
 composition and the data formats used at the training boundary.
 
-Training backends are defined by the abstract \texttt{NCARunner} interface in
-\path{src/core/runners/base.py}. The default implementation,
+Training backends are defined by the abstract \texttt{NCARunner} interface.
+The interface is defined in \path{src/core/runners/base.py}. The default implementation,
 \texttt{MorphRunner}, owns the model instance (\texttt{Grid3D}), the
 optimiser, the current target tensor, and a pool of intermediate states used
 as training samples. The main entry point is the generator method
@@ -1379,8 +1379,8 @@ The second core backend, \texttt{RegenRunner}
 (\path{src/core/runners/regeneration.py}), reuses the same optimisation
 path but injects random local box damage into pooled states before each
 update, enabling regeneration experiments without changes to the server or
-protocol. The damage behaviour is controlled by
-\path{training.regen_damage_prob} and \path{training.regen_damage_size}.
+protocol. Damage probability is controlled by \path{training.regen_damage_prob}.
+Damage size is controlled by \path{training.regen_damage_size}.
 
 Runner initialisation accepts voxel targets in the channels-last format
 \texttt{[D,\,H,\,W,\,C]}, which is convenient for Blender and for protocol
