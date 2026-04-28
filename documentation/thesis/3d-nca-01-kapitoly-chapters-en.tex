@@ -32,7 +32,7 @@ server that exposes any training
 backend over a local or tunnelled connection; and a standalone Python core package
 providing the NCA model and training pipeline independently of both. The central
 design requirement was that adding a new experiment should require writing one class,
-with the server, protocol, logging, and visualisation pipeline requiring no changes.
+with the server, protocol, logging and visualisation pipeline requiring no changes.
 The metamorphogenesis experiments described later confirm this in practice -- they
 required only a custom runner subclass, minimal changes to the core module and no
 changes to the server or visualisation components.
@@ -62,14 +62,14 @@ Existing 3D Neural Cellular Automata implementations are mostly standalone train
 with no interactive tooling and no integrated workflow for preparing mesh targets or
 exporting coloured voxel datasets. This thesis presents a modular framework consisting
 of a Blender add-on for mesh voxelisation and live viewport rendering, a TCP server
-that exposes any training backend over a local or tunnelled connection, and a
+that exposes any training backend over a local or tunnelled connection and a
 standalone Python core package usable in Jupyter notebooks without Blender. The
 framework is validated through morphogenesis experiments on symmetric and asymmetric
 targets, and through multi-target metamorphogenesis, where a single model grows and
 transitions between distinct voxel shapes conditioned on task channels. The primary
 contributions are the modular framework itself, in which implementing a new experiment
 requires subclassing one abstract class with no changes to the server, protocol,
-logging, or visualisation pipeline, and the metamorphogenesis training regime, which
+logging, or visualisation pipeline and the metamorphogenesis training regime, which
 demonstrates task-conditioned multi-target growth in 3D in a way not previously
 explored in the literature.
 
@@ -158,7 +158,7 @@ as the blinker and toad, which cycle through a fixed sequence of states;
 through their phases; and more complex constructions such as glider guns and
 computational logic structures.
 
-Berlekamp, Conway, and Guy~\cite{Berlekamp1982} showed that Life is Turing-complete:
+Berlekamp, Conway and Guy~\cite{Berlekamp1982} showed that Life is Turing-complete:
 any computation expressible as a Turing machine can, in principle, be carried out
 within a sufficiently large Life grid. This is a clear illustration of the defining
 property of cellular automata -- complex, globally coordinated behaviour emerging
@@ -169,7 +169,7 @@ hand-designed.
 \subsection{Three-Dimensional Cellular Automata}
 
 In three dimensions, the Moore neighbourhood covers 26 adjacent cells (6
-face-adjacent, 12 edge-adjacent, and 8 corner-adjacent) in a $3\times3\times3$ cube
+face-adjacent, 12 edge-adjacent and 8 corner-adjacent) in a $3\times3\times3$ cube
 surrounding the central cell. Binary states with a full Moore neighbourhood produce
 $2^{27} \approx 134$~million neighbourhood configurations, making complete rule
 enumeration impractical. Practical 3D~CA therefore use totalistic or outer-totalistic
@@ -192,7 +192,7 @@ carries over directly to the neural CA extensions discussed later in this chapte
 \subsection{Differentiability and Continuous Cellular Automata}
 
 Classical CA use discrete states and discrete update rules. Several extensions have
-shown that the core CA principles -- a spatial lattice, local interactions, and
+shown that the core CA principles -- a spatial lattice, local interactions and
 parallel updates -- also work with continuous states and smooth transition functions.
 These continuous CA are directly relevant to neural CA, which operate on real-valued
 state vectors and use differentiable update rules trained by gradient descent.
@@ -207,7 +207,7 @@ automata, and it has since motivated much of the work on continuous and neural C
 \textbf{SmoothLife}~\cite{Rafler2011} generalises Conway's Game of Life to continuous
 space and time. It replaces the discrete neighbour count with continuous averaging
 kernels and the binary birth/survival rule with smooth sigmoid transition functions,
-producing gliders, oscillators, and wave-like structures that closely resemble their
+producing gliders, oscillators and wave-like structures that closely resemble their
 discrete counterparts but evolve smoothly in time. The characteristic behaviours of
 Life, it turns out, do not depend on discretisation -- they arise from the structure
 of local interactions.
@@ -271,7 +271,7 @@ procedure.
 In 2D, perception uses $3 \times 3$ filters over a nine-cell Moore neighbourhood. In
 3D, the same filters generalise to $3 \times 3 \times 3$ volumes covering twenty-seven
 cells. Prior 3D extensions have shown that Sobel-type gradient filters and other
-perception operators transfer directly to $x$, $y$, and $z$ axes without changing the
+perception operators transfer directly to $x$, $y$ and $z$ axes without changing the
 overall update formulation~\cite{Sudhakaran2021, Rossi2021, Aadityaza2024}.
 
 Two practical differences are worth noting. First, cell count grows cubically with
@@ -287,7 +287,7 @@ similar resolution.
 
 How this affects specific behaviours -- persistence, regeneration, long-term
 stability -- is not fully established in the literature. The neighbourhood grows from
-9 to 27 cells, the propagation distances increase, and the spatial topology changes.
+9 to 27 cells, the propagation distances increase and the spatial topology changes.
 Whether the dynamics observed in 2D carry over cleanly to volumetric grids is one of
 the questions motivating the experiments in this thesis.
 
@@ -338,7 +338,7 @@ Common filter types include:
     \item \textbf{Neighbour aggregation filters}, which compute a sum or average of
     adjacent voxels, capturing the local density and composition of the neighbourhood.
     \item \textbf{Gradient filters}, such as Sobel-type kernels extended to the $x$,
-    $y$, and $z$ axes, which approximate directional differences across the
+    $y$ and $z$ axes, which approximate directional differences across the
     neighbourhood~\cite{Mordvintsev2020, Sudhakaran2021}.
 \end{itemize}
 
@@ -347,7 +347,7 @@ perception vector per cell. With $C$ channels and $G$ filter groups, the percept
 vector has dimensionality $G \cdot C$, which is then passed to the update rule.
 
 The filters are fixed and non-learnable. This constrains the spatial information
-available to the update rule, stabilises training, and reduces the number of
+available to the update rule, stabilises training and reduces the number of
 parameters to optimise -- a convention established by Mordvintsev et
 al.~\cite{Mordvintsev2020} and followed in subsequent
 work~\cite{Sudhakaran2021, Rossi2021, Aadityaza2024}.
@@ -416,7 +416,7 @@ structure through repeated application of the local update rule.
 
 Because the update rule is differentiable, the model parameters can be optimised by
 gradient descent. The standard procedure unrolls the automaton for $T$ steps from a
-seed state, computes a loss between the resulting configuration and a target, and
+seed state, computes a loss between the resulting configuration and a target and
 backpropagates through the full unrolled computation graph~\cite{Mordvintsev2020}.
 
 The most common loss function is mean squared error (MSE) between the predicted and
@@ -427,7 +427,7 @@ Several training strategies have been developed to encourage specific behaviours
 \begin{itemize}
     \item \textbf{Pool-based sampling} maintains a pool of persistent states at
     various stages of growth. Each iteration samples a batch from the pool, runs the
-    automaton forward, computes the loss, and writes the updated states back,
+    automaton forward, computes the loss and writes the updated states back,
     exposing the model to different developmental stages rather than always starting
     from a fresh seed~\cite{Mordvintsev2020}.
     \item \textbf{Curriculum learning} gradually increases the number of unrolled
@@ -449,16 +449,16 @@ trading roughly twice the computation for substantially reduced memory usage.
 
 This chapter reviews the research most directly related to neural cellular automata
 and their three-dimensional extensions, focusing on architectures, training
-procedures, and experimental results. The core NCA components described in
-Section~\ref{sec:core-components} -- state representation, perception, update rule,
+procedures and experimental results. The core NCA components described in
+Section~\ref{sec:core-components} -- state representation, perception, update rule
 and training -- were drawn directly from Mordvintsev et al.~\cite{Mordvintsev2020}
 and are not repeated here. Each section instead focuses on the concrete design
-decisions, experimental findings, and limitations of the reviewed work, and on what
+decisions, experimental findings and limitations of the reviewed work and on what
 they mean for the framework developed in this thesis.
 
 \section{Growing Neural Cellular Automata}
 
-Mordvintsev, Randazzo, Niklasson, and Levin~\cite{Mordvintsev2020} introduced the
+Mordvintsev, Randazzo, Niklasson and Levin~\cite{Mordvintsev2020} introduced the
 Growing Neural Cellular Automata paradigm that serves as the methodological basis for
 this work. Unlike continuous CA such as Lenia~\cite{Chan2019}, which rely on manual
 parameter exploration, neural CA use supervised optimisation: the transition function
@@ -479,7 +479,7 @@ local spatial context rather than from any privileged role in the architecture.
 
 Mordvintsev et al.~\cite{Mordvintsev2020} introduced three training regimes that
 target different aspects of the learned dynamics. The choice of regime determines
-the balance between initial growth, long-term stability, and robustness to damage.
+the balance between initial growth, long-term stability and robustness to damage.
 
 \subsubsection{Growing Regime}
 
@@ -492,7 +492,7 @@ $T$~\cite{Mordvintsev2020}.
 \subsubsection{Persistent Regime}
 
 Loss is evaluated at multiple steps beyond initial convergence -- at $T$,
-$T + \delta$, $T + 2\delta$, and so on -- penalising any drift from the target.
+$T + \delta$, $T + 2\delta$ and so on -- penalising any drift from the target.
 This produces more stable dynamics. Persistent models also showed limited regenerative 
 behaviour without any explicit damage training -- a side effect of the stability 
 objective that Randazzo et al.~\cite{Randazzo2021} later explored further, finding 
@@ -512,10 +512,10 @@ updated in the previous step.
 
 \subsection{Relevance to This Work}
 
-This work adopts the architecture, training regimes, and optimisation strategy of
+This work adopts the architecture, training regimes and optimisation strategy of
 Mordvintsev et al.~\cite{Mordvintsev2020} as its baseline and extends them to
 three-dimensional voxel lattices. The transition from 2D to 3D increases neighbourhood
-size from 9 to 27 cells, raises computational cost cubically, and extends the
+size from 9 to 27 cells, raises computational cost cubically and extends the
 propagation distances required for global coordination. Whether the stability and
 regenerative behaviours observed in 2D carry over to volumetric grids is one of the
 central questions motivating the experiments in this thesis.
@@ -539,7 +539,7 @@ authors also observed partial regenerative behaviour: when parts of a built stru
 were manually destroyed, the NCA could partially rebuild the damaged region.
 
 An interesting aspect of this work is its evaluation under real-world constraints.
-The Minecraft platform fixes the available block types, rendering pipeline, and
+The Minecraft platform fixes the available block types, rendering pipeline and
 interaction tools -- all of which differ from the unconstrained continuous-valued
 grids used in purely computational settings. That the NCA paradigm still produced
 recognisable structures under these conditions shows the approach is not limited to
@@ -549,22 +549,22 @@ idealised simulation environments.
 
 The evaluation is primarily a proof of concept: the experiments demonstrate successful
 growth toward predefined targets but stop short of systematic analysis. There are no
-measurements of long-term stability, no controlled damage experiments, and no
+measurements of long-term stability, no controlled damage experiments and no
 comparison against other 3D generative methods. The Minecraft environment contributes 
-to this limitation. Discrete block types, a fixed renderer, and game-based interaction 
+to this limitation. Discrete block types, a fixed renderer and game-based interaction
 tools all constrain how precisely experiments can be set up and measured.
 
 \subsection{Relation to This Work}
 
 Sudhakaran et al.~\cite{Sudhakaran2021} provide the primary basis for extending
 neural CA from planar grids to volumetric $3 \times 3 \times 3$ perception
-neighbourhoods. The core principles -- strict locality, parameter sharing, and
+neighbourhoods. The core principles -- strict locality, parameter sharing and
 gradient-based optimisation -- carry over directly into the framework developed here.
 
 The main difference is the environment. This work uses Blender rather than a game
 engine, which gives direct programmatic access to the voxel grid, mesh
-representations, rendering pipelines, and the Python scripting API. This makes it
-practical to vary grid resolution, boundary conditions, and material properties
+representations, rendering pipelines and the Python scripting API. This makes it
+practical to vary grid resolution, boundary conditions and material properties
 systematically -- aspects that the Minecraft setting does not expose to the
 researcher. It also opens the door to future extensions that would be difficult in
 a game environment, such as integrating more complex mesh targets, alternative
@@ -593,7 +593,7 @@ served as an early reference point for validating the feasibility of the 3D
 extension.
 
 The implementation covers single-target reconstruction only. There is no training
-server, no interactive visualisation, and no modular structure for swapping model
+server, no interactive visualisation and no modular structure for swapping model
 components. These are gaps the framework developed in this thesis addresses directly.
 
 \subsection{Voxel-Based Morphogenesis}
@@ -615,12 +615,12 @@ practical workflow for preparing real mesh targets or observing training interac
 \section{Chapter Conclusion}
 
 The works reviewed in this chapter share a common foundation -- local perception,
-shared update rules, residual dynamics, and gradient-based optimisation -- but none
+shared update rules, residual dynamics and gradient-based optimisation -- but none
 provide the tooling needed for systematic 3D experimentation. The original 2D Growing
 NCA established that a network with fewer than 10\,000 parameters can learn to grow,
-maintain, and regenerate complex patterns through purely local interactions.
+maintain and regenerate complex patterns through purely local interactions.
 Subsequent 3D extensions confirmed that these principles transfer to volumetric grids,
-but left open questions about stability, persistence, and regeneration that the
+but left open questions about stability, persistence and regeneration that the
 experiments in this thesis aim to address.
 
 \chapter{Architectural Design}
@@ -641,7 +641,7 @@ structure and well-defined interactions between components.
 
 The primary design goal is to enable simulation and training of 3D neural
 cellular automata within a modular architecture. Components such as the
-simulation grid, update mechanism, and training pipeline can be developed and
+simulation grid, update mechanism and training pipeline can be developed and
 modified independently, which allows different models and update rules to be
 tested without touching unrelated parts of the system.
 
@@ -710,7 +710,7 @@ replaces them for practical target preparation and interactive visualisation.
 \label{sec:arch-core-model}
 
 The core NCA model is composed of four different components: \texttt{CellState},
-\texttt{Perception3D}, \texttt{UpdateRule}, and \texttt{Grid3D}. Each
+\texttt{Perception3D}, \texttt{UpdateRule} and \texttt{Grid3D}. Each
 component has its own configuration and can be instantiated independently.
 \texttt{Grid3D} acts as the composition root, wiring the other three together
 and exposing a single-step forward pass. A higher-level wrapper,
@@ -728,7 +728,7 @@ or the server.
 
 The cell component defines the structure of the per-voxel state vector and
 computes the alive mask that gates cell updates. It is configured by the number
-of hidden channels, the number of visible channels, and the alive threshold.
+of hidden channels, the number of visible channels and the alive threshold.
 
 The state vector of each voxel contains four groups of channels, as shown in
 Figure~\ref{fig:cell-state-vector}. Hidden channels carry internal memory that
@@ -756,7 +756,7 @@ only.
     \centering
     \includegraphics[width=\textwidth]{obrazky-figures/fig-cell-state-vector.png}
     \caption{Per-voxel state vector layout. The vector contains hidden channels,
-             optional positional channels, optional task channels, and visible
+             optional positional channels, optional task channels and visible
              channels. The alpha channel, which serves as the alive signal, is
              always the last visible channel.}
     \label{fig:cell-state-vector}
@@ -778,9 +778,9 @@ filters over the local neighbourhood. The filters are non-learnable: their
 weights are set at initialisation and held constant throughout training.
 
 In the baseline configuration, three filter groups are applied per channel:
-identity, six-neighbour sum, and Laplacian. For asymmetric targets, a
+identity, six-neighbour sum and Laplacian. For asymmetric targets, a
 directional mode replaces the Laplacian with three signed gradients along the
-$x$, $y$, and $z$ axes, giving five groups in total. The signed gradients
+$x$, $y$ and $z$ axes, giving five groups in total. The signed gradients
 introduce orientation-sensitive features that break reflection ambiguity,
 which arises when a purely symmetric neighbourhood representation cannot
 distinguish a structure from its mirror image. Without these directional cues,
@@ -869,7 +869,7 @@ The default \texttt{MorphRunner} implements pool-based training. Rather than
 restarting from a fresh seed at every iteration, it maintains a fixed-size
 pool of persistent states covering various stages of development. Each
 training iteration samples a batch from the pool, runs it forward for a
-randomly chosen number of steps, computes the loss against the target, and
+randomly chosen number of steps, computes the loss against the target and
 writes the updated states back into the pool. The state with the highest loss
 is replaced by a fresh seed at each iteration, preserving diversity across
 developmental stages and preventing the pool from collapsing to a single
@@ -1058,7 +1058,7 @@ State broadcasts received from the server are rendered as voxel meshes in the
 Blender viewport. The add-on maintains three spatial slots arranged side by
 side: the original source mesh, the voxelized target, and the current NCA state
 received from the server. Placing all three in the same scene lets the user
-compare the source, the discretized target, and the evolving model output at
+compare the source, the discretized target and the evolving model output at
 the same time.
 
 The state mesh is rebuilt from each received broadcast. A voxel cap prevents
@@ -1078,8 +1078,8 @@ modified from the thread that owns it.
 \chapter{Implementation}
 
 This chapter describes how the framework is implemented in code. It covers the
-project structure, the main libraries, and the NCA model components shared by
-training scripts, the TCP server, and the Blender add-on.
+project structure, the main libraries and the NCA model components shared by
+training scripts, the TCP server and the Blender add-on.
 
 \lstdefinestyle{py}{
     language=Python,
@@ -1102,15 +1102,15 @@ training scripts, the TCP server, and the Blender add-on.
 The implementation is organised into the following Python packages:
 
 \begin{itemize}
-    \item \path{src/core/} -- NCA model, stepping logic, and training
+        \item \path{src/core/} -- NCA model, stepping logic and training
           utilities,
-    \item \path{src/server/} -- TCP server, protocol handling, and the
+        \item \path{src/server/} -- TCP server, protocol handling and the
           training runner,
     \item \path{src/io/} -- legacy import/export and mesh conversion
           utilities used in early notebooks,
     \item \path{src/viz/} -- notebook visualisation helpers for offline
           inspection,
-    \item \path{blender/} -- Blender add-on for voxelisation, UI, and
+    \item \path{blender/} -- Blender add-on for voxelisation, UI and
           viewport rendering.
 \end{itemize}
 
@@ -1120,7 +1120,7 @@ grid size and training presets. The notebook utilities in \path{src/io/} and
 \path{src/viz/} cover only simple cases and are not part of the interactive
 workflow.
 
-PyTorch provides tensor operations, 3D convolutions, and automatic
+PyTorch provides tensor operations, 3D convolutions and automatic
 differentiation for unrolling the automaton through
 time~\cite{PaszkePyTorch, PyTorchDocs}. NumPy is used at I/O boundaries and
 for data structures that need to be serialised or passed across the
@@ -1128,7 +1128,7 @@ client-server boundary.
 
 The simulator stores the full grid state as a single float32 tensor of shape
 \texttt{[B, C, D, H, W]}, where \texttt{B} is batch size, \texttt{C} is the
-total number of channels, and \texttt{D}, \texttt{H}, \texttt{W} are the grid
+total number of channels and \texttt{D}, \texttt{H}, \texttt{W} are the grid
 dimensions. This layout matches the convention expected by 3D convolution
 operations and avoids redundant transpositions inside the perception and update
 steps. Listing~\ref{lst:state-layout} shows the two channel slices used most
@@ -1144,13 +1144,13 @@ alpha   = state[:, -1:, ...]
 
 Channel ordering follows the state vector layout shown in
 Figure~\ref{fig:cell-state-vector}. Hidden channels come first, followed by
-optional positional channels, optional task channels, and visible channels,
+optional positional channels, optional task channels and visible channels,
 with alpha stored last. Task and positional channels are disabled in the
 baseline configuration and can be enabled per experiment.
 
 Model hyperparameters are grouped into small configuration dataclasses.
 The four component-level configs -- \texttt{CellConfig},
-\texttt{Perception\allowbreak Config}, \texttt{Update\allowbreak Config}, and
+\texttt{Perception\allowbreak Config}, \texttt{Update\allowbreak Config} and
 \texttt{Grid\allowbreak Config} --
 are frozen, so they can be passed around safely and used as serialisation
 inputs for logs and checkpoints. \texttt{NCAConfig} collects the most commonly
