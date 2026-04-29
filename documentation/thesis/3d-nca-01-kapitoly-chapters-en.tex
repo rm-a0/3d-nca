@@ -475,6 +475,8 @@ Section~\ref{sec:core-components}, are applied throughout. The result is a
 homogeneous system where all behavioural differences between cells emerge from their
 local spatial context rather than from any privileged role in the architecture.
 
+\clearpage
+
 \subsection{Training Regimes}
 
 Mordvintsev et al.~\cite{Mordvintsev2020} introduced three training regimes that
@@ -519,6 +521,8 @@ size from 9 to 27 cells, raises computational cost cubically and extends the
 propagation distances required for global coordination. Whether the stability and
 regenerative behaviours observed in 2D carry over to volumetric grids is one of the
 central questions motivating the experiments in this thesis.
+
+\clearpage
 
 \section{Volumetric NCA in Interactive Environments}
 
@@ -815,6 +819,8 @@ When stochastic masking is enabled, each step randomly selects which cells
 apply their computed increment. This avoids lockstep synchronisation artefacts
 and makes the dynamics more tolerant of asynchronous perturbations, as
 discussed in the Theoretical Foundations chapter.
+
+\clearpage
 
 \subsection{Grid and Model Composition}
 \label{sec:arch-grid}
@@ -1324,6 +1330,8 @@ hidden channels start at zero. When positional channels are enabled, they are
 filled with normalised coordinate values across the full grid and re-injected
 after each step.
 
+\clearpage
+
 \subsection{NCAModel}
 
 \texttt{NCAModel} wraps \texttt{Grid3D} and keeps all configuration in a
@@ -1787,40 +1795,46 @@ experiments are discussed in the following chapter.
 
 \chapter{Experiments}
 \label{chap:experiments}
- 
-This chapter presents the experimental evaluation of the framework.
-The experiments were designed to answer two practical questions:
- 
+
+This chapter presents the experimental evaluation of the framework. The
+experiments were designed to answer several practical questions:
+
 \begin{itemize}
-    \item Can the baseline 3D NCA grow a target from a single seed in a stable way?
-    \item Can one model learn multiple targets and switch between them through
-          task-channel conditioning?
+    \item Can the baseline 3D NCA grow a target from a single seed in a stable
+          way?
+    \item Can one model learn multiple targets and transition between them
+          through task-channel conditioning?
+    \item Does the interactive remote training workflow - core framework on
+          a GPU machine, real-time visualisation in Blender over a TCP
+          tunnel - work in practice?
+    \item Can the framework be used effectively without the server, treating
+          the core package as a standalone research tool?
+    \item Does schedule-driven training remove the need to hardcode phase
+          transitions in the training loop?
 \end{itemize}
- 
-The focus is on morphogenesis as the primary training regime and metamorphogenesis
-as the more demanding multi-target extension.
-Regeneration is implemented and tested in the framework through \texttt{RegenRunner},
-but no full qualitative experiment was completed within the scope of this thesis;
-it is left as future work.
-This reflects a deliberate choice to explore the breadth of the framework rather
-than exhaustively cover every training mode.
- 
-Unless stated otherwise, all experiments use a $32^3$ grid and start from a single
-alive seed at the grid centre.
- 
-% =========================================================================
+
+The focus is on morphogenesis as the primary training regime and
+metamorphogenesis as the more demanding multi-target extension. Regeneration
+is implemented and available through \texttt{RegenRunner} but no full
+qualitative experiment was completed within the scope of this thesis; it is
+left as future work. This reflects a deliberate choice to explore the breadth
+of the framework rather than exhaustively cover every training mode.
+
+Unless stated otherwise, all experiments use a $32^3$ grid and start from a
+single alive seed at the grid centre.
+
+\clearpage
+
 \section{Morphogenesis}
-% =========================================================================
- 
-Morphogenesis experiments focus on single-target growth from a seed.
-They use the default \texttt{MorphRunner} training path and serve as a baseline
-for the later metamorphogenesis experiments.
- 
-Table~\ref{tab:exp-morph-runner-defaults} summarises the shared training setup
-implemented by \texttt{MorphRunner}.
-Unless stated otherwise, these defaults apply to all morphogenesis experiments
-in this section.
- 
+
+Morphogenesis experiments focus on single-target growth from a seed. They use
+the default \texttt{MorphRunner} training path and serve as a baseline for the
+later metamorphogenesis experiments.
+
+Table~\ref{tab:exp-morph-runner-defaults} summarises the shared training
+settings implemented by \texttt{MorphRunner}. Unless stated otherwise, these
+apply to all morphogenesis experiments in this section.
+
 \begin{table}[htbp]
     \centering
     \small
@@ -1829,9 +1843,11 @@ in this section.
         \textbf{Category} & \textbf{Setting} & \textbf{Value}\\
         \hline
         Optimisation & Optimiser & AdamW (\texttt{weight\_decay}$=10^{-5}$)\\
-        Optimisation & Learning-rate schedule & cosine annealing ($\eta_{\min}=10^{-5}$)\\
+        Optimisation & LR schedule & cosine annealing
+                                     ($\eta_{\min}=10^{-5}$)\\
         Training dynamics & Pool size & 32\\
-        Training dynamics & Step range & $(8,16)\rightarrow(32,64)$ over first 2000 epochs\\
+        Training dynamics & Step range &
+            $(8,16)\rightarrow(32,64)$ over first 2000 epochs\\
         Loss & Loss weights & $w_{\alpha}:w_{c}:w_{o}=4{:}1{:}2$\\
         Stability & Gradient clip & global norm 1.0\\
         \hline
@@ -1839,27 +1855,12 @@ in this section.
     \caption{Default \texttt{MorphRunner} training settings.}
     \label{tab:exp-morph-runner-defaults}
 \end{table}
- 
-\subsection{Early Exploration}
- 
-Before integrating the full client--server workflow, early exploratory runs were
-done in notebooks.
-The notebooks \texttt{01\_basic\_functionality.ipynb},
-\texttt{02\_sphere\_training\_alpha.ipynb},
-\texttt{03\_donut\_training\_alpha.ipynb} and
-\texttt{04\_donut\_training\_rgba.ipynb} were used to validate core stepping,
-loss behaviour and basic target reconstruction.
- 
-These runs were intentionally lightweight and focused on debugging and fast
-iteration.
-After this phase, experiments moved to the structured runner-based setup.
- 
+
 \subsection{Symmetrical Morphogenesis}
- 
-The first full morphogenesis experiment used a symmetric target (sphere-like
-volumetric shape) with the baseline configuration in
-Table~\ref{tab:exp-morph-sym-config}.
- 
+
+The first full morphogenesis experiment used a symmetric target with the
+configuration in Table~\ref{tab:exp-morph-sym-config}.
+
 \begin{table}[htbp]
     \centering
     \small
@@ -1883,96 +1884,100 @@ Table~\ref{tab:exp-morph-sym-config}.
     \caption{Symmetric morphogenesis configuration.}
     \label{tab:exp-morph-sym-config}
 \end{table}
- 
-Other training defaults follow Table~\ref{tab:exp-morph-runner-defaults}.
- 
-This setup corresponds to the baseline \texttt{MorphRunner} path and was also
-used in remote Colab sessions visualised from Blender through ngrok tunnelling.
- 
+
+All other training settings follow Table~\ref{tab:exp-morph-runner-defaults}.
+
+This experiment was run in two configurations to validate two different
+framework workflows. The first used the full interactive pipeline: training ran
+on a remote Colab GPU and the Blender add-on connected to it over an ngrok TCP
+tunnel, rendering incoming state broadcasts in real time. This confirmed that
+the full three-layer pipeline (core, server, Blender) works end to end, including the tunnelling
+scenario described in the System Overview. The second used only the core
+package and \texttt{MorphRunner} in a Colab notebook without a server session,
+with Blender used separately for target preparation and post-training inference
+inspection. This is the connectionless researcher workflow: the server and
+add-on are optional, and the core package functions as a standalone training
+library.
+
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=0.62\textwidth]{obrazky-figures/fig-exp-morph-sym-target.png}
     \caption{Symmetric target used for baseline morphogenesis.}
     \label{fig:exp-morph-sym-target}
 \end{figure}
- 
+
 Figure~\ref{fig:exp-morph-sym-target} shows the supervised target for RGBA
-reconstruction.
-The alpha channel acts as the alive signal and the RGB loss is masked by the
-target alpha so only voxels above the alive threshold contribute to colour error.
- 
+reconstruction. The alpha channel acts as the alive signal and the RGB loss is
+masked by the target alpha, so only voxels above the alive threshold contribute
+to colour error.
+
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=\textwidth]{obrazky-figures/fig-exp-morph-sym-dynamics.png}
     \caption{Symmetric morphogenesis from a single seed over inference steps.}
     \label{fig:exp-morph-sym-dynamics}
 \end{figure}
- 
-The inference trajectory in Figure~\ref{fig:exp-morph-sym-dynamics} shows growth
-from the single seed followed by stabilisation, which is important for interactive
-deployment where the automaton may be stepped beyond the training horizon.
- 
+
+Figure~\ref{fig:exp-morph-sym-dynamics} shows the inference trajectory: growth
+from the single seed followed by stabilisation. Stability beyond the training
+horizon is important for interactive use, where the automaton may be stepped
+further than it was trained to go.
+
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=\textwidth]{obrazky-figures/fig-exp-morph-sym-final-comparison.png}
     \caption{Final state at epoch 3000 compared with the symmetric target.}
     \label{fig:exp-morph-sym-final}
 \end{figure}
- 
-Figure~\ref{fig:exp-morph-sym-final} compares the final model output to the
-target.
-Quantitative convergence is shown by the loss curves in
-Figure~\ref{fig:exp-morph-sym-loss}.
- 
+
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=\textwidth]{obrazky-figures/fig-exp-morph-sym-loss.png}
     \caption{Loss curves for symmetric morphogenesis training.}
     \label{fig:exp-morph-sym-loss}
 \end{figure}
- 
-The run converged steadily: \texttt{loss\_total} decreased from approximately
-$2.36$ at the start to approximately $4.5 \times 10^{-3}$ at epoch 3000.
-The generated structure remained stable in post-training inference.
- 
+
+Figure~\ref{fig:exp-morph-sym-final} compares the final output to the target
+and Figure~\ref{fig:exp-morph-sym-loss} shows the loss curves.
+\texttt{loss\_total} decreased from approximately $2.36$ at the start to
+approximately $4.5 \times 10^{-3}$ at epoch 3000, and the generated structure
+remained stable in post-training inference.
+
 \clearpage
- 
+
 \subsection{Asymmetrical Morphogenesis}
- 
-The second morphogenesis experiment targeted an asymmetric object (voxelised
-chess pawn) and exposed a failure mode in the initial setup.
- 
-The first attempt reused the symmetric baseline settings
-(\texttt{pos\_channels = 0}, \texttt{perception.channel\_groups = 3}).
-With only isotropic local features, the model repeatedly drifted toward overly
-symmetric intermediate solutions and struggled to preserve directional structure.
- 
+
+The second morphogenesis experiment targeted a voxelised chess pawn and
+exposed a failure mode in the baseline configuration.
+
+The first attempt reused the symmetric settings (\texttt{pos\_channels = 0},
+\texttt{perception.channel\_groups = 3}). With only isotropic local features,
+the model repeatedly drifted toward symmetric intermediate solutions and failed
+to preserve the directional structure of the target.
+
 \begin{figure}[!htbp]
     \centering
     \includegraphics[width=\textwidth]{obrazky-figures/fig-exp-morph-asym-failure-symmetry.png}
-    \caption{Failed asymmetric pawn run at epoch 5000 with symmetric perception
-             (\texttt{pos\_channels=0}, \texttt{channel\_groups=3}).
+    \caption{Failed asymmetric pawn run at epoch 5000 with symmetric perception configuration.
              The prediction overgrows the target and collapses into repeated
              symmetric structures.}
     \label{fig:exp-morph-asym-failure-symmetry}
 \end{figure}
- 
-This failure is consistent with the information available to the update rule.
-The legacy \texttt{channel\_groups = 3} perception produces only isotropic
-neighbourhood statistics (identity, neighbour sum, Laplacian), which gives no
-signed cue for global orientation.
- 
-To resolve this, two extensions were introduced:
-\begin{itemize}
-    \item \texttt{perception.channel\_groups = 5}, enabling directional gradients
-          along $x$, $y$ and $z$,
-    \item \texttt{pos\_channels = 3}, injecting normalised absolute coordinates
-          as read-only channels.
-\end{itemize}
- 
-Table~\ref{tab:exp-morph-asym-config} summarises the changes relative to the
-symmetric baseline.
- 
+
+The failure is consistent with the information available to the update rule.
+The three-group perception produces only isotropic neighbourhood statistics
+(identity, neighbour sum and Laplacian), which provides no signed cue for
+global orientation. Without a way to distinguish up from down or front from
+back, the local rule has no basis for producing directional structure.
+
+This observation directly motivated two additions to the framework. First,
+\texttt{perception.channel\_groups = 5} was introduced, replacing the
+Laplacian with signed gradients along $x$, $y$ and $z$. Second,
+\texttt{pos\_channels = 3} was added, injecting normalised absolute
+coordinates as read-only channels that give each cell a stable global
+reference. Table~\ref{tab:exp-morph-asym-config} lists the changes relative
+to the symmetric baseline.
+
 \begin{table}[htbp]
     \centering
     \small
@@ -1985,29 +1990,28 @@ symmetric baseline.
         \texttt{training.num\_epochs} & 4000\\
         \hline
     \end{tabular}
-    \caption{Asymmetric morphogenesis changes relative to the symmetric baseline.}
+    \caption{Asymmetric morphogenesis changes relative to the symmetric
+             baseline.}
     \label{tab:exp-morph-asym-config}
 \end{table}
- 
+
 All other settings match Table~\ref{tab:exp-morph-sym-config} and
 Table~\ref{tab:exp-morph-runner-defaults}.
- 
-This issue also affected framework design: positional channels were introduced
-to resolve this asymmetry problem.
-Because the core model is modular (\texttt{CellState}, \texttt{Perception3D},
-\texttt{UpdateRule}, \texttt{Grid3D}) and channel layout is configuration-driven,
-the fix required only local model and config updates with no server-protocol
-changes.
-The intended extensibility goal was therefore validated in practice.
- 
-The final asymmetric run used \texttt{task\_channels = 0},
-\texttt{pos\_channels = 3}, \texttt{perception.channel\_groups = 5},
-and \texttt{num\_epochs = 4000}.
- 
-Unlike the symmetric baseline, this experiment was executed notebook-first using
-the core runner directly, without a mandatory server session.
-Blender was still used for target preparation and for final qualitative inspection.
- 
+
+Because the core model is modular and channel layout is entirely
+configuration-driven, applying both fixes required only config changes. No
+server messages, protocol definitions or Blender UI code needed to change.
+This is the direct benefit of the component separation described in
+Section~\ref{sec:arch-core-model}: experimenting with the model structure
+stays local to the model and does not affect anything outside the model.
+
+This experiment was run in the connectionless pattern: \texttt{MorphRunner}
+was used directly in a notebook without a server session. Blender was used
+for target preparation and for final qualitative inspection of the trained
+model, but the training itself ran entirely within the notebook. This
+demonstrates that a researcher who does not need live visualisation can use
+the core package as a self-contained training library.
+
 \begin{figure}[!htbp]
     \centering
     \includegraphics[width=0.9\textwidth]{obrazky-figures/fig-exp-morph-asym-target.png}\\[0.5em]
@@ -2016,239 +2020,231 @@ Blender was still used for target preparation and for final qualitative inspecti
              during training (bottom).}
     \label{fig:exp-morph-asym-targets}
 \end{figure}
- 
-Figure~\ref{fig:exp-morph-asym-targets} highlights the additional difficulty of
-mesh-based targets: thin parts can become sparse or disconnected after voxelisation,
-which makes them harder to grow and maintain under local updates.
- 
+
+Figure~\ref{fig:exp-morph-asym-targets} illustrates an additional difficulty
+of mesh-based targets: thin parts can become sparse or disconnected after
+voxelisation, which makes them harder to grow and maintain under purely local
+updates.
+
 \begin{figure}[!htbp]
     \centering
     \includegraphics[width=\textwidth]{obrazky-figures/fig-exp-morph-asym-dynamics.png}
     \caption{Asymmetric morphogenesis from a single seed over inference steps.}
     \label{fig:exp-morph-asym-dynamics}
 \end{figure}
- 
-With directional gradients and positional channels enabled, the model preserves
-orientation throughout the inference rollout
+
+With directional gradients and positional channels enabled, the model
+preserves orientation throughout the inference rollout
 (Figure~\ref{fig:exp-morph-asym-dynamics}).
- 
+
 \begin{figure}[!htbp]
     \centering
     \includegraphics[width=0.62\textwidth]{obrazky-figures/fig-exp-morph-asym-final.png}
     \caption{Final asymmetric output at epoch 4000.}
     \label{fig:exp-morph-asym-final}
 \end{figure}
- 
+
 \begin{figure}[!htbp]
     \centering
     \includegraphics[width=\textwidth]{obrazky-figures/fig-exp-morph-asym-loss.png}
     \caption{Loss curves for asymmetric morphogenesis training.}
     \label{fig:exp-morph-asym-loss}
 \end{figure}
- 
-The run reached a low final error (approximately $2.75 \times 10^{-4}$
-\texttt{loss\_total} at epoch 4000) while preserving the global orientation of
-the target.
-Compared to the symmetric baseline, convergence was slower and more sensitive to
-configuration, but the final shape fidelity was higher for this asymmetric object.
- 
+
+The run reached a \texttt{loss\_total} of approximately $2.75 \times 10^{-4}$
+at epoch 4000 while preserving the global orientation of the target. Compared
+to the symmetric baseline, convergence was slower and more sensitive to
+configuration, but the final shape fidelity was higher for this asymmetric
+object.
+
 \clearpage
  
 \section{Metamorphogenesis}
- 
-Multi-target conditioning has been explored in the NCA literature.
-Palm et al.~\cite{Palm2022VNCA} proposed Variational Neural Cellular Automata
-(VNCA), which uses local NCA dynamics to represent a distribution of stable
-attractors conditioned by a latent code and demonstrates recovery from significant
-damage.
-While their conditioning mechanism is continuous and probabilistic, the core
-observation is aligned with the goal of this section: a single local update rule
-can encode multiple behaviours and the selected behaviour can be controlled
-through additional channels.
- 
-In this thesis, \textit{metamorphogenesis} is used as a compound term formed from
-the Latinized scientific terms \textit{metamorphosis} (change of form) and
-\textit{morphogenesis} (generation of form).
-The term denotes a multi-target setting in which one model both generates form
-and transitions between forms through task-channel conditioning.
 
-Conceptually, metamorphogenesis extends standard morphogenesis from a single
-seed-to-target mapping to guided stage-to-stage development.
-Instead of learning only ``cell state $\rightarrow$ one final target'', the model
-is trained to follow a sequence of developmental stages under explicit guidance.
-This is closer to biological development in organisms that pass through distinct
-life stages (e.g., larva $\rightarrow$ pupa $\rightarrow$ adult) and it makes
-generated transitions visually and structurally more plausible.
- 
-While this thesis was being written, Sakour~\cite{Sakour2025} published a related
-approach to conditional morphogenesis in neural cellular automata.
-That work reduced the novelty of the conditioning idea itself, but the
-implementation here remains a practical 3D contribution focused on framework
-extensibility, integration workflow and reproducible experiments.
- 
+Multi-target conditioning in neural cellular automata has precedent in the
+literature. Palm et al.~\cite{Palm2022VNCA} proposed Variational Neural
+Cellular Automata (VNCA), which conditions a single NCA on a latent code to
+produce different stable forms and demonstrates recovery from significant
+damage. The same principle applies here: a single local update rule
+can encode multiple behaviours, and the active behaviour can be selected
+through additional channels. Sakour~\cite{Sakour2025} published a related
+approach to conditional morphogenesis in 2D NCA during the writing of this
+thesis.
+
+This work extends that idea into 3D with a distinct training algorithm and a
+term to describe the regime. In this thesis, \textit{metamorphogenesis}
+denotes a multi-target setting in which one model both generates form and
+transitions between forms through task-channel conditioning. The term is
+formed from the Latinised scientific terms \textit{metamorphosis} (change of
+form) and \textit{morphogenesis} (generation of form). Conceptually, it
+extends standard morphogenesis from a single seed-to-target mapping to
+guided stage-to-stage development, similar to biological organisms that pass
+through distinct life stages such as larva, pupa and adult. Unlike the
+latent-code and 2D approaches in the literature, the implementation here is
+fully 3D, integrates with the framework's pool-based training and schedule
+system, and is designed so that the runner can be connected to the server and
+Blender with minimal code changes.
+
 \textbf{Training algorithm.}
-The key idea behind metamorphogenesis training is a shared replay pool that holds
-states from all active tasks simultaneously.
-Each training batch is sampled uniformly from the pool and each element is
-supervised against the target corresponding to its stored task ID.
-At phase boundaries, the pool is \textit{expanded}: a subset of the
-best-converged predecessor states (lowest MSE against the predecessor target)
-is copied and relabeled to the next task ID.
-This gives the new task realistic morphing inputs rather than fresh seeds,
-making the transition smoother.
-The task-channel embedding is a one-hot vector broadcast across all cells;
-overwriting it is the only operation required to trigger a transition at inference
-time.
- 
-This training regime differs from standard single-target morphogenesis in three
-important ways.
-First, the pool must hold states from multiple tasks at the same time, so the pool
-size is larger.
-Second, each phase boundary causes a sharp loss increase because a new target
-enters the batch distribution and the model must re-adjust (visible as spikes in
-loss curves at the dashed boundary markers).
-Third, loss weights and learning rate typically need to be adjusted per phase
-because shape complexity increases progressively -- later phases contain finer
-structures and stronger colour discontinuities that require a higher colour weight
-to converge.
- 
+The key idea is a shared replay pool that holds states from all active tasks
+simultaneously. Each training batch is sampled from the pool and each element
+is supervised against the target corresponding to its stored task ID. At phase
+boundaries the pool is \textit{expanded}: the best-converged predecessor
+states, selected by lowest MSE against the predecessor target, are copied and
+relabeled to the next task ID. This seeds the new task with realistic
+intermediate forms rather than fresh seeds, giving the transition a natural
+starting point. The task-channel embedding is a one-hot vector broadcast
+across all cells; overwriting it at inference time is the only operation
+needed to trigger a transition.
+
+The training dynamics differ from single-target morphogenesis in several
+respects. The pool must be large enough to hold diverse states across all
+active tasks. Each phase boundary causes a sharp loss increase as the new
+target enters the batch distribution, visible as spikes in the loss curves.
+Loss weights and learning rate typically need per-phase adjustment because
+later phases contain finer structures and stronger colour discontinuities than
+earlier ones.
+
 Table~\ref{tab:exp-meta-overview} lists the concrete hyperparameters for all
-implemented metamorphogenesis runs.
- 
+metamorphogenesis runs.
+
 \begin{table}[htbp]
     \centering
     \small
-    \begin{tabular}{p{0.17\textwidth}p{0.08\textwidth}p{0.15\textwidth}p{0.10\textwidth}p{0.06\textwidth}p{0.07\textwidth}p{0.14\textwidth}p{0.13\textwidth}}
+    \begin{tabular}{p{0.17\textwidth}p{0.08\textwidth}p{0.15\textwidth}
+                    p{0.10\textwidth}p{0.06\textwidth}p{0.07\textwidth}
+                    p{0.14\textwidth}p{0.13\textwidth}}
         \hline
-        \textbf{Run} & \textbf{Epochs} & \textbf{Phases} & \textbf{Boundaries} & \textbf{$h$} & \textbf{Pool} & \textbf{LR schedule} & \textbf{Loss weights}\\
+        \textbf{Run} & \textbf{Epochs} & \textbf{Phases} &
+        \textbf{Boundaries} & \textbf{$h$} & \textbf{Pool} &
+        \textbf{LR schedule} & \textbf{Loss weights}\\
         \hline
-        Synthetic & 9000 & 3000/3000/3000 & 3001, 6001 & 96 & 32 & cosine ($2\times10^{-3}$) & $4{:}1{:}2$\\
-        Creature R1 & 9000 & 3000/3000/3000 & 3001, 6001 & 96 & 32 & cosine ($2\times10^{-3}$) & $4{:}1{:}2$\\
-        Creature R2 & 12000 & 2000/5000/5000 & 2001, 7001 & 128 & 48 & $2\times10^{-3}\rightarrow8\times10^{-4}\rightarrow3\times10^{-4}$ & $3{:}2{:}3$ (+ events)\\
-        Creature R3 & 19500 & 1500/6000/12000 & 1501, 7501 & 128 & 64 & $2\times10^{-3}\rightarrow8\times10^{-4}\rightarrow3\times10^{-4}\rightarrow1\times10^{-4}$ & $3{:}2{:}3$ (+ events)\\
+        Synthetic & 9000 & 3000/3000/3000 & 3001, 6001 & 96 & 32 &
+            cosine ($2\times10^{-3}$) & $4{:}1{:}2$\\
+        Creature R1 & 9000 & 3000/3000/3000 & 3001, 6001 & 96 & 32 &
+            cosine ($2\times10^{-3}$) & $4{:}1{:}2$\\
+        Creature R2 & 12000 & 2000/5000/5000 & 2001, 7001 & 128 & 48 &
+            $2\times10^{-3}\rightarrow8\times10^{-4}\rightarrow3\times10^{-4}$
+            & $3{:}2{:}3$ (+ events)\\
+        Creature R3 & 19500 & 1500/6000/12000 & 1501, 7501 & 128 & 64 &
+            $2\times10^{-3}\rightarrow8\times10^{-4}\rightarrow
+             3\times10^{-4}\rightarrow1\times10^{-4}$
+            & $3{:}2{:}3$ (+ events)\\
         \hline
     \end{tabular}
     \caption{Metamorphogenesis runs. $h$ denotes \texttt{update.hidden\_dim}.}
     \label{tab:exp-meta-overview}
 \end{table}
 
-All metamorphogenesis runs are reproducible from the provided notebooks.
-For Colab workflows, the only required setup is uploading target volumes to the
-expected directory on Google Drive; the notebooks then run without additional
-configuration.
-For Kaggle workflows, one can either create a private dataset with the same
-target layout or directly use the linked public datasets.
-No extra setup is required in either case; for long runs, Kaggle is preferred
-because jobs can continue in the background.
- 
-\clearpage
- 
+All runs are reproducible from the provided notebooks. For Colab, the only
+required setup is uploading target volumes to the expected Google Drive
+directory. For Kaggle, targets can be loaded from a private dataset or from
+the linked public datasets. For long runs Kaggle is preferred because jobs
+continue in the background after the browser session ends.
+
 \subsection{Synthetic Three-Target Curriculum}
- 
-The first metamorphogenesis experiment used three analytically defined targets on
-a phased training schedule:
+
+The first metamorphogenesis experiment used three analytically defined targets
+on a phased schedule:
+
 \begin{itemize}
-    \item phase 1 (epochs 1--3000): seed \texorpdfstring{$\rightarrow$}{->}
-          tetrahedron,
+    \item phase 1 (epochs 1--3000): seed
+          \texorpdfstring{$\rightarrow$}{->} tetrahedron,
     \item phase 2 (epochs 3001--6000): tetrahedron
           \texorpdfstring{$\rightarrow$}{->} cube,
     \item phase 3 (epochs 6001--9000): cube
           \texorpdfstring{$\rightarrow$}{->} sphere.
 \end{itemize}
- 
+
 The model used \texttt{task\_channels = 3}, \texttt{pos\_channels = 3} and
-\texttt{perception.channel\_groups = 5}.
-Pool expansion and relabeling were applied at phase boundaries so each new task
-saw realistic morphing inputs rather than fresh seeds.
- 
-Analytic targets were chosen to validate task conditioning without any confounding
-effects from mesh voxelisation.
-This run was executed on Kaggle and took 4 hours and 1 minute.
-A reproducible notebook version is available in
+\texttt{perception.channel\_groups = 5}. Pool expansion and relabeling were
+applied at phase boundaries so each new task received realistic morphing
+inputs rather than fresh seeds.
+
+This run used the core-only pattern: \texttt{Grid3D} was constructed directly
+with a custom training loop and no \texttt{NCARunner} inheritance.
+\texttt{NCALogger} was used standalone for checkpointing and loss logging,
+with no server required. This demonstrates that the logging and training
+infrastructure works independently of the runner interface. The run was
+executed on Kaggle and took 4 hours and 1 minute. The notebook is
 \path{notebooks/kaggle_run_moprh.ipynb}.
- 
+
 \begin{figure}[!htbp]
     \centering
     \includegraphics[width=\textwidth]{obrazky-figures/fig-exp-meta-basic-targets.png}
-    \caption{Synthetic targets used in the metamorphogenesis proof-of-concept:
-             tetrahedron, cube and sphere.}
+    \caption{Synthetic targets for the three-target curriculum: tetrahedron,
+             cube and sphere.}
     \label{fig:exp-meta-basic-targets}
 \end{figure}
- 
+
 \begin{figure}[!htbp]
     \centering
     \includegraphics[width=\textwidth]{obrazky-figures/fig-exp-meta-basic-loss.png}
-    \caption{Loss curves for phased synthetic metamorphogenesis training.
-             Dashed vertical lines mark phase boundaries at epochs 3000 and 6000.}
+    \caption{Loss curves for the synthetic curriculum. Dashed vertical lines
+             mark phase boundaries at epochs 3000 and 6000.}
     \label{fig:exp-meta-basic-loss}
 \end{figure}
- 
-The main trend visible in Figure~\ref{fig:exp-meta-basic-loss} is that each new
-phase causes an immediate loss increase followed by gradual re-convergence.
-This confirms that one model can be conditioned to switch behaviour and also shows
-that each new task introduces a temporary stability cost.
-Within each phase the loss curve falls steeply before levelling off, following
-the same pattern seen in single-target morphogenesis.
- 
+
+Figure~\ref{fig:exp-meta-basic-loss} shows the characteristic pattern of the
+metamorphogenesis training regime: each phase boundary causes an immediate
+loss spike followed by gradual re-convergence, confirming that the model
+adjusts to each new task while retaining the previous ones. Within each phase
+the curve follows the same steep initial fall seen in single-target
+morphogenesis.
+
 \begin{figure}[!htbp]
     \centering
     \includegraphics[width=\textwidth]{obrazky-figures/fig-exp-meta-basic-progression.png}
-    \caption{Inference progression for the synthetic curriculum.
-             Each row continues from the previous row's final state with no
-             re-seeding -- only the task-channel embedding is overwritten.}
+    \caption{Inference progression for the synthetic curriculum. Each row
+             continues from the previous row's final state with no re-seeding 
+             -- only the task-channel embedding is overwritten.}
     \label{fig:exp-meta-basic-progression}
 \end{figure}
- 
-Figure~\ref{fig:exp-meta-basic-progression} demonstrates the intended
-metamorphosis behaviour: overwriting only the task-channel embedding is sufficient
-to transition the same state toward the next target.
- 
+
+Figure~\ref{fig:exp-meta-basic-progression} shows the intended behaviour:
+overwriting only the task-channel embedding is sufficient to transition the
+same state toward the next target, with no re-seeding required.
+
 \begin{figure}[!htbp]
     \centering
     \includegraphics[width=\textwidth]{obrazky-figures/fig-exp-meta-basic-comparison.png}
-    \caption{Target versus model output after phased synthetic metamorphogenesis
-             training.}
+    \caption{Target versus model output after synthetic curriculum training.}
     \label{fig:exp-meta-basic-comparison}
 \end{figure}
- 
-Figure~\ref{fig:exp-meta-basic-comparison} shows the final reconstructions for
-all three tasks.
-Shape fidelity is high for the symmetric sphere and cube; the tetrahedron is
-slightly less precise at its sharp edges but remains well-formed.
-This result confirms the basic conditioning mechanism works before moving to more
-complex mesh-based targets.
- 
-\clearpage
- 
-\subsection{Pokemon-Inspired Creature Sequence -- Round 1 (9k epochs)}
- 
-The second metamorphogenesis experiment applied the same phased curriculum to a
-more complex three-object sequence exported from Blender:
+
+Figure~\ref{fig:exp-meta-basic-comparison} shows the final reconstructions.
+Shape fidelity is high for the sphere and cube; the tetrahedron is slightly
+less precise at its sharp edges but remains well-formed. The conditioning
+mechanism works on clean analytic targets. The result gives a clean baseline 
+before moving to mesh-based targets.
+\subsection{Pokémon-Inspired Creature Sequence -- Round 1}
+
+The second metamorphogenesis experiment applied the same phased curriculum to
+a more complex three-object sequence exported from Blender:
 Creature~1 \texorpdfstring{$\rightarrow$}{->}
 Creature~2 \texorpdfstring{$\rightarrow$}{->} Creature~3.
-The three targets are Pokemon-inspired character models
-(Charmander, Charmeleon and Charizard) voxelised to the same $32^3$ grid.
- 
-This run used the same hyperparameters as the synthetic curriculum
-(Table~\ref{tab:exp-meta-overview}, Creature R1) and was executed on a Kaggle
-notebook with a T4 GPU.
-Runtime was 4 hours and 1 minute.
-The run notebook is \path{notebooks/kaggle_run_creature.ipynb}.
- 
+The three targets are Pokémon-inspired character models (Charmander,
+Charmeleon and Charizard) voxelised to the same $32^3$ grid.
+
+Like the synthetic run, this experiment used the core-only pattern:
+\texttt{Grid3D} was constructed directly with a custom loop and no
+\texttt{NCARunner} inheritance. The same hyperparameters as the synthetic
+curriculum were used (Table~\ref{tab:exp-meta-overview}, Creature R1). The
+run was executed on a Kaggle T4 GPU and took 4 hours and 1 minute. The
+notebook is \path{notebooks/kaggle_run_creature.ipynb}.
+
 \begin{figure}[!htbp]
     \centering
     \includegraphics[width=\textwidth]{obrazky-figures/fig-exp-meta-creature-targets.png}
-    \caption{Blender-exported targets for the creature sequence (Creature 1,
-             Creature 2, Creature 3).}
+    \caption{Blender-exported targets for the creature sequence: Creature 1,
+             Creature 2 and Creature 3.}
     \label{fig:exp-meta-creature-targets}
 \end{figure}
- 
+
 Compared to the synthetic targets, the creature models contain thinner limbs,
 asymmetric silhouettes and stronger colour discontinuities
-(Figure~\ref{fig:exp-meta-creature-targets}).
-These properties make them more sensitive to stability issues during training and
-inference.
- 
+(Figure~\ref{fig:exp-meta-creature-targets}), all of which make training less stable.
+
 \begin{figure}[!htbp]
     \centering
     \includegraphics[width=\textwidth]{obrazky-figures/fig-exp-meta-creature-loss-r1.png}
@@ -2256,58 +2252,54 @@ inference.
              phase boundaries at epochs 3000 and 6000.}
     \label{fig:exp-meta-creature-loss-r1}
 \end{figure}
- 
-The loss curve in Figure~\ref{fig:exp-meta-creature-loss-r1} exhibits the same
-characteristic curriculum pattern as the synthetic run: each phase boundary
-triggers a sudden increase followed by gradual re-convergence.
-The main difference from the synthetic case is that the colour loss in phases 2
-and 3 stabilises at a higher floor, reflecting the greater colour complexity of
-the creature targets.
- 
+
+Figure~\ref{fig:exp-meta-creature-loss-r1} shows the same characteristic
+boundary pattern as the synthetic run: each phase boundary causes a sudden
+loss increase followed by gradual re-convergence. The main difference is that
+the colour loss in phases 2 and 3 stabilises at a higher floor, reflecting
+the greater colour complexity of the creature targets.
+
 \begin{figure}[!htbp]
     \centering
     \includegraphics[width=\textwidth]{obrazky-figures/fig-exp-meta-creature-comparison-r1.png}
     \caption{Target versus model output for Creature Round 1.}
     \label{fig:exp-meta-creature-comparison-r1}
 \end{figure}
- 
-Round 1 confirmed that the conditioning mechanism transfers from synthetic to
-mesh-based targets
-(Figure~\ref{fig:exp-meta-creature-comparison-r1}).
-However, compared to the synthetic curriculum, reconstruction quality in thin or
-highly asymmetric regions remained limited.
-In particular, colour accuracy in the late-phase targets was worse than expected,
-and some limb voxels were unstable during inference.
- 
-These observations led directly to two changes tested in Rounds 2 and 3: a higher
-MLP capacity (\texttt{update.hidden\_dim = 128}), a larger pool and explicit
-per-phase weight and learning-rate events.
- 
-\clearpage
- 
-\subsection{Pokemon-Inspired Creature Sequence -- Rounds 2 and 3 (12k and 19.5k epochs)}
- 
+
+Figure~\ref{fig:exp-meta-creature-comparison-r1} shows that the conditioning
+mechanism transfers from synthetic to mesh-based targets. Reconstruction
+quality in thin or highly asymmetric regions was limited, however. Colour
+accuracy in the late-phase targets was worse than expected, and some limb
+voxels were unstable during inference. These observations led directly to
+three changes tested in Rounds 2 and 3: higher MLP capacity
+(\texttt{update.hidden\_dim = 128}), a larger pool and explicit per-phase
+weight and learning-rate schedule events.
+
+\subsection{Pokémon-Inspired Creature Sequence -- Rounds 2 and 3}
+
 Rounds 2 and 3 share the same training algorithm but differ in phase lengths
-and schedule parameters.
-Both use the framework \texttt{Schedule} and a custom \texttt{MetamorphosisRunner}
-that subclasses \texttt{NCARunner}, so phase transitions are driven by schedule
-events rather than hardcoded epoch checks.
-This design allowed Round 3 to be set up by adjusting only the schedule
-configuration without changing the runner code.
- 
-\textbf{Shared changes from Round 1.}
-Both rounds increase \texttt{update.hidden\_dim} from 96 to 128, giving the MLP
-more capacity to store multiple shape representations.
-They also raise the pool size (to 48 and 64 respectively) so the pool holds more
-diverse intermediate morphing states across tasks.
-Initial loss weights are set to $w_{\alpha}:w_c:w_o = 3{:}2{:}3$ -- a higher
-colour and overflow weighting relative to Round 1 -- based on the observation that
-the colour loss plateau was the main failure mode in Round 1.
- 
-\textbf{Round 2 (12k epochs).}
-Phase lengths are 2000, 5000 and 5000 epochs (boundaries at epochs 2001 and 7001).
-The schedule events are listed in Table~\ref{tab:exp-meta-r2-schedule}.
- 
+and schedule parameters. Both use a \texttt{MetamorphosisRunner} that
+subclasses \texttt{NCARunner} and a \texttt{Schedule} populated with
+\texttt{Event} objects, so phase transitions, weight changes and learning rate
+drops all fire at specified epochs with no hardcoded epoch checks in the
+training loop. The pool expansion events use a custom string-backed event
+type (\texttt{POOL\_EXPAND}) rather than a built-in \texttt{EventType}, which shows 
+that the schedule system accepts custom event types alongside the built-in ones. 
+Because \texttt{MetamorphosisRunner} implements the full \texttt{NCARunner} 
+interface, connecting it to the server and Blender add-on would require only a few 
+lines of setup code, as shown in the Implementation chapter.
+
+Both rounds increase \texttt{update.hidden\_dim} from 96 to 128 and raise the
+pool size (to 48 and 64 respectively) to hold more diverse states across tasks.
+Initial loss weights are set to $w_{\alpha}:w_c:w_o = 3{:}2{:}3$, with a
+higher colour and overflow weighting than Round 1, based on the observation
+that the colour loss plateau was the main limitation in Round 1.
+
+Round 2 uses phase lengths of 2000, 5000 and 5000 epochs (boundaries at
+epochs 2001 and 7001). The schedule events are listed in
+Table~\ref{tab:exp-meta-r2-schedule}. The run took 8 hours and 46 minutes on
+a Kaggle T4 GPU.
+
 \begin{table}[htbp]
     \centering
     \small
@@ -2329,17 +2321,15 @@ The schedule events are listed in Table~\ref{tab:exp-meta-r2-schedule}.
     \label{tab:exp-meta-r2-schedule}
 \end{table}
 
-The run notebook is \path{notebooks/kaggle_run_creature_final.ipynb}.
- 
-Round 2 ran for 8 hours and 46 minutes on a Kaggle T4 GPU.
- 
-\textbf{Round 3 (19.5k epochs).}
-Phase lengths are 1500, 6000 and 12000 epochs (boundaries at epochs 1501 and 7501).
-Extending phase 2 and especially phase 3 was the primary change from Round 2,
-motivated by the observation that the final-phase colour loss had not fully
-converged within Round 2's 5000-epoch phase 3.
-The schedule events are listed in Table~\ref{tab:exp-meta-r3-schedule}.
- 
+Round 3 uses phase lengths of 1500, 6000 and 12000 epochs (boundaries at
+epochs 1501 and 7501). Extending phase 2 and especially phase 3 was the
+primary change from Round 2, motivated by the observation that the
+final-phase colour loss had not fully converged within Round 2's 5000-epoch
+phase 3. Two additional late-epoch events were added at epoch 15000 to push
+the overflow weight higher and reduce the learning rate further. The schedule
+events are listed in Table~\ref{tab:exp-meta-r3-schedule}. The run took 11
+hours and 43 minutes on a Kaggle T4 GPU.
+
 \begin{table}[htbp]
     \centering
     \small
@@ -2362,144 +2352,144 @@ The schedule events are listed in Table~\ref{tab:exp-meta-r3-schedule}.
     \label{tab:exp-meta-r3-schedule}
 \end{table}
 
-The run notebook is \path{notebooks/kaggle_run_creature_final.ipynb}.
- 
-Round 3 ran for 11 hours and 43 minutes on a Kaggle T4 GPU.
- 
+Both notebooks are \path{notebooks/kaggle_run_creature_final.ipynb}.
+
 \begin{figure}[!htbp]
     \centering
     \includegraphics[width=\textwidth]{obrazky-figures/fig-exp-meta-creature-loss-r2.png}
-    \caption{Loss curves for Creature Round 2 (12k epochs). Phase boundaries at
-             epochs 2001 and 7001.}
+    \caption{Loss curves for Creature Round 2 (12k epochs). Phase boundaries
+             at epochs 2001 and 7001.}
     \label{fig:exp-meta-creature-loss-r2}
 \end{figure}
- 
+
 \begin{figure}[!htbp]
     \centering
     \includegraphics[width=\textwidth]{obrazky-figures/fig-exp-meta-creature-loss-r3.png}
-    \caption{Loss curves for Creature Round 3 (19.5k epochs). Phase boundaries at
-             epochs 1501 and 7501. The final LR and overflow events at epoch 15000
-             are visible as a small stability correction in the late curve.}
+    \caption{Loss curves for Creature Round 3 (19.5k epochs). Phase boundaries
+             at epochs 1501 and 7501.}
     \label{fig:exp-meta-creature-loss-r3}
 \end{figure}
- 
-Figures~\ref{fig:exp-meta-creature-loss-r2} and~\ref{fig:exp-meta-creature-loss-r3}
-show the loss curves for both rounds.
-The characteristic boundary spikes are present in both, consistent with all
-previous metamorphogenesis runs.
-Compared to Round 2, Round 3 shows continued improvement in the colour loss
-throughout the extended phase 3, with the late-epoch LR reduction and increased
-overflow weight visibly tightening the total loss in the final training segment.
- 
+
+Figures~\ref{fig:exp-meta-creature-loss-r2}
+and~\ref{fig:exp-meta-creature-loss-r3} show the loss curves for both rounds.
+Both exhibit the same boundary spikes seen in all previous metamorphogenesis
+runs. Compared to Round 2, Round 3 shows continued colour loss improvement
+throughout the extended phase 3. The late-epoch learning rate reduction and
+increased overflow weight at epoch 15000 visibly reduce the total loss in
+the final training segment.
+
 \begin{figure}[!htbp]
     \centering
     \includegraphics[width=\textwidth]{obrazky-figures/fig-exp-meta-creature-comparison-r2.png}
     \caption{Target versus model output for Creature Round 2 (12k epochs).}
     \label{fig:exp-meta-creature-comparison-r2}
 \end{figure}
- 
+
 \begin{figure}[!htbp]
     \centering
     \includegraphics[width=\textwidth]{obrazky-figures/fig-exp-meta-creature-comparison-r3.png}
     \caption{Target versus model output for Creature Round 3 (19.5k epochs).}
     \label{fig:exp-meta-creature-comparison-r3}
 \end{figure}
- 
+
 Figures~\ref{fig:exp-meta-creature-comparison-r2}
-and~\ref{fig:exp-meta-creature-comparison-r3} show the target-versus-output
-comparisons.
-Round 2 improved colour reconstruction in phases 1 and 2 relative to Round 1,
-but phase 3 (Creature 3) still showed colour artefacts in thin wing regions.
-Round 3 reduced these artefacts further: the extended phase 3 and the final
-overflow weight push cleared most stray floating voxels and improved colour
-coherence across all three tasks, although thin structures remained the hardest
-part to reconstruct at the $32^3$ grid resolution.
- 
+and~\ref{fig:exp-meta-creature-comparison-r3} show the target versus output
+comparisons. Round 2 improved colour reconstruction in phases 1 and 2
+relative to Round 1, but phase 3 still showed colour artefacts in thin wing
+regions. Round 3 reduced these further: the extended phase 3 and the final
+overflow weight adjustment cleared most stray floating voxels and improved
+colour coherence across all three tasks, although thin structures remained
+the hardest part to reconstruct at the $32^3$ grid resolution.
+
 \begin{figure}[!htbp]
     \centering
     \includegraphics[width=\textwidth]{obrazky-figures/fig-exp-meta-creature-progression-r3.png}
-    \caption{Inference progression for Creature Round 3. Each row continues from
-             the previous row's final state; only the task-channel embedding is
-             overwritten between rows.}
+    \caption{Inference progression for Creature Round 3. Each row continues
+             from the previous row's final state; only the task-channel
+             embedding is overwritten between rows.}
     \label{fig:exp-meta-creature-progression-r3}
 \end{figure}
- 
-Figure~\ref{fig:exp-meta-creature-progression-r3} shows the inference trajectory
-for Round 3.
-The model transitions continuously between creatures without re-seeding and the
-intermediate states show a gradual morphological change rather than an abrupt
-switch, which is the intended behaviour.
- 
-\clearpage
- 
+
+Figure~\ref{fig:exp-meta-creature-progression-r3} shows the Round 3 inference
+trajectory. The model transitions continuously between creatures without
+re-seeding and the intermediate states show a gradual change in form rather
+than an abrupt switch.
+
 \subsection{Summary}
- 
-Table~\ref{tab:exp-meta-summary} compares the four metamorphogenesis runs across
-the key dimensions.
- 
+
+Table~\ref{tab:exp-meta-summary} compares the four metamorphogenesis runs.
+
 \begin{table}[htbp]
     \centering
     \small
-    \begin{tabular}{p{0.20\textwidth}p{0.10\textwidth}p{0.10\textwidth}p{0.10\textwidth}p{0.11\textwidth}p{0.25\textwidth}}
+    \begin{tabular}{p{0.20\textwidth}p{0.10\textwidth}p{0.10\textwidth}
+                    p{0.10\textwidth}p{0.11\textwidth}p{0.25\textwidth}}
         \hline
-        \textbf{Run} & \textbf{Epochs} & \textbf{$h$} & \textbf{Pool} & \textbf{Runtime} & \textbf{Main outcome}\\
+        \textbf{Run} & \textbf{Epochs} & \textbf{$h$} & \textbf{Pool} &
+        \textbf{Runtime} & \textbf{Main outcome}\\
         \hline
-        Synthetic & 9000 & 96 & 32 & 4 h 01 min & Conditioning validated on analytic targets\\
-        Creature R1 & 9000 & 96 & 32 & 4 h 01 min & Conditioning transfers to mesh targets; colour quality limited\\
-        Creature R2 & 12000 & 128 & 48 & 8 h 46 min & Colour improved; phase 3 not fully converged\\
-        Creature R3 & 19500 & 128 & 64 & 11 h 43 min & Best overall fidelity; thin structures remain challenging\\
+        Synthetic    & 9000  & 96  & 32 & 4 h 01 min  &
+            Conditioning validated on analytic targets\\
+        Creature R1  & 9000  & 96  & 32 & 4 h 01 min  &
+            Conditioning transfers to mesh targets; colour quality limited\\
+        Creature R2  & 12000 & 128 & 48 & 8 h 46 min  &
+            Colour improved; phase 3 not fully converged\\
+        Creature R3  & 19500 & 128 & 64 & 11 h 43 min &
+            Best overall fidelity; thin structures remain challenging\\
         \hline
     \end{tabular}
     \caption{Metamorphogenesis run summary.}
     \label{tab:exp-meta-summary}
 \end{table}
- 
-The progression from Round 1 to Round 3 on the creature sequence shows a clear
-trend: increased model capacity, a larger pool and explicit per-phase scheduling
-consistently improved reconstruction quality.
-The most persistent difficulty across all runs was thin or highly asymmetric
-voxel regions, where the $32^3$ grid resolution is a hard constraint on the
-achievable level of detail.
+
+The progression from Round 1 to Round 3 shows a clear trend: higher model
+capacity, a larger pool and explicit per-phase scheduling consistently
+improved reconstruction quality. The most persistent difficulty across all
+runs was thin or highly asymmetric voxel regions, where the $32^3$ grid
+resolution is a hard constraint on the level of detail achievable.
 
 \chapter{Conclusion}
 \label{zaver}
 
 The goal of this thesis was to design and implement a modular framework for
-interactive experimentation with three-dimensional neural cellular automata. The
-framework connects mesh-based dataset preparation, TCP-mediated GPU training and
-live Blender viewport rendering into a single coherent workflow. All components of
-the formal specification were delivered: the Blender add-on provides mesh
-voxelisation with per-voxel colour sampling from Blender materials and supports
-direct transmission of targets to the training server; the TCP server exposes any
-conforming backend over a local or tunnelled connection, including remote services
-via ngrok; and the standalone Python core package is usable from scripts and Jupyter
-notebooks without Blender.
+interactive experimentation with three-dimensional neural cellular automata.
+The framework connects mesh-based target preparation, TCP-mediated GPU
+training and live Blender viewport rendering into a single workflow. All
+design goals were met: the Blender add-on provides mesh voxelisation with
+per-voxel colour sampling from Blender materials and supports direct
+transmission of targets to the training server; the TCP server exposes any
+conforming backend over a local or tunnelled connection, including remote
+sessions via ngrok; and the standalone Python core package works from scripts
+and Jupyter notebooks without Blender.
 
-The framework was validated through four categories of experiments. Symmetric
-morphogenesis confirmed stable growth from a single seed, with total loss converging
-from $2.36$ to $4.5 \times 10^{-3}$ over 3\,000 epochs. Asymmetric morphogenesis
-exposed a reflection ambiguity failure in the baseline configuration, which was
-resolved by enabling directional gradient filters and positional channels; the
-corrected run reached a total loss of $2.75 \times 10^{-4}$ at epoch 4\,000.
-Multi-target metamorphogenesis confirmed that a single model can grow and transition
-between three distinct voxel targets through task-channel conditioning without
-re-seeding, with the best creature run training for 19\,500 epochs. The
-extensibility claim was validated directly: the metamorphogenesis experiment required
-only a custom \texttt{NCARunner} subclass with no changes to the server, protocol,
-or visualisation pipeline.
+The framework was validated through three categories of experiments. Symmetric
+morphogenesis confirmed stable growth from a single seed, with total loss
+converging from $2.36$ to $4.5 \times 10^{-3}$ over 3\,000 epochs.
+Asymmetric morphogenesis revealed a symmetry problem in the
+baseline configuration, which was resolved by enabling directional gradient
+filters and positional channels; the corrected run reached a total loss of
+$2.75 \times 10^{-4}$ at epoch 4\,000. Multi-target metamorphogenesis
+confirmed that a single model can grow and transition between three distinct
+voxel targets through task-channel conditioning without re-seeding, with the
+best creature run completing 19\,500 epochs of training. The extensibility
+of the framework was validated directly by the metamorphogenesis experiment:
+a custom \texttt{NCARunner} subclass was sufficient to introduce the new
+training regime with no changes to the server, protocol or visualisation
+pipeline.
 
-Several directions are open for future development. In the short term, the framework
-could be extended with additional training regimes -- specifically persistence and
-full regeneration -- exposed through the existing runner interface and demonstrated
-interactively through Blender add-on tools such as a voxel eraser that lets the user
-remove parts of the grown structure and observe live recovery in the viewport. The
-voxelisation pipeline could also be extended to encode additional Blender data into
-training targets, such as armature rigs or shape keys, with the goal of producing
-models whose grown voxel output retains rig information and supports
-animation-compatible workflows. In the longer term, scaling the framework to higher
-grid resolutions such as $64^3$ or $128^3$ would require replacing the current dense
-tensor representation with sparse data structures, making the approach practical for
-large volumetric domains where most voxels are empty.
+Several directions are open for future development. In the short term, the
+framework could be extended with additional training regimes --- specifically
+persistence and full regeneration --- exposed through the existing runner
+interface and demonstrated interactively through tools such as a Blender
+viewport eraser that lets the user remove parts of a grown structure and
+observe live recovery. The voxelisation pipeline could also be extended to
+encode additional Blender data into training targets, such as armature rigs
+or shape keys, with the goal of producing models whose output retains rig
+information and supports animation-compatible workflows. In the longer term,
+scaling to higher grid resolutions such as $64^3$ or $128^3$ would require
+replacing the current dense tensor representation with sparse data
+structures, making the approach practical for large volumetric domains where
+most voxels are empty.
 
 %=========================================================================
 
