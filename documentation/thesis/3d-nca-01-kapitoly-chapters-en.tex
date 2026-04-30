@@ -498,9 +498,7 @@ $T$~\cite{Mordvintsev2020}.
 Loss is evaluated at multiple steps beyond initial convergence -- at $T$,
 $T + \delta$, $T + 2\delta$ and so on -- penalising any drift from the target.
 This produces more stable dynamics. Persistent models also showed limited regenerative 
-behaviour without any explicit damage training -- a side effect of the stability 
-objective that Randazzo et al.~\cite{Randazzo2021} later explored further, finding 
-that long-horizon training leads to increasingly robust hidden channel representations.
+behaviour without any explicit damage training.
 
 \subsubsection{Regenerating Regime}
 
@@ -985,6 +983,8 @@ completion or until stopped.
     \label{fig:protocol-fsm}
 \end{figure}
 
+\clearpage
+
 \subsection{Protocol}
 
 TCP provides an ordered, reliable byte stream but does not preserve message
@@ -1110,22 +1110,22 @@ training scripts, the TCP server and the Blender add-on.
 The implementation is organised into the following Python packages:
 
 \begin{itemize}
-        \item \path{src/core/} -- NCA model, stepping logic and training
+        \item \path{nca3d/core/} -- NCA model, stepping logic and training
           utilities,
-        \item \path{src/server/} -- TCP server, protocol handling and the
+        \item \path{nca3d/server/} -- TCP server, protocol handling and the
           training runner,
-    \item \path{src/io/} -- legacy import/export and mesh conversion
+    \item \path{nca3d/io/} -- legacy import/export and mesh conversion
           utilities used in early notebooks,
-    \item \path{src/viz/} -- notebook visualisation helpers for offline
+    \item \path{nca3d/viz/} -- notebook visualisation helpers for offline
           inspection,
-    \item \path{blender/} -- Blender add-on for voxelisation, UI and
+    \item \path{nca3d/blender/} -- Blender add-on for voxelisation, UI and
           viewport rendering.
 \end{itemize}
 
 Voxel targets for training are prepared and exported through the add-on, which
 samples colour from Blender materials and provides a single place to adjust
-grid size and training presets. The notebook utilities in \path{src/io/} and
-\path{src/viz/} cover only simple cases and are not part of the interactive
+grid size and training presets. The notebook utilities in \path{nca3d/io/} and
+\path{nca3d/viz/} cover only simple cases and are not part of the interactive
 workflow.
 
 PyTorch provides tensor operations, 3D convolutions and automatic
@@ -1378,7 +1378,7 @@ Section~\ref{sec:arch-training}. This section focuses on the code-level
 composition and the data formats used at the training boundary.
 
 Training backends are defined by the abstract \texttt{NCARunner} interface.
-The interface is defined in \path{src/core/runners/base.py}. The default implementation,
+The interface is defined in \path{nca3d/core/runners/base.py}. The default implementation,
 \texttt{MorphRunner}, owns the model instance (\texttt{Grid3D}), the
 optimiser, the current target tensor and a pool of intermediate states used
 as training samples. The main entry point is the generator method
@@ -1386,7 +1386,7 @@ as training samples. The main entry point is the generator method
 stream progress without blocking on GPU work.
 
 The second core backend, \texttt{RegenRunner}
-(\path{src/core/runners/regeneration.py}), reuses the same optimisation
+(\path{nca3d/core/runners/regeneration.py}), uses the same optimisation
 path but injects random local box damage into pooled states before each
 update, enabling regeneration experiments without changes to the server or
 protocol. Damage probability is controlled by \path{training.regen_damage_prob}.
@@ -1633,7 +1633,7 @@ message types.
 
 The role of logging and stored artefacts is described in
 Section~\ref{sec:arch-server}. In the implementation, run outputs are written
-by \texttt{NCALogger} (\path{src/server/logger.py}). Each training run
+by \texttt{NCALogger} (\path{nca3d/server/logger.py}). Each training run
 claims the next available \path{runs/run_NNN/} directory and writes the
 following files:
 
@@ -1766,7 +1766,7 @@ the framing logic and rate limiting were still being adjusted.
 
 Before the Blender add-on was available, Jupyter notebooks served as an
 exploratory environment for the core model and training behaviour. These rely
-on the \path{src/viz/} and \path{src/io/} helpers, which is the main reason
+on the \path{nca3d/viz/} and \path{nca3d/io/} helpers, which is the main reason
 those modules exist despite not being part of the core-server-Blender workflow.
 Unlike the pool-based training used by the server runners, these notebooks use
 a simpler per-iteration loop that restarts from a fresh seed on each step. The
@@ -2092,7 +2092,8 @@ fully 3D, integrates with the framework's pool-based training and schedule
 system, and is designed so that the runner can be connected to the server and
 Blender with minimal code changes.
 
-\textbf{Training algorithm.}
+\subsection{Training algorithm}
+
 The key idea is a shared replay pool that holds states from all active tasks
 simultaneously. Each training batch is sampled from the pool and each element
 is supervised against the target corresponding to its stored task ID. At phase
@@ -2117,35 +2118,20 @@ metamorphogenesis runs.
 
 \begin{table}[htbp]
     \centering
-    \small
-    {\setlength{\tabcolsep}{2pt}
-    \begin{tabular}{@{}p{0.16\textwidth}p{0.09\textwidth}p{0.15\textwidth}
-                    p{0.10\textwidth}p{0.06\textwidth}p{0.07\textwidth}
-                    p{0.14\textwidth}p{0.13\textwidth}@{}}
-        \hline
-        \textbf{Run} & \textbf{Epochs} & \textbf{Phases} &
-        \shortstack{\textbf{Phase}\\\textbf{bounds}} &
-        \textbf{$h$} & \textbf{Pool} &
-        \shortstack{\textbf{LR}\\\textbf{schedule}} &
-        \shortstack{\textbf{Loss}\\\textbf{weights}}\\
-        \hline
-        Synthetic & 9000 & \shortstack{3000/\\3000/\\3000} &
-            \shortstack{3001,\\6001} & 96 & 32 &
-            \shortstack{cosine\\($2\times10^{-3}$)} & $4{:}1{:}2$\\
-        Creature R1 & 9000 & \shortstack{3000/\\3000/\\3000} &
-            \shortstack{3001,\\6001} & 96 & 32 &
-            \shortstack{cosine\\($2\times10^{-3}$)} & $4{:}1{:}2$\\
-        Creature R2 & 12000 & \shortstack{2000/\\5000/\\5000} &
-            \shortstack{2001,\\7001} & 128 & 48 &
-            \shortstack{$2\times10^{-3}$\\$\rightarrow8\times10^{-4}$\\$\rightarrow3\times10^{-4}$}
-            & \shortstack{$3{:}2{:}3$\\(+ events)}\\
-        Creature R3 & 19500 & \shortstack{1500/\\6000/\\12000} &
-            \shortstack{1501,\\7501} & 128 & 64 &
-            \shortstack{$2\times10^{-3}$\\$\rightarrow8\times10^{-4}$\\$\rightarrow3\times10^{-4}$\\$\rightarrow1\times10^{-4}$}
-            & \shortstack{$3{:}2{:}3$\\(+ events)}\\
-        \hline
-    \end{tabular}}
-    \caption{Metamorphogenesis runs. $h$ denotes \texttt{update.hidden\_dim}.}
+    \footnotesize 
+    \setlength{\tabcolsep}{3.5pt} 
+    \begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} l r c c c c l l @{}}
+        \toprule
+        \textbf{Run} & \textbf{Epochs} & \textbf{Phases} & \textbf{Bounds} & \textbf{$h$} & \textbf{Pool} & \textbf{LR Schedule} & \textbf{Loss Wts.} \\ 
+        \midrule
+        Synthetic   & 9k  & 3/3/3 (k) & 3k, 6k & 96  & 32 & Cosine ($2e^{-3}$) & 4:1:2 \\
+        Creature R1 & 9k  & 3/3/3 (k) & 3k, 6k & 96  & 32 & Cosine ($2e^{-3}$) & 4:1:2 \\
+        Creature R2 & 12k & 2/5/5 (k) & 2k, 7k & 128 & 48 & $2e^{-3} \to 3e^{-4}$ & 3:2:3+ev \\
+        Creature R3 & 19.5k & 1.5/6/12 (k) & 1.5k, 7.5k & 128 & 64 & $2e^{-3} \to 1e^{-4}$ & 3:2:3+ev \\
+        \bottomrule
+    \end{tabular*}
+    \caption{Configuration summary for Metamorphogenesis runs. Phases and Bounds denote stage durations and transition indices (in thousands, $k$). 
+    \textbf{$h$} is the \texttt{update.hidden\_dim} and Pool is the seed buffer size. LR Schedule shows the decay trend, and Loss Wts. indicates component ratios (+ev includes event-based loss).}
     \label{tab:exp-meta-overview}
 \end{table}
 
