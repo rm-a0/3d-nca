@@ -10,7 +10,7 @@ A modular PyTorch framework for training 3D Neural Cellular Automata on volumetr
 
 3D-NCA is a PyTorch library for training 3D Neural Cellular Automata on volumetric targets. It provides a composable model API, two built-in training runners (morphogenesis and regeneration), visualization helpers for matplotlib and pyvista, and a TCP server for real-time Blender integration.
 
-For theoretical background and architecture details see the [thesis](documentation/thesis/) or the [API docs](documentation/docs/).
+For theoretical background and architecture details see the [thesis](documentation/thesis/) or the [API docs](documentation/docs/). Framework API docs are also available at [https://www.stud.fit.vutbr.cz/~xrepcim00/3d-nca-docs/](https://www.stud.fit.vutbr.cz/~xrepcim00/3d-nca-docs/).
 
 ## Requirements
 
