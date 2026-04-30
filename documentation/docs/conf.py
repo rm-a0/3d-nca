@@ -1,7 +1,7 @@
 import os
 import sys
 
-# Repo root on sys.path so `from src.core import ...` resolves
+# Repo root on sys.path so `from nca3d.core import ...` resolves
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 # -- Project information -----------------------------------------------------

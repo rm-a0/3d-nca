@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from src.core.schedule import Event, EventType, Schedule
+from nca3d.core.schedule import Event, EventType, Schedule
 
 
 class _DummyRunner:

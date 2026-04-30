@@ -17,8 +17,8 @@ from typing import Any, Callable, Dict, List, Optional
 
 import numpy as np
 
-from src.core.runners import NCARunner, MorphRunner
-from src.core.schedule import Event, Schedule
+from nca3d.core.runners import NCARunner, MorphRunner
+from nca3d.core.schedule import Event, Schedule
 from .protocol import build_state_msg
 from .logger import NCALogger
 
@@ -235,7 +235,7 @@ class NCATrainer:
             send_delay_ms: Delay before each broadcast in milliseconds.
         """
         import torch
-        from src.core.grid import Grid3D
+        from nca3d.core.grid import Grid3D
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -287,10 +287,10 @@ class NCATrainer:
 
     def _parse_inference_checkpoint(self, ckpt: Dict[str, Any]) -> tuple:
         """Parse both legacy and NCAModel checkpoint formats for inference."""
-        from src.core.cell import CellConfig
-        from src.core.perception import PerceptionConfig
-        from src.core.update import UpdateConfig
-        from src.core.grid import GridConfig
+        from nca3d.core.cell import CellConfig
+        from nca3d.core.perception import PerceptionConfig
+        from nca3d.core.update import UpdateConfig
+        from nca3d.core.grid import GridConfig
 
         config = ckpt.get("config")
         if not isinstance(config, dict):

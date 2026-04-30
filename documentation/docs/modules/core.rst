@@ -4,7 +4,7 @@ Core
 Cell
 ----
 
-.. automodule:: src.core.cell
+.. automodule:: nca3d.core.cell
    :members:
    :undoc-members:
    :show-inheritance:
@@ -12,7 +12,7 @@ Cell
 Perception
 ----------
 
-.. automodule:: src.core.perception
+.. automodule:: nca3d.core.perception
    :members:
    :undoc-members:
    :show-inheritance:
@@ -20,7 +20,7 @@ Perception
 Update
 ------
 
-.. automodule:: src.core.update
+.. automodule:: nca3d.core.update
    :members:
    :undoc-members:
    :show-inheritance:
@@ -28,7 +28,7 @@ Update
 Grid
 ----
 
-.. automodule:: src.core.grid
+.. automodule:: nca3d.core.grid
    :members:
    :undoc-members:
    :show-inheritance:
@@ -36,7 +36,7 @@ Grid
 NCA Model
 ---------
 
-.. automodule:: src.core.nca_model
+.. automodule:: nca3d.core.nca_model
    :members:
    :undoc-members:
    :show-inheritance:
@@ -44,7 +44,7 @@ NCA Model
 Schedule
 --------
 
-.. automodule:: src.core.schedule
+.. automodule:: nca3d.core.schedule
    :members:
    :undoc-members:
    :show-inheritance:
@@ -52,7 +52,7 @@ Schedule
 Runners - Base
 --------------
 
-.. automodule:: src.core.runners.base
+.. automodule:: nca3d.core.runners.base
    :members:
    :undoc-members:
    :show-inheritance:
@@ -60,7 +60,7 @@ Runners - Base
 Runners - Default
 -----------------
 
-.. automodule:: src.core.runners.default
+.. automodule:: nca3d.core.runners.default
    :members:
    :undoc-members:
    :show-inheritance:
@@ -68,7 +68,7 @@ Runners - Default
 Runners - Regeneration
 ----------------------
 
-.. automodule:: src.core.runners.regeneration
+.. automodule:: nca3d.core.runners.regeneration
    :members:
    :undoc-members:
    :show-inheritance:

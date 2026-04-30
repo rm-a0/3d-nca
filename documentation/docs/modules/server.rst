@@ -4,7 +4,7 @@ Server
 Server
 ------
 
-.. automodule:: src.server.server
+.. automodule:: nca3d.server.server
    :members:
    :undoc-members:
    :show-inheritance:
@@ -12,7 +12,7 @@ Server
 Trainer
 -------
 
-.. automodule:: src.server.trainer
+.. automodule:: nca3d.server.trainer
    :members:
    :undoc-members:
    :show-inheritance:
@@ -20,7 +20,7 @@ Trainer
 Logger
 ------
 
-.. automodule:: src.server.logger
+.. automodule:: nca3d.server.logger
    :members:
    :undoc-members:
    :show-inheritance:
@@ -28,7 +28,7 @@ Logger
 Protocol
 --------
 
-.. automodule:: src.server.protocol
+.. automodule:: nca3d.server.protocol
    :members:
    :undoc-members:
    :show-inheritance:

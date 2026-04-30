@@ -8,11 +8,11 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from src.core.runners import MorphRunner
-from src.core.schedule import Event, EventType
-from src.server.server import NCAServer
-from src.server.trainer import NCATrainer
-from src.server.protocol import build_init_msg, build_run_model_msg, build_state_msg
+from nca3d.core.runners import MorphRunner
+from nca3d.core.schedule import Event, EventType
+from nca3d.server.server import NCAServer
+from nca3d.server.trainer import NCATrainer
+from nca3d.server.protocol import build_init_msg, build_run_model_msg, build_state_msg
 
 
 _ROOT = Path(__file__).resolve().parents[1]
@@ -179,8 +179,8 @@ def test_server_handle_client_dispatches_protocol_messages(monkeypatch) -> None:
     ft = FakeTrainer()
     server.trainer = ft
 
-    monkeypatch.setattr("src.server.server.recv_msg", lambda s: messages.pop(0))
-    monkeypatch.setattr("src.server.server.send_msg", lambda s, m: sent.append(m))
+    monkeypatch.setattr("nca3d.server.server.recv_msg", lambda s: messages.pop(0))
+    monkeypatch.setattr("nca3d.server.server.send_msg", lambda s, m: sent.append(m))
 
     server._handle_client(object())
 
@@ -197,10 +197,10 @@ def test_server_handle_client_stops_on_recv_error(monkeypatch) -> None:
     server = NCAServer()
     sent: list[dict] = []
     monkeypatch.setattr(
-        "src.server.server.recv_msg",
+        "nca3d.server.server.recv_msg",
         lambda s: (_ for _ in ()).throw(RuntimeError("socket failed")),
     )
-    monkeypatch.setattr("src.server.server.send_msg", lambda s, m: sent.append(m))
+    monkeypatch.setattr("nca3d.server.server.send_msg", lambda s, m: sent.append(m))
     server._handle_client(object())
     assert sent == []
 
@@ -228,7 +228,7 @@ def test_trainer_broadcast_rate_limit(monkeypatch) -> None:
     trainer._send_fn = lambda m: captured.append(m)
     trainer._last_broadcast = 0.0
 
-    monkeypatch.setattr("src.server.trainer.time.monotonic", lambda: 10.0)
+    monkeypatch.setattr("nca3d.server.trainer.time.monotonic", lambda: 10.0)
 
     trainer._broadcast(state, epoch=3, loss=0.5, visible_channels=1)
     trainer._broadcast(state, epoch=4, loss=0.25, visible_channels=1)

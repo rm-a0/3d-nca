@@ -26,10 +26,10 @@ import torch
 import sys
 sys.path.insert(0, '/content/3d-nca')
 
-from src.core.runners import MorphRunner
-from src.core.nca_model import NCAModel, NCAConfig
-from src.server.logger import NCALogger
-from src.viz.volume_mpl import show_volume_rgba_mpl, show_state_target_comparison_mpl
+from nca3d.core.runners import MorphRunner
+from nca3d.core.nca_model import NCAModel, NCAConfig
+from nca3d.server.logger import NCALogger
+from nca3d.viz.volume_mpl import show_volume_rgba_mpl, show_state_target_comparison_mpl
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Device : {device}")

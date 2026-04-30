@@ -3,9 +3,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from src.core.runners import MorphRunner, NCARunner, TrainingSnapshot
-from src.core.schedule import Event, EventType
-from src.io.object_converter import obj_to_tensor
+from nca3d.core.runners import MorphRunner, NCARunner, TrainingSnapshot
+from nca3d.core.schedule import Event, EventType
+from nca3d.io.object_converter import obj_to_tensor
 
 
 def _make_config(

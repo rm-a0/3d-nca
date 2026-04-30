@@ -78,7 +78,7 @@ pip install -e ".[viz,io,dev]"
 ```python
 import torch
 import torch.nn.functional as F
-from src import NCAModel, NCAConfig
+from nca3d import NCAModel, NCAConfig
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -112,7 +112,7 @@ for step in range(1, 2001):
 ### Load a mesh target
 
 ```python
-from src.io import obj_to_tensor    # requires pip install -e ".[io]"
+from nca3d.io import obj_to_tensor    # requires pip install -e ".[io]"
 
 target = obj_to_tensor("mesh.obj", grid_size=32)
 ```
@@ -122,7 +122,7 @@ target = obj_to_tensor("mesh.obj", grid_size=32)
 `MorphRunner` and `RegenRunner` manage the training loop, sample pool, LR schedule, and loss internally.
 
 ```python
-from src.core.runners import MorphRunner
+from nca3d.core.runners import MorphRunner
 
 runner = MorphRunner()
 runner.init(
@@ -143,7 +143,7 @@ for metrics in runner.train():
 
 ```
 3d-nca/
-├── src/                        # Installable Python package
+├── nca3d/                        # Installable Python package
 │   ├── __init__.py             # Public API: NCAModel, NCAConfig, low-level components
 │   ├── core/                   # NCA engine
 │   │   ├── cell.py             # Cell state and channel layout
@@ -182,7 +182,7 @@ Requires `pip install -e ".[viz]"`.
 | `show_volume_color_pv` | pyvista | Interactive 3D rendering, color |
 
 ```python
-from src.viz import show_slice_alpha_mpl, show_volume_alpha_pv
+from nca3d.viz import show_slice_alpha_mpl, show_volume_alpha_pv
 
 show_slice_alpha_mpl(state, visible_channels=1)
 show_volume_alpha_pv(state, visible_channels=1)
@@ -193,7 +193,7 @@ show_volume_alpha_pv(state, visible_channels=1)
 A TCP server streams per-epoch state updates to a Blender addon for real-time visualization.
 
 ```python
-from src.server import NCAServer
+from nca3d.server import NCAServer
 
 server = NCAServer()
 server.start(host="localhost", port=8765)
@@ -216,16 +216,16 @@ pre-commit install
 
 ```bash
 pytest tests/
-pytest --cov=src tests/
+pytest --cov=nca3d tests/
 ```
 
 ### Linting and Formatting
 
 ```bash
-black src/ tests/
-isort src/ tests/
-ruff check src/ tests/
-mypy src/
+black nca3d/ tests/
+isort nca3d/ tests/
+ruff check nca3d/ tests/
+mypy nca3d/
 ```
 
 Tool configuration is in `pyproject.toml` under `[tool.black]`, `[tool.ruff]`, and `[tool.mypy]`.
@@ -252,9 +252,14 @@ python scripts/plot_loss_phased.py runs/experiment/loss.csv
 
 ## API Reference
 
-Full docs: `cd documentation/docs && make html`
+Full docs available [here](https://www.stud.fit.vutbr.cz/~xrepcim00/3d-nca-docs/), or you can generate them using:
 
-**`from src import ...`**
+```bash
+cd documentation/docs
+python -m sphinx.cmd.build -b html . _build/html
+```
+
+**`from nca3d import ...`**
 
 | Symbol | Description |
 |---|---|
@@ -265,11 +270,11 @@ Full docs: `cd documentation/docs && make html`
 | `Perception3D` / `PerceptionConfig` | 3D Sobel perception module |
 | `UpdateRule` / `UpdateConfig` | Learnable MLP update rule |
 
-**`from src.core.runners import ...`** - `MorphRunner`, `RegenRunner`, `NCARunner`, `TrainingSnapshot`
+**`from nca3d.core.runners import ...`** - `MorphRunner`, `RegenRunner`, `NCARunner`, `TrainingSnapshot`
 
-**`from src.viz import ...`** - see Visualization table above
+**`from nca3d.viz import ...`** - see Visualization table above
 
-**`from src.io import ...`** - `obj_to_tensor`
+**`from nca3d.io import ...`** - `obj_to_tensor`
 
 ## License
 
@@ -278,10 +283,12 @@ MIT - see [LICENSE](LICENSE).
 ## Citation
 
 ```bibtex
-@software{3d-nca,
+@mastersthesis{3d-nca-thesis,
   author = {Michal Repcik},
   title  = {3D Neural Cellular Automata},
+  school = {Brno University of Technology, Faculty of Information Technology},
   year   = {2026},
-  url    = {https://github.com/rm-a0/3d-nca}
+  url    = {[https://www.vut.cz/en/students/final-thesis/detail/171171](https://www.vut.cz/en/students/final-thesis/detail/171171)},
+  note   = {Supervisor: Ing. Karel Fritz}
 }
 ```

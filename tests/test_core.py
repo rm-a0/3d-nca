@@ -5,11 +5,11 @@ import dataclasses
 import pytest
 import torch
 
-from src.core.cell import CellConfig, CellState
-from src.core.grid import Grid3D, GridConfig
-from src.core.nca_model import NCAConfig, NCAModel
-from src.core.perception import Perception3D, PerceptionConfig
-from src.core.update import UpdateConfig, UpdateRule
+from nca3d.core.cell import CellConfig, CellState
+from nca3d.core.grid import Grid3D, GridConfig
+from nca3d.core.nca_model import NCAConfig, NCAModel
+from nca3d.core.perception import Perception3D, PerceptionConfig
+from nca3d.core.update import UpdateConfig, UpdateRule
 
 
 def _make_grid(

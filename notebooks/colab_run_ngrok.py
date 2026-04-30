@@ -41,5 +41,5 @@ print("=" * 40)
 import sys
 sys.path.insert(0, '/content/3d-nca')
 
-from src.server.app import main
+from nca3d.server.app import main
 main()

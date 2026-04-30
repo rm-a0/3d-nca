@@ -33,12 +33,12 @@ import matplotlib.pyplot as plt
 
 sys.path.insert(0, '/content/3d-nca')
 
-from src.core.cell import CellConfig
-from src.core.grid import Grid3D, GridConfig
-from src.core.nca_model import NCAModel
-from src.core.perception import PerceptionConfig
-from src.core.update import UpdateConfig
-from src.viz.volume_mpl import show_state_rgba_mpl
+from nca3d.core.cell import CellConfig
+from nca3d.core.grid import Grid3D, GridConfig
+from nca3d.core.nca_model import NCAModel
+from nca3d.core.perception import PerceptionConfig
+from nca3d.core.update import UpdateConfig
+from nca3d.viz.volume_mpl import show_state_rgba_mpl
 
 
 def _normalize_grid_state_dict(state_dict: dict) -> dict:

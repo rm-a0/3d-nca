@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "3d-nca"
+name = "nca3d"
 version = "0.1.0"
 description = "Modular 3D Neural Cellular Automata in PyTorch"
 readme = "README.md"
@@ -38,12 +38,12 @@ io = [
     "trimesh>=4.0",
 ]
 
-# Server dependencies (currently no external deps needed)
+# Server dependencies
 server = []
 
 # All optional features
 all = [
-    "3d-nca[viz,io]",
+    "nca3d[viz,io]",
 ]
 
 # Development dependencies
@@ -63,7 +63,7 @@ Repository = "https://github.com/rm-a0/3d-nca"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["src*"]
+include = ["nca3d*"]
 
 # ------------------------------------------------------------------
 # Tool configurations
@@ -78,7 +78,7 @@ profile = "black"
 line_length = 88
 multi_line_output = 3
 force_single_line = false
-known_first_party = ["src"]
+known_first_party = ["nca3d"]
 
 [tool.ruff]
 line-length = 88
