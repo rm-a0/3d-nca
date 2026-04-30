@@ -68,7 +68,8 @@ class RegenRunner(MorphRunner):
             return 0
 
         indices = [
-            i for i in range(len(self._pool))
+            i
+            for i in range(len(self._pool))
             if random.random() < self._regen_damage_prob
         ]
 
@@ -90,4 +91,4 @@ class RegenRunner(MorphRunner):
         y0 = random.randint(0, height - side)
         x0 = random.randint(0, width - side)
 
-        state[:, :, z0:z0 + side, y0:y0 + side, x0:x0 + side] = 0.0
+        state[:, :, z0 : z0 + side, y0 : y0 + side, x0 : x0 + side] = 0.0

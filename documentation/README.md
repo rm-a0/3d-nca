@@ -5,6 +5,5 @@
 This folder contains technical documentation for the **3D Neural Cellular Automata**, including:
 
 - Thesis source files
-- Configuration reference for building 3D NCAs via configs
-- Examples simulations, graphs and visualizations
-- Media and demos
+- Framework documentation generated using Sphinx
+- Poster and extended abstract for Excel@FIT conference

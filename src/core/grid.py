@@ -63,7 +63,9 @@ class Grid3D(torch.nn.Module):
 
             depth, height, width = grid_cfg.size
             xs = torch.linspace(0.0, 1.0, depth, dtype=torch.float32).view(depth, 1, 1)
-            ys = torch.linspace(0.0, 1.0, height, dtype=torch.float32).view(1, height, 1)
+            ys = torch.linspace(0.0, 1.0, height, dtype=torch.float32).view(
+                1, height, 1
+            )
             zs = torch.linspace(0.0, 1.0, width, dtype=torch.float32).view(1, 1, width)
 
             pos = torch.stack(
@@ -73,7 +75,9 @@ class Grid3D(torch.nn.Module):
                     zs.expand(depth, height, width),
                 ],
                 dim=0,
-            ).unsqueeze(0)  # [1, 3, D, H, W]
+            ).unsqueeze(
+                0
+            )  # [1, 3, D, H, W]
             self.register_buffer("_pos_enc", pos)
         else:
             self._pos_enc = None
@@ -123,9 +127,7 @@ class Grid3D(torch.nn.Module):
         tc = self.cell.cfg.task_channels
         pc = self.cell.cfg.pos_channels
 
-        seed_vis = torch.rand(
-            batch_size, vis, 1, 1, 1, device=device
-        )
+        seed_vis = torch.rand(batch_size, vis, 1, 1, 1, device=device)
         seed_vis[:, -1:, ...] = 1.0
         state[
             :,

@@ -31,7 +31,12 @@ __all__ = ["NCAServer"]
 class NCAServer:
     """TCP socket server that exposes NCA training/inference over the network."""
 
-    def __init__(self, host: str = "0.0.0.0", port: int = 5555, trainer: Optional[NCATrainer] = None) -> None:
+    def __init__(
+        self,
+        host: str = "0.0.0.0",
+        port: int = 5555,
+        trainer: Optional[NCATrainer] = None,
+    ) -> None:
         """
         Args:
             host: Interface to bind to.

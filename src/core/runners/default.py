@@ -74,17 +74,13 @@ class MorphRunner(NCARunner):
         """
         task_channels = int(config.get("cell", {}).get("task_channels", 0))
         if task_channels != 0:
-            raise ValueError(
-                "MorphRunner requires cell.task_channels == 0. "
-            )
+            raise ValueError("MorphRunner requires cell.task_channels == 0. ")
 
         if isinstance(target, list):
             if not target:
                 raise ValueError("Target list cannot be empty")
             if len(target) != 1:
-                raise ValueError(
-                    "MorphRunner expects a single target. "
-                )
+                raise ValueError("MorphRunner expects a single target. ")
             target = target[0]
 
         self._pool = []
@@ -95,7 +91,9 @@ class MorphRunner(NCARunner):
         grid_cfg = GridConfig(**config["grid"])
 
         self._device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.model = Grid3D(self._cell_cfg, perc_cfg, upd_cfg, grid_cfg).to(self._device)
+        self.model = Grid3D(self._cell_cfg, perc_cfg, upd_cfg, grid_cfg).to(
+            self._device
+        )
 
         self.optimizer = torch.optim.AdamW(
             self.model.parameters(),
@@ -135,7 +133,9 @@ class MorphRunner(NCARunner):
                 schedule.check_and_execute(epoch, self)
 
             if self.verbose:
-                print(f"Epoch {epoch}/{self.total_epochs} - Loss: {metrics['loss_total']:.4f}")
+                print(
+                    f"Epoch {epoch}/{self.total_epochs} - Loss: {metrics['loss_total']:.4f}"
+                )
 
             yield metrics
 
@@ -220,14 +220,14 @@ class MorphRunner(NCARunner):
         with torch.no_grad():
             per_sample = [
                 F.mse_loss(
-                    batch[i:i+1, -vis:],
+                    batch[i : i + 1, -vis:],
                     self.target[:, -vis:],
                 ).item()
                 for i in range(batch_size)
             ]
             worst = int(np.argmax(per_sample))
             best_idx = int(np.argmin(per_sample))
-            batch[worst:worst+1] = self.model.seed_center(1, device, None)
+            batch[worst : worst + 1] = self.model.seed_center(1, device, None)
 
         self.optimizer.zero_grad()
         state = self.model(batch, steps=n_steps)
@@ -261,7 +261,7 @@ class MorphRunner(NCARunner):
 
         with torch.no_grad():
             for j, idx in enumerate(indices):
-                self._pool[idx] = state[j:j+1].detach()
+                self._pool[idx] = state[j : j + 1].detach()
 
         self.state = state[0:1].detach()
 
@@ -279,7 +279,9 @@ class MorphRunner(NCARunner):
         visible_channels: int,
     ) -> Tensor:
         if not isinstance(target, np.ndarray):
-            raise TypeError(f"Target must be numpy.ndarray, got {type(target).__name__}")
+            raise TypeError(
+                f"Target must be numpy.ndarray, got {type(target).__name__}"
+            )
         if target.ndim != 4:
             raise ValueError(f"Target must have shape (D, H, W, C), got {target.ndim}D")
         if target.shape[-1] != visible_channels:

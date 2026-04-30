@@ -6,23 +6,17 @@ A modular PyTorch framework for training 3D Neural Cellular Automata on volumetr
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![PyTorch](https://img.shields.io/badge/pytorch-2.0%2B-orange)
 
----
-
 ## Overview
 
 3D-NCA is a PyTorch library for training 3D Neural Cellular Automata on volumetric targets. It provides a composable model API, two built-in training runners (morphogenesis and regeneration), visualization helpers for matplotlib and pyvista, and a TCP server for real-time Blender integration.
 
 For theoretical background and architecture details see the [thesis](documentation/thesis/) or the [API docs](documentation/docs/).
 
----
-
 ## Requirements
 
 - Python 3.11+
 - PyTorch 2.0+
 - CUDA-capable GPU (optional, but strongly recommended)
-
----
 
 ## Installation
 
@@ -54,12 +48,8 @@ pip install -e ".[io]"           # trimesh (mesh voxelization)
 pip install -e ".[dev]"          # pytest, black, ruff, mypy, pre-commit
 pip install -e ".[all]"          # viz + io
 ```
-
-> **CUDA (pip only):** Install a CUDA-enabled PyTorch build before `pip install -e .`:
-> ```bash
-> pip install torch --index-url https://download.pytorch.org/whl/cu121
-> pip install -e ".[all]"
-> ```
+> [!IMPORTANT]
+> Install a CUDA-enabled PyTorch build before installing the package if you want GPU support.
 
 ### Option 2 - conda (full development)
 
@@ -81,13 +71,9 @@ conda activate nca3d
 pip install -e ".[viz,io,dev]"
 ```
 
-See [ENVIRONMENT_GUIDE.md](ENVIRONMENT_GUIDE.md) for a full comparison of all three options.
-
----
-
 ## Quick Start
 
-`NCAModel` is a standard `nn.Module` -- drop it into any PyTorch training loop.
+`NCAModel` is a standard `nn.Module` - drop it into any PyTorch training loop.
 
 ```python
 import torch
@@ -104,7 +90,7 @@ config = NCAConfig(
 )
 model = NCAModel(config).to(device)
 
-# Spherical target -- shape [1, 1, D, H, W]
+# Spherical target - shape [1, 1, D, H, W]
 D, H, W = config.grid_size
 axes = [torch.linspace(-1, 1, s) for s in (D, H, W)]
 grid = torch.stack(torch.meshgrid(*axes, indexing="ij"))
@@ -153,36 +139,32 @@ for metrics in runner.train():
     print(runner.current_epoch, metrics["loss_total"])
 ```
 
----
-
 ## Project Structure
 
 ```
 3d-nca/
-+-- src/                        # Installable Python package
-|   +-- __init__.py             # Public API: NCAModel, NCAConfig, low-level components
-|   +-- core/                   # NCA engine
-|   |   +-- cell.py             # Cell state and channel layout
-|   |   +-- grid.py             # Grid3D -- main nn.Module
-|   |   +-- perception.py       # 3D Sobel convolution kernels
-|   |   +-- update.py           # Learnable MLP update rule
-|   |   +-- nca_model.py        # NCAModel high-level wrapper
-|   |   +-- schedule.py         # Training event scheduling
-|   |   +-- runners/            # MorphRunner, RegenRunner
-|   +-- viz/                    # Visualization (matplotlib + pyvista)
-|   +-- io/                     # Mesh voxelization (trimesh)
-|   +-- server/                 # TCP server for Blender integration
-+-- tests/                      # Pytest test suite
-+-- notebooks/                  # Jupyter training examples
-+-- scripts/                    # Loss plotting utilities
-+-- blender/                    # Blender addon
-+-- documentation/              # Thesis and Sphinx API docs
-+-- pyproject.toml              # Package definition and pip dependencies
-+-- conda_env.yml               # Full development conda environment
-+-- environment.yml             # Minimal conda + pip environment
+├── src/                        # Installable Python package
+│   ├── __init__.py             # Public API: NCAModel, NCAConfig, low-level components
+│   ├── core/                   # NCA engine
+│   │   ├── cell.py             # Cell state and channel layout
+│   │   ├── grid.py             # Grid3D - main nn.Module
+│   │   ├── perception.py       # 3D Sobel convolution kernels
+│   │   ├── update.py           # Learnable MLP update rule
+│   │   ├── nca_model.py        # NCAModel high-level wrapper
+│   │   ├── schedule.py         # Training event scheduling
+│   │   └── runners/            # MorphRunner, RegenRunner
+│   ├── viz/                    # Visualization (matplotlib + pyvista)
+│   ├── io/                     # Mesh voxelization (trimesh)
+│   └── server/                 # TCP server for Blender integration
+├── tests/                      # Pytest test suite
+├── notebooks/                  # Jupyter training examples
+├── scripts/                    # Loss plotting utilities
+├── blender/                    # Blender addon
+├── documentation/              # Thesis and Sphinx API docs
+├── pyproject.toml              # Package definition and pip dependencies
+├── conda_env.yml               # Full development conda environment
+└── environment.yml             # Minimal conda + pip environment
 ```
-
----
 
 ## Visualization
 
@@ -206,8 +188,6 @@ show_slice_alpha_mpl(state, visible_channels=1)
 show_volume_alpha_pv(state, visible_channels=1)
 ```
 
----
-
 ## Blender Integration
 
 A TCP server streams per-epoch state updates to a Blender addon for real-time visualization.
@@ -220,8 +200,6 @@ server.start(host="localhost", port=8765)
 ```
 
 Install the addon from `blender/`, connect to `localhost:8765`, and start training. The growing structure updates live in the 3D viewport.
-
----
 
 ## Development
 
@@ -272,8 +250,6 @@ python scripts/plot_loss.py runs/experiment/loss.csv
 python scripts/plot_loss_phased.py runs/experiment/loss.csv
 ```
 
----
-
 ## API Reference
 
 Full docs: `cd documentation/docs && make html`
@@ -282,31 +258,29 @@ Full docs: `cd documentation/docs && make html`
 
 | Symbol | Description |
 |---|---|
-| `NCAModel` | High-level `nn.Module` -- recommended entry point |
+| `NCAModel` | High-level `nn.Module` - recommended entry point |
 | `NCAConfig` | Dataclass bundling all configuration |
 | `Grid3D` / `GridConfig` | Low-level 3D grid module |
 | `CellState` / `CellConfig` | Cell state and channel configuration |
 | `Perception3D` / `PerceptionConfig` | 3D Sobel perception module |
 | `UpdateRule` / `UpdateConfig` | Learnable MLP update rule |
 
-**`from src.core.runners import ...`** -- `MorphRunner`, `RegenRunner`, `NCARunner`, `TrainingSnapshot`
+**`from src.core.runners import ...`** - `MorphRunner`, `RegenRunner`, `NCARunner`, `TrainingSnapshot`
 
-**`from src.viz import ...`** -- see Visualization table above
+**`from src.viz import ...`** - see Visualization table above
 
-**`from src.io import ...`** -- `obj_to_tensor`
-
----
+**`from src.io import ...`** - `obj_to_tensor`
 
 ## License
 
-MIT -- see [LICENSE](LICENSE).
+MIT - see [LICENSE](LICENSE).
 
 ## Citation
 
 ```bibtex
 @software{3d-nca,
   author = {Michal Repcik},
-  title  = {3D Neural Cellular Automata Framework},
+  title  = {3D Neural Cellular Automata},
   year   = {2026},
   url    = {https://github.com/rm-a0/3d-nca}
 }

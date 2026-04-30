@@ -141,14 +141,18 @@ def _surface_mask(alpha: np.ndarray, threshold: float = 0.15) -> np.ndarray:
     return filled & ~interior
 
 
-def _to_rgba_array(target: np.ndarray | Tensor, visible_channels: int = 4) -> np.ndarray:
+def _to_rgba_array(
+    target: np.ndarray | Tensor, visible_channels: int = 4
+) -> np.ndarray:
     """Convert target/state tensor or array to clipped RGBA array [D,H,W,4]."""
     if isinstance(target, Tensor):
         visible = extract_visible(target, visible_channels=visible_channels)
         return np.clip(extract_rgba(visible), 0.0, 1.0)
 
     if not isinstance(target, np.ndarray):
-        raise TypeError(f"Expected numpy.ndarray or Tensor, got {type(target).__name__}")
+        raise TypeError(
+            f"Expected numpy.ndarray or Tensor, got {type(target).__name__}"
+        )
     if target.ndim != 4:
         raise ValueError(f"Expected target shape (D,H,W,C), got {target.shape}")
 

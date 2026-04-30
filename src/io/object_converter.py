@@ -37,8 +37,12 @@ def obj_to_tensor(
         Uses internal (B,C,D,H,W) format (batch-first) for PyTorch compatibility.
         To convert to external (D,H,W,C) format: tensor[0].permute(1,2,3,0).numpy()
     """
-    if len(grid_size) != 3 or any(not isinstance(dim, Integral) or dim <= 0 for dim in grid_size):
-        raise ValueError(f"grid_size must be a tuple of 3 positive integers, got {grid_size}")
+    if len(grid_size) != 3 or any(
+        not isinstance(dim, Integral) or dim <= 0 for dim in grid_size
+    ):
+        raise ValueError(
+            f"grid_size must be a tuple of 3 positive integers, got {grid_size}"
+        )
 
     mesh = trimesh.load_mesh(filepath)
 

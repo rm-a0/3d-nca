@@ -54,8 +54,8 @@ class NCATrainer:
         self._base_dir = base_dir
         self._checkpoint_interval = checkpoint_interval
         self.verbose = verbose
-        self._runner_factory: Callable[[], NCARunner] = (
-            runner_factory or (lambda: MorphRunner(verbose=verbose))
+        self._runner_factory: Callable[[], NCARunner] = runner_factory or (
+            lambda: MorphRunner(verbose=verbose)
         )
 
         self._runner: Optional[NCARunner] = None
@@ -207,7 +207,9 @@ class NCATrainer:
                         is_final=snap.epoch == snap.total_epochs,
                     )
 
-                self._broadcast(snap.state, snap.epoch, snap.loss, snap.visible_channels)
+                self._broadcast(
+                    snap.state, snap.epoch, snap.loss, snap.visible_channels
+                )
         finally:
             gen.close()
 
@@ -238,7 +240,9 @@ class NCATrainer:
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
         try:
-            ckpt = torch.load(io.BytesIO(model_bytes), map_location=device, weights_only=False)
+            ckpt = torch.load(
+                io.BytesIO(model_bytes), map_location=device, weights_only=False
+            )
             cell_cfg, perc_cfg, upd_cfg, grid_cfg, state_dict = (
                 self._parse_inference_checkpoint(ckpt)
             )

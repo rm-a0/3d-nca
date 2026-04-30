@@ -73,7 +73,9 @@ class Event:
 
         Unknown values are kept as raw strings so custom runner events remain supported.
         """
-        if isinstance(self.event_type, str) and not isinstance(self.event_type, EventType):
+        if isinstance(self.event_type, str) and not isinstance(
+            self.event_type, EventType
+        ):
             name = self.event_type.strip()
             try:
                 self.event_type = EventType(name)
