@@ -412,6 +412,8 @@ Most neural CA are initialised from a \emph{seed} -- a single active cell placed
 the centre of an otherwise empty grid -- from which the system must grow the target
 structure through repeated application of the local update rule.
 
+\clearpage
+
 \subsection{Training and Optimisation}
 
 Because the update rule is differentiable, the model parameters can be optimised by
@@ -1429,7 +1431,6 @@ loss = (
     + w_color    * loss_color(pred, target)
     + w_overflow * loss_overflow(pred)
 )
-
 loss.backward()
 optimizer.step()
 pool.update(batch, pred)
@@ -1804,9 +1805,9 @@ experiments were designed to answer several practical questions:
           way?
     \item Can one model learn multiple targets and transition between them
           through task-channel conditioning?
-    \item Does the interactive remote training workflow - core framework on
+    \item Does the interactive remote training workflow -- core framework on
           a GPU machine, real-time visualisation in Blender over a TCP
-          tunnel - work in practice?
+          tunnel -- work in practice?
     \item Can the framework be used effectively without the server, treating
           the core package as a standalone research tool?
     \item Does schedule-driven training remove the need to hardcode phase
@@ -1838,7 +1839,8 @@ apply to all morphogenesis experiments in this section.
 \begin{table}[htbp]
     \centering
     \small
-    \begin{tabular}{p{0.32\textwidth}p{0.24\textwidth}p{0.36\textwidth}}
+    {\setlength{\tabcolsep}{4pt}
+    \begin{tabular}{@{}p{0.32\textwidth}p{0.24\textwidth}p{0.36\textwidth}@{}}
         \hline
         \textbf{Category} & \textbf{Setting} & \textbf{Value}\\
         \hline
@@ -1851,7 +1853,7 @@ apply to all morphogenesis experiments in this section.
         Loss & Loss weights & $w_{\alpha}:w_{c}:w_{o}=4{:}1{:}2$\\
         Stability & Gradient clip & global norm 1.0\\
         \hline
-    \end{tabular}
+    \end{tabular}}
     \caption{Default \texttt{MorphRunner} training settings.}
     \label{tab:exp-morph-runner-defaults}
 \end{table}
@@ -1864,23 +1866,24 @@ configuration in Table~\ref{tab:exp-morph-sym-config}.
 \begin{table}[htbp]
     \centering
     \small
-    \begin{tabular}{p{0.42\textwidth}p{0.50\textwidth}}
+    {\setlength{\tabcolsep}{4pt}
+    \begin{tabular}{@{}p{0.42\textwidth}p{0.50\textwidth}@{}}
         \hline
         \textbf{Setting} & \textbf{Value}\\
         \hline
         Grid size & $32^3$\\
-        \texttt{cell.hidden\_channels} & 16\\
-        \texttt{cell.visible\_channels} & 4 (RGBA)\\
-        \texttt{cell.task\_channels} & 0\\
-        \texttt{cell.pos\_channels} & 0\\
-        \texttt{perception.kernel\_radius} & 1\\
-        \texttt{perception.channel\_groups} & 3\\
-        \texttt{update.hidden\_dim} & 96\\
-        \texttt{training.learning\_rate} & $2\times10^{-3}$\\
-        \texttt{training.num\_epochs} & 3000\\
-        \texttt{training.batch\_size} & 4\\
+        \path{cell.hidden_channels} & 16\\
+        \path{cell.visible_channels} & 4 (RGBA)\\
+        \path{cell.task_channels} & 0\\
+        \path{cell.pos_channels} & 0\\
+        \path{perception.kernel_radius} & 1\\
+        \path{perception.channel_groups} & 3\\
+        \path{update.hidden_dim} & 96\\
+        \path{training.learning_rate} & $2\times10^{-3}$\\
+        \path{training.num_epochs} & 3000\\
+        \path{training.batch_size} & 4\\
         \hline
-    \end{tabular}
+    \end{tabular}}
     \caption{Symmetric morphogenesis configuration.}
     \label{tab:exp-morph-sym-config}
 \end{table}
@@ -1950,8 +1953,10 @@ remained stable in post-training inference.
 The second morphogenesis experiment targeted a voxelised chess pawn and
 exposed a failure mode in the baseline configuration.
 
-The first attempt reused the symmetric settings (\texttt{pos\_channels = 0},
-\texttt{perception.channel\_groups = 3}). With only isotropic local features,
+The first attempt reused the settings from the symmetric experiment
+(\texttt{pos\_\allowbreak channels=0},
+\texttt{perception.\allowbreak channel\_\allowbreak groups=\allowbreak 3}).
+With only isotropic local features,
 the model repeatedly drifted toward symmetric intermediate solutions and failed
 to preserve the directional structure of the target.
 
@@ -1971,9 +1976,10 @@ global orientation. Without a way to distinguish up from down or front from
 back, the local rule has no basis for producing directional structure.
 
 This observation directly motivated two additions to the framework. First,
-\texttt{perception.channel\_groups = 5} was introduced, replacing the
-Laplacian with signed gradients along $x$, $y$ and $z$. Second,
-\texttt{pos\_channels = 3} was added, injecting normalised absolute
+\texttt{perception.\allowbreak channel\_\allowbreak groups=\allowbreak 5} was
+introduced, replacing the Laplacian with signed gradients along $x$, $y$ and
+$z$. Second, \texttt{pos\_\allowbreak channels=\allowbreak 3} was added,
+injecting normalised absolute
 coordinates as read-only channels that give each cell a stable global
 reference. Table~\ref{tab:exp-morph-asym-config} lists the changes relative
 to the symmetric baseline.
@@ -1981,15 +1987,16 @@ to the symmetric baseline.
 \begin{table}[htbp]
     \centering
     \small
-    \begin{tabular}{p{0.42\textwidth}p{0.50\textwidth}}
+    {\setlength{\tabcolsep}{4pt}
+    \begin{tabular}{@{}p{0.42\textwidth}p{0.50\textwidth}@{}}
         \hline
         \textbf{Setting} & \textbf{Value}\\
         \hline
-        \texttt{cell.pos\_channels} & 3\\
-        \texttt{perception.channel\_groups} & 5\\
-        \texttt{training.num\_epochs} & 4000\\
+        \path{cell.pos_channels} & 3\\
+        \path{perception.channel_groups} & 5\\
+        \path{training.num_epochs} & 4000\\
         \hline
-    \end{tabular}
+    \end{tabular}}
     \caption{Asymmetric morphogenesis changes relative to the symmetric
              baseline.}
     \label{tab:exp-morph-asym-config}
@@ -2014,7 +2021,7 @@ the core package as a self-contained training library.
 
 \begin{figure}[!htbp]
     \centering
-    \includegraphics[width=0.9\textwidth]{obrazky-figures/fig-exp-morph-asym-target.png}\\[0.5em]
+    \includegraphics[width=1\textwidth]{obrazky-figures/fig-exp-morph-asym-target.png}\\[0.5em]
     \includegraphics[width=0.5\textwidth]{obrazky-figures/fig-exp-morph-asym-target-voxel.png}
     \caption{Asymmetric target prepared in Blender (top) and voxel target used
              during training (bottom).}
@@ -2111,27 +2118,33 @@ metamorphogenesis runs.
 \begin{table}[htbp]
     \centering
     \small
-    \begin{tabular}{p{0.17\textwidth}p{0.08\textwidth}p{0.15\textwidth}
+    {\setlength{\tabcolsep}{2pt}
+    \begin{tabular}{@{}p{0.16\textwidth}p{0.09\textwidth}p{0.15\textwidth}
                     p{0.10\textwidth}p{0.06\textwidth}p{0.07\textwidth}
-                    p{0.14\textwidth}p{0.13\textwidth}}
+                    p{0.14\textwidth}p{0.13\textwidth}@{}}
         \hline
         \textbf{Run} & \textbf{Epochs} & \textbf{Phases} &
-        \textbf{Boundaries} & \textbf{$h$} & \textbf{Pool} &
-        \textbf{LR schedule} & \textbf{Loss weights}\\
+        \shortstack{\textbf{Phase}\\\textbf{bounds}} &
+        \textbf{$h$} & \textbf{Pool} &
+        \shortstack{\textbf{LR}\\\textbf{schedule}} &
+        \shortstack{\textbf{Loss}\\\textbf{weights}}\\
         \hline
-        Synthetic & 9000 & 3000/3000/3000 & 3001, 6001 & 96 & 32 &
-            cosine ($2\times10^{-3}$) & $4{:}1{:}2$\\
-        Creature R1 & 9000 & 3000/3000/3000 & 3001, 6001 & 96 & 32 &
-            cosine ($2\times10^{-3}$) & $4{:}1{:}2$\\
-        Creature R2 & 12000 & 2000/5000/5000 & 2001, 7001 & 128 & 48 &
-            $2\times10^{-3}\rightarrow8\times10^{-4}\rightarrow3\times10^{-4}$
-            & $3{:}2{:}3$ (+ events)\\
-        Creature R3 & 19500 & 1500/6000/12000 & 1501, 7501 & 128 & 64 &
-            $2\times10^{-3}\rightarrow8\times10^{-4}\rightarrow
-             3\times10^{-4}\rightarrow1\times10^{-4}$
-            & $3{:}2{:}3$ (+ events)\\
+        Synthetic & 9000 & \shortstack{3000/\\3000/\\3000} &
+            \shortstack{3001,\\6001} & 96 & 32 &
+            \shortstack{cosine\\($2\times10^{-3}$)} & $4{:}1{:}2$\\
+        Creature R1 & 9000 & \shortstack{3000/\\3000/\\3000} &
+            \shortstack{3001,\\6001} & 96 & 32 &
+            \shortstack{cosine\\($2\times10^{-3}$)} & $4{:}1{:}2$\\
+        Creature R2 & 12000 & \shortstack{2000/\\5000/\\5000} &
+            \shortstack{2001,\\7001} & 128 & 48 &
+            \shortstack{$2\times10^{-3}$\\$\rightarrow8\times10^{-4}$\\$\rightarrow3\times10^{-4}$}
+            & \shortstack{$3{:}2{:}3$\\(+ events)}\\
+        Creature R3 & 19500 & \shortstack{1500/\\6000/\\12000} &
+            \shortstack{1501,\\7501} & 128 & 64 &
+            \shortstack{$2\times10^{-3}$\\$\rightarrow8\times10^{-4}$\\$\rightarrow3\times10^{-4}$\\$\rightarrow1\times10^{-4}$}
+            & \shortstack{$3{:}2{:}3$\\(+ events)}\\
         \hline
-    \end{tabular}
+    \end{tabular}}
     \caption{Metamorphogenesis runs. $h$ denotes \texttt{update.hidden\_dim}.}
     \label{tab:exp-meta-overview}
 \end{table}
@@ -2156,8 +2169,9 @@ on a phased schedule:
           \texorpdfstring{$\rightarrow$}{->} sphere.
 \end{itemize}
 
-The model used \texttt{task\_channels = 3}, \texttt{pos\_channels = 3} and
-\texttt{perception.channel\_groups = 5}. Pool expansion and relabeling were
+The model used three task channels, three positional channels and the
+directional five-group perception operator.
+Pool expansion and relabeling were
 applied at phase boundaries so each new task received realistic morphing
 inputs rather than fresh seeds.
 
@@ -2272,7 +2286,7 @@ quality in thin or highly asymmetric regions was limited, however. Colour
 accuracy in the late-phase targets was worse than expected, and some limb
 voxels were unstable during inference. These observations led directly to
 three changes tested in Rounds 2 and 3: higher MLP capacity
-(\texttt{update.hidden\_dim = 128}), a larger pool and explicit per-phase
+(\texttt{update.\allowbreak hidden\_dim=\allowbreak 128}), a larger pool and explicit per-phase
 weight and learning-rate schedule events.
 
 \subsection{Pokémon-Inspired Creature Sequence -- Rounds 2 and 3}
@@ -2303,7 +2317,8 @@ a Kaggle T4 GPU.
 \begin{table}[htbp]
     \centering
     \small
-    \begin{tabular}{p{0.14\textwidth}p{0.78\textwidth}}
+    {\setlength{\tabcolsep}{4pt}
+    \begin{tabular}{@{}p{0.14\textwidth}p{0.78\textwidth}@{}}
         \hline
         \textbf{Epoch} & \textbf{Event}\\
         \hline
@@ -2316,7 +2331,7 @@ a Kaggle T4 GPU.
         7001 & $w_c \leftarrow 5.0$\\
         9001 & $w_o \leftarrow 6.0$\\
         \hline
-    \end{tabular}
+    \end{tabular}}
     \caption{Round 2 schedule events.}
     \label{tab:exp-meta-r2-schedule}
 \end{table}
@@ -2333,7 +2348,8 @@ hours and 43 minutes on a Kaggle T4 GPU.
 \begin{table}[htbp]
     \centering
     \small
-    \begin{tabular}{p{0.14\textwidth}p{0.78\textwidth}}
+    {\setlength{\tabcolsep}{4pt}
+    \begin{tabular}{@{}p{0.14\textwidth}p{0.78\textwidth}@{}}
         \hline
         \textbf{Epoch} & \textbf{Event}\\
         \hline
@@ -2347,7 +2363,7 @@ hours and 43 minutes on a Kaggle T4 GPU.
         15000 & LR $\leftarrow 1\times10^{-4}$\\
         15000 & $w_o \leftarrow 8.0$\\
         \hline
-    \end{tabular}
+    \end{tabular}}
     \caption{Round 3 schedule events.}
     \label{tab:exp-meta-r3-schedule}
 \end{table}
@@ -2422,8 +2438,9 @@ Table~\ref{tab:exp-meta-summary} compares the four metamorphogenesis runs.
 \begin{table}[htbp]
     \centering
     \small
-    \begin{tabular}{p{0.20\textwidth}p{0.10\textwidth}p{0.10\textwidth}
-                    p{0.10\textwidth}p{0.11\textwidth}p{0.25\textwidth}}
+    {\setlength{\tabcolsep}{3pt}
+    \begin{tabular}{@{}p{0.20\textwidth}p{0.10\textwidth}p{0.10\textwidth}
+                    p{0.10\textwidth}p{0.11\textwidth}p{0.25\textwidth}@{}}
         \hline
         \textbf{Run} & \textbf{Epochs} & \textbf{$h$} & \textbf{Pool} &
         \textbf{Runtime} & \textbf{Main outcome}\\
@@ -2437,7 +2454,7 @@ Table~\ref{tab:exp-meta-summary} compares the four metamorphogenesis runs.
         Creature R3  & 19500 & 128 & 64 & 11 h 43 min &
             Best overall fidelity; thin structures remain challenging\\
         \hline
-    \end{tabular}
+    \end{tabular}}
     \caption{Metamorphogenesis run summary.}
     \label{tab:exp-meta-summary}
 \end{table}
@@ -2478,8 +2495,8 @@ training regime with no changes to the server, protocol or visualisation
 pipeline.
 
 Several directions are open for future development. In the short term, the
-framework could be extended with additional training regimes --- specifically
-persistence and full regeneration --- exposed through the existing runner
+framework could be extended with additional training regimes -- specifically
+persistence and full regeneration -- exposed through the existing runner
 interface and demonstrated interactively through tools such as a Blender
 viewport eraser that lets the user remove parts of a grown structure and
 observe live recovery. The voxelisation pipeline could also be extended to
