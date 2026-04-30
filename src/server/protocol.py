@@ -246,10 +246,26 @@ def build_resume_msg() -> Dict[str, Any]:
 
 
 def build_ack_msg(message: str) -> Dict[str, Any]:
+    """Build an acknowledgement message.
+
+    Args:
+        message: Human-readable confirmation text.
+
+    Returns:
+        Dict with ``type='ack'`` and the message string.
+    """
     return {"type": "ack", "message": message}
 
 
 def build_error_msg(message: str) -> Dict[str, Any]:
+    """Build an error message.
+
+    Args:
+        message: Error description to send to the client.
+
+    Returns:
+        Dict with ``type='error'`` and the message string.
+    """
     return {"type": "error", "message": message}
 
 

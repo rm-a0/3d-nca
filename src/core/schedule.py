@@ -60,12 +60,7 @@ class Event:
 
     For TARGET_CHANGE events, ``target`` is in external (D, H, W, C) format.
     The runner is responsible for converting it to the internal format.
-
-    Attributes:
-        epoch: Epoch when the event fires. Use NOW (-1) to fire immediately.
-        event_type: Type of parameter change. Can be an EventType or custom string.
-        value: Numeric value associated with the change.
-        target: Voxel grid for TARGET_CHANGE events, None otherwise.
+    Use ``NOW`` (-1) as ``epoch`` to fire the event on the next training step.
     """
 
     epoch: int

@@ -4,15 +4,16 @@ NCALogger - owns all file I/O for a single training run.
 Each instantiation claims the next available run_NNN directory automatically,
 so concurrent or sequential runs never collide.
 
-Run directory layout:
-  runs/
+Run directory layout::
+
+    runs/
     run_003/
-            meta.json          - config, timestamps, git hash
-            loss.csv           - per-epoch losses
-            events.jsonl       - schedule events (one JSON per line)
-      checkpoints/
-                model_ep01000.pt - full PyTorch checkpoint (config + state_dict)
-        model_ep02000.pt
+        meta.json           - config, timestamps, git hash
+        loss.csv            - per-epoch losses
+        events.jsonl        - schedule events (one JSON per line)
+        checkpoints/
+            model_ep01000.pt
+            model_ep02000.pt
 """
 
 from __future__ import annotations
@@ -57,7 +58,11 @@ class NCALogger:
     # --- Public API ---
 
     def log_meta(self, config: dict) -> None:
-        """Write meta.json with config, wall-clock start time, and git hash."""
+        """Write meta.json with config, wall-clock start time, and git hash.
+
+        Args:
+            config: Training configuration dict to embed in the metadata file.
+        """
         self._config = config
         meta: Dict[str, Any] = {
             "run_id": self.run_id,
@@ -94,7 +99,19 @@ class NCALogger:
         is_final: bool = False,
         metrics: Optional[Dict[str, Any]] = None,
     ) -> None:
-        """Append one CSV row.  Optionally save a model checkpoint."""
+        """Append one CSV row and optionally save a model checkpoint.
+
+        Args:
+            epoch: Current training epoch number.
+            loss_alpha: Alpha channel loss component.
+            loss_color: RGB color loss component.
+            loss_overflow: Overflow penalty loss component.
+            loss_total: Combined total loss.
+            phase: Optional phase label written to the CSV (e.g. ``"regen"``).
+            model: PyTorch model to checkpoint; skipped if ``None``.
+            is_final: If ``True``, forces a checkpoint regardless of interval.
+            metrics: Additional metrics (currently unused, reserved for future use).
+        """
         with self._loss_path.open("a", newline="", encoding="utf-8") as f:
             csv.writer(f).writerow(
                 [
@@ -128,7 +145,15 @@ class NCALogger:
                 pass
 
     def save_model(self, model, epoch: int) -> Path:
-        """Save a full model checkpoint as .pt (config + state_dict)."""
+        """Save a full model checkpoint as ``.pt`` (config + state_dict).
+
+        Args:
+            model: PyTorch model with a ``state_dict()`` method.
+            epoch: Epoch number used to name the file.
+
+        Returns:
+            Path to the saved checkpoint file.
+        """
         import torch
 
         path = self.checkpoint_dir / f"model_ep{epoch:05d}.pt"
@@ -148,7 +173,13 @@ class NCALogger:
         event_type: str,
         details: Optional[Dict[str, Any]] = None,
     ) -> None:
-        """Append one JSON line to events.jsonl."""
+        """Append one JSON line to events.jsonl.
+
+        Args:
+            epoch: Epoch at which the event fired.
+            event_type: String label for the event (e.g. ``"LEARNING_RATE"``).
+            details: Optional extra fields merged into the JSON record.
+        """
         record: Dict[str, Any] = {
             "epoch": epoch,
             "event_type": event_type,

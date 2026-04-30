@@ -14,6 +14,8 @@ from torch import Tensor
 
 from .default import MorphRunner
 
+__all__ = ["RegenRunner"]
+
 _DEFAULT_REGEN_DAMAGE_PROB = 0.5
 _DEFAULT_REGEN_DAMAGE_SIZE = 6
 
@@ -27,6 +29,19 @@ class RegenRunner(MorphRunner):
         self._regen_damage_size: int = _DEFAULT_REGEN_DAMAGE_SIZE
 
     def init(self, config: dict, target: np.ndarray | list[np.ndarray]) -> None:
+        """Initialise the runner with regeneration damage settings.
+
+        Reads ``training.regen_damage_prob`` and ``training.regen_damage_size``
+        from *config* in addition to all base-class fields.
+
+        Args:
+            config: Nested training config dict (see :class:`MorphRunner`).
+            target: Target voxel grid ``(D, H, W, C)`` or a single-element list.
+
+        Raises:
+            ValueError: If ``regen_damage_prob`` is outside ``[0, 1]`` or
+                ``regen_damage_size`` is less than 1.
+        """
         super().init(config, target)
 
         training_cfg = config.get("training", {})

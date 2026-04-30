@@ -25,8 +25,19 @@ from .protocol import (
 )
 
 
+__all__ = ["NCAServer"]
+
+
 class NCAServer:
+    """TCP socket server that exposes NCA training/inference over the network."""
+
     def __init__(self, host: str = "0.0.0.0", port: int = 5555, trainer: Optional[NCATrainer] = None) -> None:
+        """
+        Args:
+            host: Interface to bind to.
+            port: TCP port to listen on.
+            trainer: Pre-configured :class:`NCATrainer`; a new one is created if omitted.
+        """
         self.trainer = trainer or NCATrainer()
         self.host = host
         self.port = port

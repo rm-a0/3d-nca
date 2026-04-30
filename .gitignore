@@ -57,6 +57,7 @@ runs/
 *.onnx
 
 # ── Documentation build artefacts ───────────────────────
+documentation/docs/_build/
 *.aux
 *.log
 *.blg

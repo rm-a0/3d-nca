@@ -4,7 +4,8 @@ NCA - High-level wrapper for the 3D Neural Cellular Automata model.
 This is the primary interface for users. Construct once with desired configuration,
 and it manages all internal components (Cell, Perception, Update, Grid).
 
-Example usage:
+Example usage::
+
     nca = NCAModel(
         grid_size=(32, 32, 32),
         hidden_channels=16,
@@ -59,7 +60,11 @@ class NCAConfig:
     def to_configs(
         self,
     ) -> tuple[CellConfig, PerceptionConfig, UpdateConfig, GridConfig]:
-        """Convert to individual config objects needed by Grid3D."""
+        """Convert to individual config objects needed by Grid3D.
+
+        Returns:
+            Tuple of ``(CellConfig, PerceptionConfig, UpdateConfig, GridConfig)``.
+        """
         cell_cfg = CellConfig(
             hidden_channels=self.hidden_channels,
             visible_channels=self.visible_channels,
@@ -81,6 +86,16 @@ class NCAConfig:
 
     @classmethod
     def from_dict(cls, d: dict) -> "NCAConfig":
+        """Construct an NCAConfig from a plain dictionary.
+
+        Unknown keys are silently ignored so older checkpoints remain loadable.
+
+        Args:
+            d: Dictionary of config field names to values.
+
+        Returns:
+            Populated ``NCAConfig`` instance.
+        """
         d = dict(d)
         if "grid_size" in d and not isinstance(d["grid_size"], tuple):
             d["grid_size"] = tuple(d["grid_size"])
@@ -186,6 +201,11 @@ class NCAModel(torch.nn.Module):
         return self.grid.init_empty(batch_size, device)
 
     def save(self, path: str) -> None:
+        """Save model weights and config to a checkpoint file.
+
+        Args:
+            path: Destination file path (passed directly to ``torch.save``).
+        """
         torch.save(
             {
                 "version": _CHECKPOINT_VERSION,
@@ -199,6 +219,21 @@ class NCAModel(torch.nn.Module):
     def load(
         cls, path: str, device: Optional[str] = None, strict: bool = True
     ) -> "NCAModel":
+        """Load a model from a checkpoint saved with :meth:`save`.
+
+        Args:
+            path: Path to the checkpoint file.
+            device: Optional device string (e.g. ``"cuda"``).  Passed to
+                ``torch.load`` as ``map_location``.
+            strict: Whether to require an exact match of state-dict keys.
+
+        Returns:
+            Restored ``NCAModel`` placed on ``device``.
+
+        Raises:
+            ValueError: If the checkpoint was saved by a newer version of the
+                framework.
+        """
         ckpt = torch.load(path, map_location=device, weights_only=False)
         if ckpt.get("version", 0) > _CHECKPOINT_VERSION:
             raise ValueError(

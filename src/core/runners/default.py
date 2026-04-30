@@ -21,6 +21,8 @@ from ..schedule import Event, EventType, Schedule
 from ..update import UpdateConfig
 from .base import NCARunner, TrainingSnapshot
 
+__all__ = ["MorphRunner"]
+
 POOL_SIZE = 32
 DEFAULT_BATCH_SIZE = 4
 
@@ -59,6 +61,17 @@ class MorphRunner(NCARunner):
         self._latest_metrics: Dict[str, float] = {}
 
     def init(self, config: dict, target: np.ndarray | list[np.ndarray]) -> None:
+        """Prepare the runner for a single-target training session.
+
+        Args:
+            config: Nested dict with keys ``cell``, ``perception``, ``update``,
+                ``grid``, and ``training``.
+            target: Target voxel grid ``(D, H, W, C)`` or a single-element list.
+
+        Raises:
+            ValueError: If ``cell.task_channels != 0`` or ``target`` is an
+                empty or multi-element list.
+        """
         task_channels = int(config.get("cell", {}).get("task_channels", 0))
         if task_channels != 0:
             raise ValueError(
@@ -127,6 +140,15 @@ class MorphRunner(NCARunner):
             yield metrics
 
     def snapshot(self) -> TrainingSnapshot:
+        """Return a point-in-time snapshot of the current training state.
+
+        Returns:
+            :class:`~src.core.runners.base.TrainingSnapshot` with the latest
+            state, epoch, loss, and metrics.
+
+        Raises:
+            RuntimeError: If ``init()`` has not been called yet.
+        """
         if self.state is None or self._cell_cfg is None:
             raise RuntimeError("Runner not initialised - call init() first")
         return TrainingSnapshot(

@@ -33,15 +33,15 @@ class GridConfig:
 
 
 class Grid3D(torch.nn.Module):
-    """
-    Composes the three core NCA components:
-      - CellState: defines the per-voxel state vector
-      - Perception3D: fixed 3x3x3 depthwise filters (identity, neighbor sum, gradient)
-      - UpdateRule: 1x1x1 MLP that predicts state delta
-    Damage robustness via alive-mask intersection (pre & post).
+    """Composes the three core NCA components.
 
-        Positional channels are optional read-only channels that encode normalized
-        absolute voxel coordinates and are re-injected every step.
+    - ``CellState``: defines the per-voxel state vector
+    - ``Perception3D``: fixed 3x3x3 depthwise filters (identity, neighbor sum, gradient)
+    - ``UpdateRule``: 1x1x1 MLP that predicts state delta
+
+    Damage robustness is achieved via alive-mask intersection (pre & post step).
+    Positional channels are optional read-only channels that encode normalised
+    absolute voxel coordinates and are re-injected every step.
     """
 
     def __init__(
@@ -79,6 +79,15 @@ class Grid3D(torch.nn.Module):
             self._pos_enc = None
 
     def init_empty(self, batch_size: int, device: torch.device | str) -> Tensor:
+        """Return a zero-filled state tensor.
+
+        Args:
+            batch_size: Number of worlds to run in parallel.
+            device: Target device for the tensor.
+
+        Returns:
+            Zero tensor ``[B, C, X, Y, Z]``.
+        """
         return torch.zeros(
             batch_size,
             self.cell.total_channels,
@@ -93,12 +102,20 @@ class Grid3D(torch.nn.Module):
         device: torch.device | str,
         task_ids: Tensor | None = None,
     ) -> Tensor:
-        """
-        Seed a single living cell at the lattice center.
+        """Seed a single living cell at the lattice center.
 
         Visible channels: random RGB + alpha = 1.0 (alive signal).
         Hidden channels remain zero.
         Positional channels, when enabled, are filled across the full grid.
+
+        Args:
+            batch_size: Number of worlds to initialise.
+            device: Target device.
+            task_ids: Integer task labels ``[B]`` used to fill one-hot task
+                channels.  Ignored when ``cell_cfg.task_channels == 0``.
+
+        Returns:
+            Seeded state tensor ``[B, C, X, Y, Z]``.
         """
         state = self.init_empty(batch_size, device)
         center = tuple(s // 2 for s in self.cfg.size)
@@ -139,14 +156,13 @@ class Grid3D(torch.nn.Module):
         return state
 
     def step(self, state: Tensor) -> Tensor:
-        """
-        Advance the NCA one iteration.
+        """Advance the NCA one iteration.
 
         1. Compute pre_life: which cells are alive now
         2. Apply fixed 3x3x3 perception filters (all cells perceive)
-        3. MLP predicts `dx` for every cell
+        3. MLP predicts ``dx`` for every cell
         4. (Optional) Stochastic fire masks some updates
-        5. new_state = state + dx
+        5. ``new_state = state + dx``
         6. Compute post_life on new_state
         7. Zero out cells where post_life is False
 
@@ -154,6 +170,12 @@ class Grid3D(torch.nn.Module):
         nonzero perception (neighbor info leaks in), so the MLP can
         produce a positive alpha delta that brings them to life.  The
         post_life mask then validates only cells with sufficient alpha.
+
+        Args:
+            state: Current world state ``[B, C, X, Y, Z]``.
+
+        Returns:
+            Updated state ``[B, C, X, Y, Z]`` after one NCA step.
         """
         pre_life = self.cell.update_alive_mask(state)
         perceived = self.perception(state)
@@ -184,12 +206,8 @@ class Grid3D(torch.nn.Module):
     ) -> Tensor:
         """Run NCA for specified iterations.
 
-        1. Apply alive mask (pre_life)
-        2. Compute perception (3x3x3 fixed filters)
-        3. MLP predicts state delta with optional stochastic fire
-        4. new_state = state + delta
-        5. Apply post_life mask (growth/death)
-        Repeat for each step. Uses gradient checkpointing to reduce memory.
+        Each step applies: pre_life mask -> perception -> MLP delta -> new_state
+        -> post_life mask. Uses gradient checkpointing to reduce peak memory.
 
         Args:
             state: Current state [B, C, X, Y, Z].

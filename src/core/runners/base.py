@@ -14,16 +14,7 @@ import numpy as np
 
 @dataclass(frozen=True)
 class TrainingSnapshot:
-    """Immutable point-in-time view of training state for logging and broadcast.
-
-    Attributes:
-        state: Current NCA state in internal (B, C, D, H, W) format.
-        epoch: Current training epoch.
-        total_epochs: Total number of epochs for this session.
-        loss: Latest total loss value.
-        visible_channels: Number of visible channels to broadcast.
-        metrics: Optional per-epoch metric breakdown.
-    """
+    """Immutable point-in-time view of training state for logging and broadcast."""
 
     state: np.ndarray
     epoch: int
@@ -38,26 +29,50 @@ class NCARunner(ABC):
 
     @abstractmethod
     def init(self, config: dict, target: np.ndarray | list[np.ndarray]) -> None:
-        """Prepare the runner for a new training session."""
+        """Prepare the runner for a new training session.
+
+        Args:
+            config: Training hyperparameters (learning rate, batch size, etc.).
+            target: Target voxel grid(s) in ``(D, H, W, C)`` format.
+        """
 
     @abstractmethod
     def train(
         self, schedule: "Schedule | None" = None
     ) -> Generator[Dict[str, Any], None, None]:
-        """Run the training loop and yield per-epoch metrics."""
+        """Run the training loop and yield per-epoch metrics.
+
+        Args:
+            schedule: Optional event schedule applied each epoch.
+
+        Yields:
+            Dict of metric names to values for each completed epoch.
+        """
 
     @abstractmethod
     def snapshot(self) -> TrainingSnapshot:
-        """Return a point-in-time snapshot of the current training state."""
+        """Return a point-in-time snapshot of the current training state.
+
+        Returns:
+            Immutable :class:`TrainingSnapshot` for logging and broadcast.
+        """
 
     @abstractmethod
     def set_target(self, target: Any) -> None:
-        """Swap the active training target."""
+        """Swap the active training target without restarting the session.
+
+        Args:
+            target: New target voxel grid(s).
+        """
 
     def on_event(self, event: "Event") -> bool:
         """Handle a schedule event.
 
-        Returns True when handled, False when ignored.
+        Args:
+            event: The event to handle.
+
+        Returns:
+            ``True`` when the event was handled, ``False`` when ignored.
         """
         return False
 

@@ -22,6 +22,8 @@ from src.core.schedule import Event, Schedule
 from .protocol import build_state_msg
 from .logger import NCALogger
 
+__all__ = ["NCATrainer"]
+
 SendFn = Callable[[Dict[str, Any]], None]
 
 _BROADCAST_INTERVAL = 0.02  # seconds - cap broadcasts at 50 fps

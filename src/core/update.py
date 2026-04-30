@@ -13,7 +13,7 @@ Architecture
   1. 1x1x1 Conv -> hidden_dim
   2. GroupNorm + ReLU
   3. 1x1x1 Conv -> hidden_dim
-    4. tanh(x) x 0.1  (bounded update)
+  4. tanh(x) * 0.1  (bounded update)
   5. (optional) stochastic fire
   6. multiply by alive_mask
 
@@ -79,14 +79,19 @@ class UpdateRule(nn.Module):
                 final_conv.bias.data.fill_(0.0)
 
     def forward(self, perceived: Tensor, alive_mask: Tensor, state: Tensor) -> Tensor:
-        """
-        Predict bounded change `dx`.
+        """Predict bounded state change ``dx``.
 
         Alive-masking is NOT applied here - Grid3D handles it via
-        post-step alive masking so that dead neighbors of alive cells
-        can receive nonzero updates and come to life (growth).
+        post-step alive masking so dead neighbors of alive cells can
+        receive nonzero updates and come to life (growth).
 
-        Returns: dx [B, C, X, Y, Z]
+        Args:
+            perceived: Perception output ``[B, G*C, X, Y, Z]``.
+            alive_mask: Boolean alive mask ``[B, 1, X, Y, Z]``.
+            state: Current cell states ``[B, C, X, Y, Z]``.
+
+        Returns:
+            State delta ``dx`` with shape ``[B, C, X, Y, Z]``.
         """
         delta = self.mlp(perceived)
 

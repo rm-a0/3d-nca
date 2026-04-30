@@ -138,10 +138,13 @@ class Perception3D(torch.nn.Module):
                         w[base + 2, 0, k + dx, k + dy, k + dz] = -1.0
 
     def forward(self, state: Tensor) -> Tensor:
-        """
-        Apply the fixed perception filters.
+        """Apply the fixed perception filters.
 
-        Input:  [B, C_in, D, H, W]
-        Output: [B, G*C_in, D, H, W]
+        Args:
+            state: Cell states ``[B, C_in, D, H, W]``.
+
+        Returns:
+            Perceived features ``[B, G*C_in, D, H, W]`` where G is
+            ``cfg.channel_groups``.
         """
         return self.depthwise(state)

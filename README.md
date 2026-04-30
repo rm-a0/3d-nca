@@ -1,342 +1,313 @@
 # 3D Neural Cellular Automata
 
-A modular PyTorch framework for training **3D Neural Cellular Automata** — self-organizing systems that learn to grow volumetric structures through local, parallel cell interactions.
+A modular PyTorch framework for training 3D Neural Cellular Automata on volumetric targets.
+
+![Python](https://img.shields.io/badge/python-3.11%2B-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![PyTorch](https://img.shields.io/badge/pytorch-2.0%2B-orange)
 
 ---
 
-## Architecture Overview
+## Overview
 
-### Package Structure
+3D-NCA is a PyTorch library for training 3D Neural Cellular Automata on volumetric targets. It provides a composable model API, two built-in training runners (morphogenesis and regeneration), visualization helpers for matplotlib and pyvista, and a TCP server for real-time Blender integration.
 
-```
-src/
-├── core/           # NCA engine and training logic
-│   ├── cell.py           # Cell state and configuration
-│   ├── grid.py           # 3D grid simulation
-│   ├── perception.py     # 3D convolution kernels for local perception
-│   ├── update.py         # Learnable update rules (MLP)
-│   ├── nca_model.py      # High-level NCA wrapper
-│   ├── schedule.py       # Training event scheduling
-│   └── runners/          # Training orchestrators (Morph, Regen)
-├── viz/            # Visualization backends
-│   ├── slice_mpl.py      # 2D slice plotting (matplotlib)
-│   ├── volume_mpl.py     # 3D volume plotting (matplotlib)
-│   └── volume_pv.py      # 3D volume rendering (pyvista)
-├── io/             # Mesh I/O utilities
-│   └── object_converter.py  # Voxelization (trimesh)
-└── server/         # TCP training server (for Blender integration)
-    ├── server.py         # Socket server
-    ├── trainer.py        # Background training thread
-    ├── protocol.py       # Message protocol
-    └── logger.py         # Training logger
-```
+For theoretical background and architecture details see the [thesis](documentation/thesis/) or the [API docs](documentation/docs/).
 
-### Core Concepts
+---
 
-**1. Cell State**
-- Each voxel stores a multi-channel state vector `[alive, r, g, b, h1, h2, ...]`
-- Channel 0: alive mask (binary, learned)
-- Channels 1-3: visible RGB color
-- Channels 4+: hidden channels for internal computation
+## Requirements
 
-**2. Perception**
-- 3D Sobel filters detect spatial gradients in each channel
-- Creates perception vectors from local neighborhood (3×3×3 kernel)
-- Differentiable convolution operations
-
-**3. Update Rule**
-- Learnable MLP maps `perception → state_delta`
-- Cell updates conditionally: only if cell or neighbor is alive
-- Stochastic masking prevents synchronization artifacts
-
-**4. Training Loop**
-- Start from seed (single alive cell or small region)
-- Apply NCA update for N steps
-- Compute loss vs target voxel mesh (alpha + color + overflow)
-- Backprop through time to train the update rule
+- Python 3.11+
+- PyTorch 2.0+
+- CUDA-capable GPU (optional, but strongly recommended)
 
 ---
 
 ## Installation
 
-### Option 1: Pip Install (Minimal Package)
+Three setup paths depending on your use case:
 
-For using the NCA library in your own projects:
+| Goal | Environment file | Command |
+|---|---|---|
+| Use as a library | `pyproject.toml` | `pip install -e ".[all]"` |
+| Develop this project | `conda_env.yml` | `conda env create -f conda_env.yml` |
+| Conda + pip hybrid | `environment.yml` | `conda env create -f environment.yml` |
+
+### Option 1 - pip (library users)
 
 ```bash
 git clone https://github.com/rm-a0/3d-nca
 cd 3d-nca
 
-# Create virtual environment
 python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
 
-# Install core only (torch, numpy, tqdm)
-pip install -e .
-
-# Or with visualization support
-pip install -e ".[viz]"
-
-# Or with 3D mesh I/O
-pip install -e ".[io]"
-
-# Or all optional features
-pip install -e ".[all]"
-
-# For development (includes pytest, black, ruff, etc.)
-pip install -e ".[dev]"
+pip install -e .                 # core only: torch, numpy, tqdm
 ```
 
-**Optional Dependency Groups:**
-- `viz`: matplotlib, pyvista (for visualization)
-- `io`: trimesh (for mesh voxelization)
-- `all`: all optional features
-- `dev`: development tools (pytest, black, isort, mypy, ruff, pre-commit)
-
-### Option 2: Conda (Full Development Environment)
-
-For developing this project with all tools (notebooks, scripts, GPU support):
+Install optional feature groups as needed:
 
 ```bash
-# Create conda environment with CUDA support
+pip install -e ".[viz]"          # matplotlib + pyvista
+pip install -e ".[io]"           # trimesh (mesh voxelization)
+pip install -e ".[dev]"          # pytest, black, ruff, mypy, pre-commit
+pip install -e ".[all]"          # viz + io
+```
+
+> **CUDA (pip only):** Install a CUDA-enabled PyTorch build before `pip install -e .`:
+> ```bash
+> pip install torch --index-url https://download.pytorch.org/whl/cu121
+> pip install -e ".[all]"
+> ```
+
+### Option 2 - conda (full development)
+
+Includes PyTorch+CUDA 12.1, Jupyter, pandas, trimesh, pyvista, wandb, and all dev tools.
+
+```bash
 conda env create -f conda_env.yml
 conda activate nca3d
-
-# Install the package in editable mode
 pip install -e .
 ```
 
-**What's included in `conda_env.yml`:**
-- PyTorch with CUDA 12.1
-- All visualization dependencies (matplotlib, pyvista)
-- Mesh I/O (trimesh)
-- Jupyter ecosystem (for notebooks/)
-- Plotting tools (pandas for scripts/)
-- Development tools (pytest, black, ruff, mypy, pre-commit)
+### Option 3 - conda + pip hybrid
 
-**What's in `environment.yml`:**
-- Minimal conda environment for pip package install
-- Use this if you want conda for PyTorch but pip for everything else
+Conda handles PyTorch+CUDA; pip handles everything else.
+
+```bash
+conda env create -f environment.yml
+conda activate nca3d
+pip install -e ".[viz,io,dev]"
+```
+
+See [ENVIRONMENT_GUIDE.md](ENVIRONMENT_GUIDE.md) for a full comparison of all three options.
 
 ---
 
 ## Quick Start
 
-### Basic Training Example
+`NCAModel` is a standard `nn.Module` -- drop it into any PyTorch training loop.
 
 ```python
-from src import NCAModel, NCAConfig
-from src.core.runners import MorphRunner
-from src.io import obj_to_tensor
 import torch
+import torch.nn.functional as F
+from src import NCAModel, NCAConfig
 
-# Load target mesh as voxel tensor
-target = obj_to_tensor("path/to/mesh.obj", grid_size=32)
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
-# Configure NCA
 config = NCAConfig(
-    grid_size=32,
-    n_channels=16,  # 4 visible (alive, R, G, B) + 12 hidden
-    hidden_size=96,
-    n_perception_kernels=3,
+    grid_size=(32, 32, 32),
+    hidden_channels=8,
+    visible_channels=1,
+    update_hidden_dim=64,
 )
+model = NCAModel(config).to(device)
 
-# Create model and runner
-model = NCAModel(config)
-runner = MorphRunner(
-    model=model,
-    target=target,
-    device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
-)
+# Spherical target -- shape [1, 1, D, H, W]
+D, H, W = config.grid_size
+axes = [torch.linspace(-1, 1, s) for s in (D, H, W)]
+grid = torch.stack(torch.meshgrid(*axes, indexing="ij"))
+target = (grid.norm(dim=0) < 0.6).float().unsqueeze(0).unsqueeze(0).to(device)
 
-# Train
-for snapshot in runner.train(epochs=1000, steps_per_epoch=32):
-    if snapshot.epoch % 100 == 0:
-        print(f"Epoch {snapshot.epoch}, Loss: {snapshot.loss:.4f}")
+optim = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-5)
+for step in range(1, 2001):
+    state = model.seed_center(batch_size=1, device=device)
+    optim.zero_grad()
+    state = model(state, steps=32)
+    loss = F.mse_loss(state[:, -1:], target)   # last channel = alpha/alive
+    loss.backward()
+    torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+    optim.step()
+    if step % 500 == 0:
+        print(f"step {step:4d}  loss {loss.item():.4f}")
 ```
 
-### Visualization
+### Load a mesh target
 
 ```python
-from src.viz import show_volume_alpha_pv
+from src.io import obj_to_tensor    # requires pip install -e ".[io]"
 
-# Visualize current state
-state = runner.grid.state.detach().cpu()
-show_volume_alpha_pv(state, opacity_channel=0)
+target = obj_to_tensor("mesh.obj", grid_size=32)
 ```
 
----
+### Use the built-in training runners
 
-## Training Modes
-
-### 1. Morphogenesis (Default)
-Grow structure from a single seed cell.
+`MorphRunner` and `RegenRunner` manage the training loop, sample pool, LR schedule, and loss internally.
 
 ```python
 from src.core.runners import MorphRunner
 
-runner = MorphRunner(model, target, device)
-```
-
-### 2. Regeneration
-Damage the structure mid-training and learn to regenerate.
-
-```python
-from src.core.runners import RegenRunner
-
-runner = RegenRunner(
-    model, target, device,
-    damage_start_epoch=500,
-    damage_radius=8,
+runner = MorphRunner()
+runner.init(
+    config={
+        "cell":       {"hidden_channels": 16, "visible_channels": 4},
+        "perception": {"kernel_radius": 1, "channel_groups": 3},
+        "update":     {"hidden_dim": 128, "stochastic_update": False, "fire_rate": 0.5},
+        "grid":       {"size": [32, 32, 32]},
+        "training":   {"num_epochs": 2000, "learning_rate": 1e-3, "batch_size": 4},
+    },
+    target=target_numpy_array,   # (D, H, W, C) float32 numpy array
 )
+for metrics in runner.train():
+    print(runner.current_epoch, metrics["loss_total"])
 ```
 
 ---
 
-## Development Workflow
+## Project Structure
 
-### Running Tests
-```bash
-pytest tests/
-pytest --cov=src tests/  # with coverage
+```
+3d-nca/
++-- src/                        # Installable Python package
+|   +-- __init__.py             # Public API: NCAModel, NCAConfig, low-level components
+|   +-- core/                   # NCA engine
+|   |   +-- cell.py             # Cell state and channel layout
+|   |   +-- grid.py             # Grid3D -- main nn.Module
+|   |   +-- perception.py       # 3D Sobel convolution kernels
+|   |   +-- update.py           # Learnable MLP update rule
+|   |   +-- nca_model.py        # NCAModel high-level wrapper
+|   |   +-- schedule.py         # Training event scheduling
+|   |   +-- runners/            # MorphRunner, RegenRunner
+|   +-- viz/                    # Visualization (matplotlib + pyvista)
+|   +-- io/                     # Mesh voxelization (trimesh)
+|   +-- server/                 # TCP server for Blender integration
++-- tests/                      # Pytest test suite
++-- notebooks/                  # Jupyter training examples
++-- scripts/                    # Loss plotting utilities
++-- blender/                    # Blender addon
++-- documentation/              # Thesis and Sphinx API docs
++-- pyproject.toml              # Package definition and pip dependencies
++-- conda_env.yml               # Full development conda environment
++-- environment.yml             # Minimal conda + pip environment
 ```
 
-### Code Formatting
-```bash
-black src/ tests/
-isort src/ tests/
-ruff check src/ tests/
-```
+---
 
-### Pre-commit Hooks
-```bash
-pre-commit install
-pre-commit run --all-files
-```
+## Visualization
 
-### Using Notebooks
-Jupyter notebooks in `notebooks/` demonstrate:
-- Basic functionality
-- Alpha-only training (structure without color)
-- RGBA training (structure + color)
-- Advanced experiments
+Requires `pip install -e ".[viz]"`.
 
-Start JupyterLab:
-```bash
-jupyter lab
-```
+| Function | Backend | Description |
+|---|---|---|
+| `show_slice_alpha_mpl` | matplotlib | 2D cross-section, alpha channel |
+| `show_slice_color_mpl` | matplotlib | 2D cross-section, RGB |
+| `show_slice_alpha_comparison_mpl` | matplotlib | Side-by-side state vs target |
+| `show_volume_alpha_mpl` | matplotlib | 3D voxel scatter, alpha |
+| `show_volume_rgba_mpl` | matplotlib | 3D voxel scatter, RGBA |
+| `show_state_target_comparison_mpl` | matplotlib | 3D side-by-side comparison |
+| `show_volume_alpha_pv` | pyvista | Interactive 3D rendering, alpha |
+| `show_volume_color_pv` | pyvista | Interactive 3D rendering, color |
 
-### Plotting Scripts
-Analyze training logs:
-```bash
-python scripts/plot_loss.py runs/experiment_name/loss.csv
-python scripts/plot_loss_phased.py runs/experiment_name/loss.csv
+```python
+from src.viz import show_slice_alpha_mpl, show_volume_alpha_pv
+
+show_slice_alpha_mpl(state, visible_channels=1)
+show_volume_alpha_pv(state, visible_channels=1)
 ```
 
 ---
 
 ## Blender Integration
 
-A TCP server allows real-time visualization in Blender during training.
+A TCP server streams per-epoch state updates to a Blender addon for real-time visualization.
 
-**1. Start training server:**
 ```python
 from src.server import NCAServer
 
-server = NCAServer(model, target, host="localhost", port=8765)
-server.start()
+server = NCAServer()
+server.start(host="localhost", port=8765)
 ```
 
-**2. Launch Blender with addon:**
-- Install the addon from `blender/`
-- Connect to `localhost:8765`
-- Watch the NCA grow in real-time
-
-The server runs training in a background thread and streams state updates to Blender without blocking.
+Install the addon from `blender/`, connect to `localhost:8765`, and start training. The growing structure updates live in the 3D viewport.
 
 ---
 
-## How It Works
+## Development
 
-### Forward Pass
-1. **Perceive**: 3D Sobel filters extract gradients → perception vectors
-2. **Update**: MLP maps perception → state delta
-3. **Mask**: Only update alive cells (and their neighbors)
-4. **Apply**: Add delta to current state
+### Setup
 
-### Training
-1. Start from seed configuration
-2. Run NCA for N steps (curriculum: 8→32 or 16→64)
-3. Compute loss:
-   - **Alpha loss**: encourage structure emergence
-   - **Color loss**: match RGB channels
-   - **Overflow loss**: suppress background
-4. Backprop through differentiable grid ops
-5. Update MLP weights
+```bash
+conda env create -f conda_env.yml
+conda activate nca3d
+pip install -e .
+pre-commit install
+```
 
-### Key Techniques
-- **Gradient checkpointing**: reduce memory for long rollouts
-- **Stochastic masking**: prevent grid-wide synchronization
-- **Alive masking**: binary mask via max-pool over neighbors
-- **Pool-based training**: sample from pool of growth trajectories
+### Tests
 
----
+```bash
+pytest tests/
+pytest --cov=src tests/
+```
 
-## Project Files
+### Linting and Formatting
 
-| File/Directory | Purpose |
+```bash
+black src/ tests/
+isort src/ tests/
+ruff check src/ tests/
+mypy src/
+```
+
+Tool configuration is in `pyproject.toml` under `[tool.black]`, `[tool.ruff]`, and `[tool.mypy]`.
+
+### Notebooks
+
+```bash
+jupyter lab
+```
+
+| Notebook | Description |
 |---|---|
-| `src/` | Installable Python package (NCA library) |
-| `tests/` | Pytest test suite |
-| `notebooks/` | Jupyter notebooks with examples |
-| `scripts/` | Utility scripts (plotting, analysis) |
-| `blender/` | Blender addon for real-time visualization |
-| `runs/` | Training outputs (checkpoints, logs, renders) |
-| `pyproject.toml` | Package metadata and pip dependencies |
-| `conda_env.yml` | Full conda environment (development) |
-| `environment.yml` | Minimal conda environment (pip package) |
+| `01_basic_functionality.ipynb` | Component overview and sanity checks |
+| `02_sphere_training_alpha.ipynb` | Alpha-only training on a sphere |
+| `03_donut_training_alpha.ipynb` | Alpha-only training on a torus |
+| `04_donut_training_rgba.ipynb` | RGBA training on a torus |
+
+### Loss Plots
+
+```bash
+python scripts/plot_loss.py runs/experiment/loss.csv
+python scripts/plot_loss_phased.py runs/experiment/loss.csv
+```
 
 ---
 
-## Environment Files Explained
+## API Reference
 
-### `conda_env.yml` — Development Environment
-- **Purpose**: Full development setup with all tools
-- **Use when**: Developing this project, running notebooks, using Blender addon
-- **Includes**: PyTorch+CUDA, Jupyter, pandas, trimesh, pyvista, dev tools
-- **Setup**: `conda env create -f conda_env.yml && conda activate nca3d`
+Full docs: `cd documentation/docs && make html`
 
-### `environment.yml` — Minimal Package Environment
-- **Purpose**: Minimal environment for using the library
-- **Use when**: Installing as a dependency or testing pip install
-- **Includes**: PyTorch+CUDA, numpy, tqdm (core only)
-- **Setup**: `conda env create -f environment.yml && pip install -e ".[all]"`
+**`from src import ...`**
 
-### `pyproject.toml` — Pip Package Definition
-- **Purpose**: Defines the installable Python package
-- **Use when**: `pip install` or building wheels
-- **Includes**: Minimal core deps + optional groups (viz, io, dev)
+| Symbol | Description |
+|---|---|
+| `NCAModel` | High-level `nn.Module` -- recommended entry point |
+| `NCAConfig` | Dataclass bundling all configuration |
+| `Grid3D` / `GridConfig` | Low-level 3D grid module |
+| `CellState` / `CellConfig` | Cell state and channel configuration |
+| `Perception3D` / `PerceptionConfig` | 3D Sobel perception module |
+| `UpdateRule` / `UpdateConfig` | Learnable MLP update rule |
 
-**TL;DR:**
-- **Developing this project?** → Use `conda_env.yml`
-- **Using as a library?** → Use `pip install -e ".[all]"`
-- **Want conda for PyTorch only?** → Use `environment.yml` + pip
+**`from src.core.runners import ...`** -- `MorphRunner`, `RegenRunner`, `NCARunner`, `TrainingSnapshot`
+
+**`from src.viz import ...`** -- see Visualization table above
+
+**`from src.io import ...`** -- `obj_to_tensor`
 
 ---
 
 ## License
 
-MIT License — see [LICENSE](LICENSE)
+MIT -- see [LICENSE](LICENSE).
 
 ## Citation
-
-If you use this framework in your research, please cite:
 
 ```bibtex
 @software{3d-nca,
   author = {Michal Repcik},
-  title = {3D Neural Cellular Automata Framework},
-  year = {2026},
-  url = {https://github.com/rm-a0/3d-nca}
+  title  = {3D Neural Cellular Automata Framework},
+  year   = {2026},
+  url    = {https://github.com/rm-a0/3d-nca}
 }
 ```
