@@ -1,3 +1,5 @@
+__version__ = "0.1.0"
+
 from .core import (
     # High-level wrapper (recommended)
     NCAModel,
@@ -14,6 +16,7 @@ from .core import (
 )
 
 __all__ = [
+    "__version__",
     # High-level wrapper
     "NCAModel",
     "NCAConfig",

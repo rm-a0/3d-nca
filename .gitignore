@@ -12,6 +12,9 @@ build/
 *.manifest
 *.spec
 
+# Poetry (not used - migrated to setuptools)
+poetry.lock
+
 # Virtual envs / Conda (track only the yml!)
 .env/
 .venv/
