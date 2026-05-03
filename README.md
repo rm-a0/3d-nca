@@ -11,7 +11,7 @@ A modular PyTorch framework for training 3D Neural Cellular Automata on volumetr
 
 **3D-NCA** provides a composable model API, built-in training runners (morphogenesis and regeneration), visualization helpers (matplotlib/pyvista), and a TCP server for real-time Blender integration.
 
-For theoretical background and architecture details, see the [Thesis](documentation/thesis/) or the [Framework API Docs](https://www.stud.fit.vutbr.cz/~xrepcim00/3d-nca-docs/).
+For theoretical background and architecture details, see the [Thesis](documentation/thesis/) or the [Framework API Docs](https://www.stud.fit.vutbr.cz/~xrepcim00/3d-nca-docs/). For Blender add-on guide check out [Add-on Guide](documentation/add-on/).
 
 ---
 
@@ -73,6 +73,8 @@ server = NCAServer()
 server.start(host="localhost", port=8765)
 ```
 In Blender, open the 3D Viewport side panel (press `N`), locate the **3D-NCA** tab, and click **Connect**. The growing structure will update live as your model trains.
+
+For more detailed guide check out the [Blender Add-on Guide](documentation/add-on/)
 
 ---
 
