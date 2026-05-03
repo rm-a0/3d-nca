@@ -1,11 +1,15 @@
 # 3D Neural Cellular Automata
 
-A modular PyTorch framework for training 3D Neural Cellular Automata on volumetric targets.
+3D-NCA is a research-oriented framework for learning self-organizing 3D structures via Neural Cellular Automata, with real-time visualization and interactive training control through Blender.
 
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
 ![PyTorch](https://img.shields.io/badge/pytorch-2.0%2B-orange)
 ![Blender](https://img.shields.io/badge/blender-3.3%2B-orange)
+![License](https://img.shields.io/badge/license-MIT-green)
+[![Docs](https://img.shields.io/badge/docs-online-blue)](https://www.stud.fit.vutbr.cz/~xrepcim00/3d-nca-docs/)
+![Version](https://img.shields.io/github/v/release/rm-a0/3d-nca)
+
+![Growth Demo](documentation/add-on/assets/training_quickstart.gif)
 
 ## Overview
 
@@ -14,6 +18,48 @@ A modular PyTorch framework for training 3D Neural Cellular Automata on volumetr
 For theoretical background and architecture details, see the [Thesis](documentation/thesis/) or the [Framework API Docs](https://www.stud.fit.vutbr.cz/~xrepcim00/3d-nca-docs/). For Blender add-on guide check out [Add-on Guide](documentation/add-on/).
 
 ---
+
+## ⚡ Quick Demo (Blender Live Training)
+
+### 1. Clone & Install
+```bash
+git clone https://github.com/rm-a0/3d-nca
+cd 3d-nca
+pip install -e ".[all]"
+```
+[!NOTE]
+> It is recommended to use Conda when running server locally, see [Installation](#-installation)
+
+### 2. Start the NCA Server
+```bash
+python -m nca3d.server.app
+```
+
+[!NOTE]
+> It is **highly** recommended to run the server on a machine with GPU
+
+### 3. Launch Blender
+- Install the add-on from the **[Releases](../../releases)** page
+- Open the **NCA** tab (press N in viewport)
+- Click **Connect**
+
+### 4. Start Training
+- Load or create a target
+- Voxelize the target (NCA -> Target -> Pick Mesh)
+- Click **Start Training**
+
+You should now see the structure grow in real time.
+
+[!TIP]
+> For detailed setup and controls, see the [Blender Add-on Guide](documentation/add-on/)
+
+## 🧠 Use Cases
+
+- Research in morphogenesis and self-organizing systems  
+- Experimentation with Neural Cellular Automata in 3D  
+- Procedural content generation (voxels, structures)  
+- Interactive ML training visualization (via Blender)  
+- Education (visualizing emergent behavior)
 
 ## ⚙️ Requirements
 
@@ -161,7 +207,7 @@ If you use this work in your research, please cite:
   title  = {3D Neural Cellular Automata},
   school = {Brno University of Technology, Faculty of Information Technology},
   year   = {2026},
-  url    = {[https://www.vut.cz/en/students/final-thesis/detail/171171](https://www.vut.cz/en/students/final-thesis/detail/171171)},
+  url    = {https://www.vut.cz/en/students/final-thesis/detail/171171},
   note   = {Supervisor: Ing. Karel Fritz}
 }
 ```
