@@ -40,18 +40,20 @@ python -m nca3d.server.app
 
 ### 3. Launch Blender
 - Install the add-on from the **[Releases](../../releases)** page
-- Open the **NCA** tab (press N in viewport)
+- Open the **NCA** tab (press **N** in viewport)
 - Click **Connect**
 
 ### 4. Start Training
 - Load or create a target
-- Voxelize the target (NCA -> Target -> Pick Mesh)
+- Voxelize the target (`NCA > Target > Pick Mesh`)
 - Click **Start Training**
 
 You should now see the structure grow in real time.
 
 > [!TIP]
 > For detailed setup and controls, see the [Blender Add-on Guide](documentation/add-on/)
+
+---
 
 ## 🧠 Use Cases
 
@@ -60,6 +62,8 @@ You should now see the structure grow in real time.
 - Procedural content generation (voxels, structures)  
 - Interactive ML training visualization (via Blender)  
 - Education (visualizing emergent behavior)
+
+---
 
 ## ⚙️ Requirements
 
@@ -124,7 +128,7 @@ For more detailed guide check out the [Blender Add-on Guide](documentation/add-o
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Quick Start (Python API)
 
 `NCAModel` is a standard PyTorch `nn.Module`. You can drop it into any custom training loop or use the high-level runners to manage the sample pool and loss logic.
 
@@ -191,8 +195,7 @@ python -m sphinx.cmd.build -b html . _build/html
 **Key Modules:**
 * `from nca3d import NCAModel, NCAConfig` - Core architecture.
 * `from nca3d.core.runners import MorphRunner, RegenRunner` - Training managers.
-* `from nca3d.io import obj_to_tensor` - Mesh processing.
-* `from nca3d.viz import show_volume_alpha_pv, show_slice_alpha_mpl` - Rendering.
+* `from nca3d.viz import show_volume_alpha_pv, show_slice_alpha_mpl` - Notebook rendering.
 
 ---
 
