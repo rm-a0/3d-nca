@@ -27,7 +27,7 @@ git clone https://github.com/rm-a0/3d-nca
 cd 3d-nca
 pip install -e ".[all]"
 ```
-[!NOTE]
+> [!NOTE]
 > It is recommended to use Conda when running server locally, see [Installation](#-installation)
 
 ### 2. Start the NCA Server
@@ -35,7 +35,7 @@ pip install -e ".[all]"
 python -m nca3d.server.app
 ```
 
-[!NOTE]
+> [!NOTE]
 > It is **highly** recommended to run the server on a machine with GPU
 
 ### 3. Launch Blender
@@ -50,7 +50,7 @@ python -m nca3d.server.app
 
 You should now see the structure grow in real time.
 
-[!TIP]
+> [!TIP]
 > For detailed setup and controls, see the [Blender Add-on Guide](documentation/add-on/)
 
 ## 🧠 Use Cases
