@@ -2,7 +2,7 @@
 
 A modular PyTorch framework for training 3D Neural Cellular Automata on volumetric targets.
 
-![Python](https://img.shields.io/badge/python-3.11%2B-blue)
+![Python](https://img.shields.io/badge/python-3.3%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![PyTorch](https://img.shields.io/badge/pytorch-2.0%2B-orange)
 ![Blender](https://img.shields.io/badge/blender-3.6%2B-orange)
@@ -30,7 +30,7 @@ Choose the setup path that matches your goal.
 ### 1. Library Usage (pip)
 For users who just want to import `nca3d` into their own projects:
 ```bash
-git clone [https://github.com/rm-a0/3d-nca](https://github.com/rm-a0/3d-nca)
+git clone https://github.com/rm-a0/3d-nca
 cd 3d-nca
 
 # Install core (torch, numpy, tqdm)

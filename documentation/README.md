@@ -6,4 +6,5 @@ This folder contains technical documentation for the **3D Neural Cellular Automa
 
 - Thesis source files
 - Framework documentation generated using Sphinx
+- Blender add-on guide
 - Poster and extended abstract for Excel@FIT conference
