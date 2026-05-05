@@ -6,7 +6,7 @@ This guide covers the installation and usage of the 3D-NCA Blender add-on. The t
 
 ## 📥 Installation & Setup
 
-1. **Download:** Get `nca3d_blender_addon_<latest>.zip` from the [Releases](../../../../releases) page.
+1. **Download:** Get `nca3d_blender_addon_<latest>.zip` from the [Releases](https://github.com/rm-a0/3d-nca/releases/tag/v0.1.0) page.
 2. **Install:** In Blender, go to `Edit > Preferences > Add-ons > Install...`. Select the `.zip` and enable it.
 3. **Locate:** Open the 3D Viewport sidebar (Press **N**) and select the **NCA** tab.
 

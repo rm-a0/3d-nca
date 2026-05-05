@@ -39,7 +39,7 @@ python -m nca3d.server.app
 > It is **highly** recommended to run the server on a machine with GPU
 
 ### 3. Launch Blender
-- Install the add-on from the **[Releases](../../releases)** page
+- Install the add-on from the **[Releases](https://github.com/rm-a0/3d-nca/releases/tag/v0.1.0)** page
 - Open the **NCA** tab (press **N** in viewport)
 - Click **Connect**
 
@@ -110,7 +110,7 @@ pre-commit install
 A TCP server streams per-epoch state updates to a Blender add-on for real-time 3D visualization.
 
 ### Add-on Installation
-1. Download `nca3d_blender_addon_<latest>.zip` from the **[Releases](../../releases)** page. *(Do not unzip it).*
+1. Download `nca3d_blender_addon_<latest>.zip` from the **[Releases](https://github.com/rm-a0/3d-nca/releases/tag/v0.1.0)** page. *(Do not unzip it).*
 2. Open Blender and go to `Edit > Preferences > Add-ons`.
 3. Click **Install...**, select the `.zip` file, and check the box to enable the add-on.
 
@@ -178,6 +178,11 @@ model = runner.get_model()
 ├── scripts/               # Loss plotting and other utilities
 ├── notebooks/             # Jupyter training examples
 ├── tests/                 # Pytest suite
+├── documentation/         # Guides, reports, and reference material
+│   ├── add-on/            # Blender add-on user guide
+│   ├── docs/              # Sphinx API reference (furo theme)
+│   ├── excel-at-fit/      # Excel@FIT conference poster and commentary
+│   └── thesis/            # LaTeX master's thesis source
 └── pyproject.toml         # Package definition
 ```
 
