@@ -119,8 +119,8 @@ Start the TCP server in your Python training script:
 ```python
 from nca3d.server import NCAServer
 
-server = NCAServer()
-server.start(host="localhost", port=8765)
+server = NCAServer(host="localhost", port=5555)
+server.start()
 ```
 In Blender, open the 3D Viewport side panel (press `N`), locate the **3D-NCA** tab, and click **Connect**. The growing structure will update live as your model trains.
 
@@ -132,37 +132,29 @@ For more detailed guide check out the [Blender Add-on Guide](documentation/add-o
 
 `NCAModel` is a standard PyTorch `nn.Module`. You can drop it into any custom training loop or use the high-level runners to manage the sample pool and loss logic.
 
-### Using the MorphRunner
-The `MorphRunner` automatically manages the training loop, sample pool, and learning rate schedule.
-
 ```python
 import torch
-from nca3d.core import NCAConfig, MorphRunner
+from nca3d import NCAModel, NCAConfig
 
-# 1. Setup your configuration
+# 1. Configure
 config = NCAConfig(
     grid_size=(32, 32, 32),
     hidden_channels=16,
     visible_channels=4,
-    num_epochs=2000,
-    batch_size=4,
-    learning_rate=1e-3
 )
+model = NCAModel(config)
 
-runner = MorphRunner()
+# 2. Seed and run
+state = model.seed_center(batch_size=1, device="cpu")
+output = model(state, steps=64)
 
-# 2. Initialize
-runner.init(config.as_dict(), target="your_numpy_array")
-
-# 3. Start training
-runner.train()
-
-# 4. Export the model
-model = runner.get_model()
+# 3. Save / load
+model.save("my_nca.pt")
+model = NCAModel.load("my_nca.pt")
 ```
 
 > [!TIP]
-> For target preparation, use the Blender add-on to export models directly to the recommended `.npz` format.
+> For full training examples (pool-based morphogenesis loop, loss scheduling, live Blender visualization), see the [notebooks](notebooks/).
 
 ---
 
