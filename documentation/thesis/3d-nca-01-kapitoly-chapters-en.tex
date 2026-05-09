@@ -263,7 +263,7 @@ optimisation.
 
 \section{Extension from Two to Three Dimensions}
 
-The original NCA of Mordvintsev et al.~\cite{Mordvintsev2020} operates on a 2D grid.
+The original NCA introduced by Mordvintsev et al.~\cite{Mordvintsev2020} operates on a 2D grid.
 Extending it to three-dimensional voxel lattices is conceptually straightforward but
 introduces practical differences that affect both the architecture and the training
 procedure.
@@ -363,7 +363,7 @@ state:
 
 By using a residual update, the model makes small, incremental changes instead of 
 sudden leaps. This approach is essential for maintaining stability when the model
-is unrolled over many many steps during training~\cite{Mordvintsev2020}. 
+is unrolled over many steps during training~\cite{Mordvintsev2020}. 
 
 The update function is implemented as a small multilayer perceptron (MLP) applied
 independently at each cell, ensuring that each increment depends only on locally
