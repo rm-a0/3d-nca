@@ -103,6 +103,13 @@ pre-commit install
 > [!NOTE]  
 > A minimal hybrid environment is also available via `environment.yml`.
 
+> [!WARNING]
+> `pip install torch` resolves to the **CPU-only** wheel by default. If you need CUDA support without Conda, install torch from the PyTorch index first:
+> ```bash
+> pip install torch --index-url https://download.pytorch.org/whl/cu121
+> pip install -e ".[all]"
+> ```
+
 ---
 
 ## 🎨 Blender Integration

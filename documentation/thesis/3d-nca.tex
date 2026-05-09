@@ -207,8 +207,8 @@ Pythone a PyTorchi, ktoré obsahuje model, tréningové cykly, plánovač udalos
 Toto jadro je použiteľné priamo zo skriptov alebo z Jupyter notebookov bez závislosti na Blendre. Druhou 
 vrstvou je TCP server, ktorý jadro sprístupní cez sieť: prijíma konfiguráciu a cieľové voxelové dáta, 
 spúšťa tréning a priebežne vysiela snímky stavu mriežky. Treťou vrstvou je doplnok do Blenderu, ktorý plní 
-rolu klienta a grafického rozhrania: pripravuje ciele voxelizáciou mesh objektov (vrátane odberu farby z 
-materiálov) a vykresľuje prijaté stavy ako voxelové modely priamo vo viewporte. Vďaka tejto separácii môže tréning 
+rolu klienta a grafického rozhrania: pripravuje ciele voxelizáciou mesh objektov
+a vykresľuje prijaté stavy ako voxelové modely priamo vo viewporte. Vďaka tejto separácii môže tréning 
 bežať na vzdialenom GPU serveri a Blender môže zostať lokálnym vizualizačným klientom; komunikácia funguje aj cez 
 tunelované spojenie (napr. pomocou ngrok).
 
