@@ -25,6 +25,8 @@ For theoretical background and architecture details, see the [Thesis](documentat
 ```bash
 git clone https://github.com/rm-a0/3d-nca
 cd 3d-nca
+python -m venv .venv
+source .venv/bin/activate
 pip install -e ".[all]"
 ```
 > [!NOTE]
@@ -77,38 +79,35 @@ You should now see the structure grow in real time.
 
 Choose the setup path that matches your goal.
 
-### 1. Library Usage (pip)
+### 1. Library Usage (pip + venv)
 For users who just want to import `nca3d` into their own projects:
 ```bash
 git clone https://github.com/rm-a0/3d-nca
 cd 3d-nca
 
+# Create and activate a virtual environment
+python -m venv .venv
+source .venv/bin/activate   # Linux / macOS
+# .venv\Scripts\activate    # Windows
+
 # Install core (torch, numpy, tqdm)
 pip install -e .
 
 # Install with optional feature groups
-pip install -e ".[viz]"    # matplotlib + pyvista
-pip install -e ".[io]"     # trimesh (mesh voxelization)
-pip install -e ".[all]"    # installs all of the above
+pip install -e ".[viz]"     # matplotlib + pyvista
+pip install -e ".[io]"      # trimesh (mesh voxelization)
+pip install -e ".[all]"     # installs all of the above
 ```
 
 ### 2. Development (Conda)
-For full development (includes PyTorch+CUDA 12.1, Jupyter, data science tools, and dev tools):
+For full development (includes PyTorch+CUDA 12.1, Jupyter, data science tools, and dev tools). Requires [Conda](https://docs.conda.io/en/latest/miniconda.html) to be installed.
 ```bash
+# In Anaconda Prompt
 conda env create -f conda_env.yml
 conda activate nca3d
-pip install -e .
-pre-commit install
 ```
 > [!NOTE]  
 > A minimal hybrid environment is also available via `environment.yml`.
-
-> [!WARNING]
-> `pip install torch` resolves to the **CPU-only** wheel by default. If you need CUDA support without Conda, install torch from the PyTorch index first:
-> ```bash
-> pip install torch --index-url https://download.pytorch.org/whl/cu121
-> pip install -e ".[all]"
-> ```
 
 ---
 

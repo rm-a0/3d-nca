@@ -6,7 +6,7 @@
 
 ## Prerequisites
 
-- **Python** 3.11 (3.12+ not supported)
+- **Python** 3.11+
 - **Conda** (recommended) or pip
 - **CUDA-capable GPU** (strongly recommended for training; CPU works but is slow)
 - **Blender 3.3+** (only required for the live visualization add-on)
@@ -19,7 +19,10 @@ Choose one of the two paths below.
 
 ### Option A - Conda (recommended, includes CUDA)
 
+Requires [Conda](https://docs.conda.io/en/latest/miniconda.html) to be installed.
+
 ```bash
+# In Anaconda Prompt 
 conda env create -f conda_env.yml
 conda activate nca3d
 pip install -e .
@@ -27,9 +30,13 @@ pip install -e .
 
 > Use `environment.yml` instead of `conda_env.yml` for a minimal environment without dev tools.
 
-### Option B - pip only
+### Option B - pip + venv
 
 ```bash
+python -m venv .venv              # make sure you are using Python 3.11+
+source .venv/bin/activate         # Linux / macOS
+# .venv\Scripts\activate          # Windows
+
 pip install -e .                  # core only (torch, numpy, tqdm)
 pip install -e ".[viz]"           # add matplotlib + pyvista
 pip install -e ".[io]"            # add trimesh (mesh voxelization)
