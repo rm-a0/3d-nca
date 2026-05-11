@@ -185,7 +185,7 @@ Three-dimensional Game of Life variants using totalistic birth/survival rules ge
 branching and crystal-like growth patterns that have no direct 2D analogue.
 
 GPU-accelerated implementations can run volumetric CA with grid sizes exceeding
-$128^3$ cells in real time~\cite{Tobias2009}, making large-scale 3D~CA simulation
+$50^3$ cells in real time~\cite{Tobias2009}, making large-scale 3D~CA simulation
 practical on consumer hardware. This same lattice structure and local-update approach
 carries over directly to the neural CA extensions discussed later in this chapter.
 
@@ -506,7 +506,7 @@ Random damage is applied during training by zeroing out rectangular regions of t
 grid, requiring the model to reconstruct the target from the damaged state. This
 produces the most robust dynamics, with models recovering from substantial
 perturbations and maintaining structural integrity over extended
-horizons~\cite{Mordvintsev2020}. Horvath and Levin~\cite{Horvath2021} later showed
+horizons~\cite{Mordvintsev2020}. Randazzo et al.~\cite{Randazzo2020} later showed
 that stochastic update masking -- one of the stabilisation mechanisms used throughout
 training -- also encourages distinct functional cell types to emerge within a single
 NCA, as cells must develop local strategies that hold regardless of which neighbours
